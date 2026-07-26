@@ -404,11 +404,9 @@ func TestGenerateCustomQuadlet_NoShareHosts(t *testing.T) {
 		Image: "docker.io/library/mongo:7",
 	}
 	out := GenerateCustomQuadlet(svc)
-	// Even without ShareHosts, a sidecar service must mount lerd's managed
-	// /etc/hosts. Otherwise podman falls back to base_hosts_file (the host's
-	// /etc/hosts by default), where a stale or client-shim "127.0.0.1 lerd-<svc>"
-	// entry shadows the container-DNS name and breaks connections — e.g.
-	// lerd-phpmyadmin resolving lerd-mysql to its own loopback (#issue).
+	// Even without ShareHosts a sidecar must mount the managed /etc/hosts,
+	// otherwise podman inherits the host's own file and a "127.0.0.1 lerd-<svc>"
+	// line there shadows the container-DNS name and breaks connections.
 	wantVolume := "Volume=" + config.ContainerHostsFile() + ":/etc/hosts:ro,z"
 	if !strings.Contains(out, wantVolume) {
 		t.Errorf("ShareHosts=false must mount the managed container hosts file to override host inheritance, got:\n%s", out)
