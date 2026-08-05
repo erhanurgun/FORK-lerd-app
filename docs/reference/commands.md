@@ -8,11 +8,11 @@
 | `lerd start` | Start DNS, nginx, PHP-FPM containers, and all installed services; warns about port conflicts and builds or pulls any missing images first |
 | `lerd stop` | Stop nginx, PHP-FPM containers, and all running services; leaves the `lerd-dns` forwarder running as install-level plumbing so `.test` keeps resolving |
 | `lerd quit` | Stop all Lerd processes and containers including the UI, watcher, tray, and the `lerd-dns` forwarder; on macOS also stops the Podman Machine VM |
-| `lerd update` | Check for updates and update after confirmation |
+| `lerd update` | Check for updates and update after confirmation; a package-managed install (apt, dnf, Homebrew) is deferred to that package manager |
 | `lerd update --beta` | Update to the latest pre-release build |
 | `lerd update --rollback` | Revert to the previously installed version |
 | `lerd whatsnew` | Show what changed between the installed version and the latest release |
-| `lerd uninstall` | Stop all containers and remove Lerd |
+| `lerd uninstall` | Stop all containers and remove Lerd; a package-installed binary is left for apt/dnf/brew to remove |
 | `lerd uninstall --force` | Same, skipping all confirmation prompts |
 | `lerd autostart enable` | Start Lerd automatically on every login |
 | `lerd autostart disable` | Disable autostart on login |
@@ -87,7 +87,7 @@ Setup steps include common tasks (composer install, npm install, lerd env) plus 
 | `lerd group db <share\|separate>` | Switch the current secondary between sharing the main's database and keeping its own |
 | `lerd group remove` | Ungroup the current secondary, restoring a standalone domain |
 | `lerd group list` | List all site groups and their members |
-| `lerd workspace add <name>` | Create an empty workspace, a display-only grouping of sites. See [Workspaces](../usage/sites.md#workspaces) |
+| `lerd workspace add <name>` | Create an empty workspace, a display-only grouping of sites. See [Workspaces](../usage/workspaces.md) |
 | `lerd workspace rename <old> <new>` | Rename a workspace, keeping its sites |
 | `lerd workspace rm <name>` | Delete a workspace; its sites stay linked and become ungrouped |
 | `lerd workspace assign <site> <workspace\|none>` | Move a site into a workspace, or out of one with `none`; assign a group main, not a secondary |
