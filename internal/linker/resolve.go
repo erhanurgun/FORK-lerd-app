@@ -1,6 +1,7 @@
 package linker
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -44,6 +45,15 @@ func Resolve(dir string, cfg *config.GlobalConfig, p Policy) (*Plan, error) {
 	}
 	baseName, _ := siteops.SiteNameAndDomain(rawName, cfg.DNS.TLD)
 	name := FreeSiteName(baseName, dir)
+
+	// One directory is one site. FreeSiteName already folds a re-link back onto
+	// its own name, so a different name here means a second registration for a
+	// path that already has one, which serves the project twice with duplicate
+	// vhosts and workers. Symlinked spellings (/home vs /var/home on ostree
+	// hosts) reach this the same way, since the lookup is canonical.
+	if existing, err := config.FindSiteByPath(dir); err == nil && existing != nil && existing.Name != name {
+		return nil, fmt.Errorf("this directory is already linked as %q — unlink it first to link it under another name", existing.Name)
+	}
 
 	kept, removed := ResolveDomains(desiredDomains(proj, p.Name, name, cfg.DNS.TLD), baseName, dir, cfg.DNS.TLD)
 	plan.DroppedDomains = removed
@@ -194,7 +204,7 @@ func relinkSecured(path string) bool {
 		return false
 	}
 	for _, existing := range reg.Sites {
-		if existing.Path == path && existing.Secured {
+		if existing.Secured && config.SamePath(existing.Path, path) {
 			return true
 		}
 	}
@@ -221,18 +231,18 @@ func OwningWorktree(dir string) (*config.Site, string, bool) {
 	if err != nil {
 		return nil, "", false
 	}
-	// Compare canonical paths, as the registry lookup does: a checkout under a
+	// Compare directories, as the registry lookup does: a checkout under a
 	// symlinked parent (/var on macOS, /home on ostree) is spelled one way in
-	// the registry and git's metadata and another by os.Getwd.
-	target := config.CanonicalPath(dir)
+	// the registry and git's metadata and another by os.Getwd, and a
+	// case-insensitive volume spells it several more.
 	for i := range reg.Sites {
 		s := &reg.Sites[i]
-		if s.Ignored || config.CanonicalPath(s.Path) == target {
+		if s.Ignored || config.SamePath(s.Path, dir) {
 			continue
 		}
 		wts, _ := gitpkg.DetectWorktrees(s.Path, s.PrimaryDomain())
 		for _, wt := range wts {
-			if config.CanonicalPath(wt.Path) == target {
+			if config.SamePath(wt.Path, dir) {
 				return s, wt.Branch, true
 			}
 		}

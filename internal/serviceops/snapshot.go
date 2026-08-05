@@ -319,6 +319,10 @@ func CreateSnapshot(t SnapshotTarget, name string, ctx SnapshotMeta, emit func(P
 		_ = os.RemoveAll(dir)
 		return nil, fmt.Errorf("dumping %s: %w", label, err)
 	}
+	if err := verifyDumpHasContent(dumpPath, true); err != nil {
+		_ = os.RemoveAll(dir)
+		return nil, fmt.Errorf("dumping %s: %w", label, err)
+	}
 
 	var size int64
 	if fi, statErr := os.Stat(dumpPath); statErr == nil {
@@ -383,6 +387,14 @@ func RestoreSnapshot(t SnapshotTarget, name string, emit func(PhaseEvent)) (Impo
 		return ImportReport{}, fmt.Errorf("reading snapshot %q: %w", name, err)
 	}
 	dumpPath := filepath.Join(dir, snap.DumpFile)
+
+	// Checked before the drop: restore recreates the database from empty, so a
+	// dump carrying nothing would replace live data with nothing. Snapshots
+	// written before creation verified its dump are still on disk and still
+	// list as restorable, so this is the guard that protects them.
+	if err := verifyDumpHasContent(dumpPath, snap.Compressed); err != nil {
+		return ImportReport{}, fmt.Errorf("refusing to restore snapshot %q: %w", name, err)
+	}
 
 	if !t.AllDatabases {
 		emit(PhaseEvent{Phase: "dropping_database", Message: "recreating " + t.Database})
