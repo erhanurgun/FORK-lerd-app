@@ -156,7 +156,12 @@ func Run(ctx context.Context, path string, fw *config.Framework) Response {
 		resp.add(c)
 	}
 	if hasEnvConfig(fw) {
-		if c, ok := checkEnvPresent(path, envFile, fwExampleFile(fw)); ok {
+		// The file that has to exist is the one lerd writes, not whichever one it
+		// can currently read: a Drupal project with no .env is read through the
+		// settings.php its installer wrote, and reporting that as the env file
+		// present would hide the missing one lerd and drush both need.
+		writeFile, _ := fw.Env.ResolveWrite(path)
+		if c, ok := checkEnvPresent(path, writeFile, fwExampleFile(fw)); ok {
 			resp.add(c)
 		}
 		if c, ok := checkServiceWiring(path, envFile, fw); ok {
@@ -388,11 +393,16 @@ func applyLabels(resp *Response) {
 
 // checkEnvPresent fails when the framework's env file is missing — every other
 // env-driven check would otherwise read an empty file and misreport.
+// envMissingDetail names the remedy rather than the symptom. `lerd env` is what
+// creates the file, copying the framework's example when it declares one and
+// seeding an empty one when it does not, and then writes the connection values
+// for the services the project picks. Leaving the finding at "it is missing"
+// hands the user a question lerd already knows the answer to.
 func envMissingDetail(envFile, exampleFile string) string {
 	if exampleFile == "" {
-		return fmt.Sprintf("%s is missing.", envFile)
+		return fmt.Sprintf("%s is missing, run `lerd env` to create it and wire the services this project picks.", envFile)
 	}
-	return fmt.Sprintf("%s is missing, copy it from the example and configure it.", envFile)
+	return fmt.Sprintf("%s is missing, run `lerd env` to create it from %s and wire the services this project picks.", envFile, exampleFile)
 }
 
 func checkEnvPresent(path, envFile, exampleFile string) (Check, bool) {
