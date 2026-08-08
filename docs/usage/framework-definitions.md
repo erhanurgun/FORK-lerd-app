@@ -15,6 +15,8 @@ Lerd resolves framework definitions from multiple sources. Higher priority wins:
 
 Workers from the user overlay and project `.lerd.yaml` are merged on top of store or built-in definitions. See [Framework workers](framework-workers.md) for the worker lifecycle and how custom workers are added and managed.
 
+`lerd install` seeds the store: it pulls the index early, so detection sees the whole published catalogue rather than only the frameworks compiled into the binary, then fetches every definition the index lists. A fresh machine therefore ends up with the same definitions an established one has, and resolves any of them offline, instead of collecting them one at a time as the projects that need each one turn up. The refresh keeps any definition you already have that the store has since stopped publishing, and the watcher refreshes the index every six hours. An install that cannot reach the store keeps working on the built-ins and seeds itself on the next run.
+
 ::: warning Untrusted projects
 A `.lerd.yaml` ships inside a project, so its embedded `framework_def` is treated as untrusted, and lerd strips its host-execution surfaces when restoring it into the store: `command`-type doctor checks, `host: true` workers, the whole `commands:` list, the `nginx:` block, `requires:`, and `php.cli_ini` are dropped, because each would otherwise run on your host, rewrite your nginx config, or start containers straight from a cloned repo. Those run only for frameworks that come from the store, a built-in, or your user overlay (`~/.config/lerd/frameworks/`); a definition already installed there is never overwritten by a project's embedded copy. In-container workers, env, symlink, and combo checks are inert and still work from a project definition.
 
