@@ -6,7 +6,22 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
+
+// resetCPUSamples clears the counters carried between reads so each test starts
+// from a process that has never sampled anything.
+func resetCPUSamples(t *testing.T) {
+	t.Helper()
+	cpuMu.Lock()
+	cpuPrev = map[string]cpuSample{}
+	cpuMu.Unlock()
+	t.Cleanup(func() {
+		cpuMu.Lock()
+		cpuPrev = map[string]cpuSample{}
+		cpuMu.Unlock()
+	})
+}
 
 func TestReadCgroupStatKey(t *testing.T) {
 	dir := t.TempDir()
@@ -92,6 +107,57 @@ func TestCgroupMemoryHeld_FallsBackWhenStatOutrunsCurrent(t *testing.T) {
 	held, ok := cgroupMemoryHeld(cg)
 	if !ok || held != 100000 {
 		t.Errorf("held = %d ok = %v, want 100000 true (fall back to memory.current)", held, ok)
+	}
+}
+
+// CPU comes from the cumulative counter across consecutive reads, so the rate
+// covers the interval that actually elapsed, including the idle stretch between
+// refreshes, rather than a window opened inside the read itself.
+func TestCPURates_MeasureTheIntervalBetweenReads(t *testing.T) {
+	resetCPUSamples(t)
+	at := time.Unix(1_000_000, 0)
+
+	// Nothing to compare a first sighting against.
+	if got := cpuRates(map[string]int64{"lerd-ui.service": 5_000_000}, at); got["lerd-ui.service"] != 0 {
+		t.Errorf("first read = %v, want 0", got["lerd-ui.service"])
+	}
+
+	// Half a second of CPU over ten seconds is 5% of one core.
+	got := cpuRates(map[string]int64{"lerd-ui.service": 5_500_000}, at.Add(10*time.Second))
+	if p := got["lerd-ui.service"]; p < 4.99 || p > 5.01 {
+		t.Errorf("rate = %v, want ~5", p)
+	}
+}
+
+// A restarted unit starts its counter again, which must not read as a spike, and
+// a unit that has gone away must not sit in the sample map forever.
+func TestCPURates_RestartAndDeparture(t *testing.T) {
+	resetCPUSamples(t)
+	at := time.Unix(2_000_000, 0)
+	cpuRates(map[string]int64{"lerd-queue.service": 9_000_000, "lerd-gone.service": 1}, at)
+
+	got := cpuRates(map[string]int64{"lerd-queue.service": 12_000}, at.Add(10*time.Second))
+	if got["lerd-queue.service"] != 0 {
+		t.Errorf("restarted unit = %v, want 0", got["lerd-queue.service"])
+	}
+	if _, ok := cpuPrev["lerd-gone.service"]; ok {
+		t.Error("a unit absent from the read should not stay in the sample map")
+	}
+}
+
+func TestCgroupCPUUsec_PrefersTheCgroupOverSystemd(t *testing.T) {
+	cg := fakeCgroup(t, "1000\n", "anon 1000\n")
+	dir := filepath.Join(cgroupRoot, cg)
+	if err := os.WriteFile(filepath.Join(dir, "cpu.stat"), []byte("usage_usec 121771336\nuser_usec 60824838\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := cgroupCPUUsec(cg, 7_000_000_000); got != 121771336 {
+		t.Errorf("usage = %d, want the cgroup's 121771336", got)
+	}
+	// No cpu.stat (an unreadable or v1 cgroup): systemd's own counter, in
+	// nanoseconds, is the fallback.
+	if got := cgroupCPUUsec("/nope", 7_000_000_000); got != 7_000_000 {
+		t.Errorf("fallback = %d, want 7000000", got)
 	}
 }
 

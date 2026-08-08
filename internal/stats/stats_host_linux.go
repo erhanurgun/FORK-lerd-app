@@ -8,46 +8,46 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
-
-// hostCPUSampleInterval is the gap between the two CPUUsageNSec reads used to
-// turn systemd's cumulative CPU counter into an instantaneous rate. Kept short
-// because Read runs this concurrently with the ~3s podman stream, so it adds no
-// wall time of its own.
-var hostCPUSampleInterval = 900 * time.Millisecond
 
 // hostCmdTimeout bounds each systemctl call so a wedged systemd never hangs the
 // stats read.
 const hostCmdTimeout = 3 * time.Second
 
-// readHostProcesses reports the resource usage of lerd's own host-side processes
-// (the lerd-ui/watcher/tray daemons and any host-side workers such as a Vite or
-// host-proxy dev server run via fnm) using systemd's per-unit cgroup accounting.
-// Memory is what the unit holds, page cache excluded. Container units appear here
-// too — Read merges their memory into the podman rows so every row in the list is
-// measured the same way. Linux only; the macOS stub returns nothing.
+// cpuPrimeGap is the one short window a process pays on its very first read,
+// where no earlier counter exists to measure against. Without it the first
+// snapshot after a restart would be a column of zeroes, which reads as broken.
+var cpuPrimeGap = 250 * time.Millisecond
+
+// readHostProcesses reports the resource usage of every lerd unit: the containers,
+// each of which runs as a quadlet unit, and lerd's own daemons (ui, watcher, tray)
+// and host-side workers such as a Vite dev server run via fnm. Everything is read
+// from the units' cgroups, so one pass over a handful of files measures the whole
+// list the same way. Memory is what the unit holds with page cache excluded, CPU
+// is the time it used since the previous read. Linux only; the macOS stub returns
+// nothing and Read falls back to podman there.
 func readHostProcesses() ([]ContainerStat, error) {
 	units := listLerdServices()
 	if len(units) == 0 {
 		return nil, nil
 	}
-	start := time.Now()
-	first := showProps(units)
-	time.Sleep(hostCPUSampleInterval)
-	elapsed := time.Since(start).Seconds()
-	cur := showProps(units)
+	props := showProps(units)
+	usage, at := sampleCPU(props), time.Now()
+	if noPriorSamples() {
+		cpuRates(usage, at)
+		time.Sleep(cpuPrimeGap)
+		usage, at = sampleCPU(props), time.Now()
+	}
+	rates := cpuRates(usage, at)
 
 	totalRAM := hostTotalRAM()
 	var rows []ContainerStat
 	for _, u := range units {
-		c, ok := cur[u]
+		c, ok := props[u]
 		if !ok {
 			continue
-		}
-		cpuPct := 0.0
-		if prev, ok := first[u]; ok && elapsed > 0 && c.cpuNsec >= prev.cpuNsec {
-			cpuPct = float64(c.cpuNsec-prev.cpuNsec) / 1e9 / elapsed * 100
 		}
 		memPct := 0.0
 		if totalRAM > 0 {
@@ -55,7 +55,7 @@ func readHostProcesses() ([]ContainerStat, error) {
 		}
 		rows = append(rows, ContainerStat{
 			Name:       strings.TrimSuffix(u, ".service"),
-			CPUPercent: cpuPct,
+			CPUPercent: rates[u],
 			MemBytes:   c.memBytes,
 			MemLimit:   totalRAM,
 			MemPercent: memPct,
@@ -64,9 +64,72 @@ func readHostProcesses() ([]ContainerStat, error) {
 	return rows, nil
 }
 
-// listLerdServices returns the running lerd-prefixed user services. This
-// includes container quadlet units (lerd-mysql.service, …) which Read dedupes
-// against the podman rows, leaving only the genuine host-side processes.
+// cpuSample is one unit's cumulative CPU time and the moment it was read.
+type cpuSample struct {
+	usec int64
+	at   time.Time
+}
+
+var (
+	cpuMu   sync.Mutex
+	cpuPrev = map[string]cpuSample{}
+)
+
+// noPriorSamples reports whether this process has ever sampled the CPU counters.
+func noPriorSamples() bool {
+	cpuMu.Lock()
+	defer cpuMu.Unlock()
+	return len(cpuPrev) == 0
+}
+
+// sampleCPU reads every unit's cumulative CPU time in one pass over the cgroups.
+func sampleCPU(props map[string]hostProps) map[string]int64 {
+	usage := make(map[string]int64, len(props))
+	for u, p := range props {
+		usage[u] = cgroupCPUUsec(p.cgroup, p.cpuNsec)
+	}
+	return usage
+}
+
+// cpuRates turns this read's cumulative counters into a percentage of one core
+// per unit, measured against the previous read, and keeps them for the next one.
+// Spreading the cost over the interval that actually elapsed is the number a
+// person reading the list is after: a sample window opened inside the read only
+// ever catches lerd measuring itself. A unit seen for the first time has nothing
+// to compare against, and a counter that went backwards is a restart; both report
+// zero rather than a spike. Units absent from this read drop out of the map.
+func cpuRates(usage map[string]int64, at time.Time) map[string]float64 {
+	cpuMu.Lock()
+	defer cpuMu.Unlock()
+	rates := make(map[string]float64, len(usage))
+	next := make(map[string]cpuSample, len(usage))
+	for u, cur := range usage {
+		if prev, ok := cpuPrev[u]; ok {
+			if elapsed := at.Sub(prev.at).Seconds(); elapsed > 0 && cur >= prev.usec {
+				rates[u] = float64(cur-prev.usec) / 1e6 / elapsed * 100
+			}
+		}
+		next[u] = cpuSample{usec: cur, at: at}
+	}
+	cpuPrev = next
+	return rates
+}
+
+// cgroupCPUUsec returns a unit's cumulative CPU time in microseconds, read from
+// its cgroup. Falls back to systemd's own counter (nanoseconds) when the cgroup
+// file isn't there, so a unit is never silently reported idle.
+func cgroupCPUUsec(cg string, fallbackNsec uint64) int64 {
+	if cg != "" {
+		if v := readCgroupStatKey(cgroupRoot+cg+"/cpu.stat", "usage_usec"); v > 0 {
+			return v
+		}
+	}
+	return int64(fallbackNsec / 1000)
+}
+
+// listLerdServices returns the running lerd-prefixed user services: the container
+// quadlet units (lerd-mysql.service, …) and lerd's own daemons alike, which
+// together are every row the dashboard shows.
 func listLerdServices() []string {
 	ctx, cancel := context.WithTimeout(context.Background(), hostCmdTimeout)
 	defer cancel()
