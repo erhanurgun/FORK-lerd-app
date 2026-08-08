@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/geodro/lerd/internal/config"
 	"github.com/geodro/lerd/internal/podman"
 )
 
@@ -127,6 +128,21 @@ func TestBuildPlistNoOptionalFields(t *testing.T) {
 	}
 	if strings.Contains(plist, "StandardOutPath") {
 		t.Error("expected no StandardOutPath key")
+	}
+}
+
+// TestBuildPlistExitTimeoutOnlyForWatcher pins that the extended exit grace is
+// scoped to the watcher, which runs the full teardown on logout. Granting it to
+// every job would make launchd wait a minute on any unit that hangs on stop.
+func TestBuildPlistExitTimeoutOnlyForWatcher(t *testing.T) {
+	watcher := buildPlist(plistLabel(podman.WatcherUnit), []string{"/bin/true"}, true, keepAliveAlways, "", "")
+	if !strings.Contains(watcher, "<key>ExitTimeOut</key>") {
+		t.Error("watcher plist must set ExitTimeOut so the teardown survives launchd's default exit grace")
+	}
+
+	other := buildPlist(plistLabel("lerd-nginx"), []string{"/bin/true"}, true, keepAliveAlways, "", "")
+	if strings.Contains(other, "ExitTimeOut") {
+		t.Error("non-watcher plists must not set ExitTimeOut")
 	}
 }
 
@@ -695,5 +711,29 @@ func TestPrecreateBindMountDirs_SkipsNamedVolume(t *testing.T) {
 	}
 	if _, err := os.Stat(bind); err != nil {
 		t.Errorf("bind-mount source not pre-created: %v", err)
+	}
+}
+
+// TestBootout_MarksWatcherStops is the regression test for a logout the watcher
+// invented. launchd delivers a bootout as the same SIGTERM a real logout does,
+// so every bootout of the watcher has to mark itself first; otherwise `lerd
+// start`, which boots the watcher out before re-bootstrapping it, makes the
+// watcher tear down everything start had just brought up.
+func TestBootout_MarksWatcherStops(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmp, ".config"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(tmp, ".local", "share"))
+
+	// A domain that cannot exist, so launchctl fails fast without touching any
+	// real job. The marker is written before the call either way.
+	bootout(podman.WatcherUnit, "gui/4294967290", "com.lerd.does-not-exist") //nolint:errcheck
+	if !config.ConsumeWatcherManagedStop() {
+		t.Error("booting out the watcher must mark the stop as lerd-initiated")
+	}
+
+	bootout("lerd-nginx", "gui/4294967290", "com.lerd.does-not-exist") //nolint:errcheck
+	if config.ConsumeWatcherManagedStop() {
+		t.Error("booting out any other unit must not mark a watcher stop")
 	}
 }

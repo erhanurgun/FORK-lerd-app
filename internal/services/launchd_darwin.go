@@ -23,6 +23,15 @@ func launchctl(args ...string) ([]byte, error) {
 	return exec.CommandContext(ctx, "launchctl", args...).CombinedOutput()
 }
 
+// bootout removes a job from the launchd domain. Every bootout of the watcher
+// goes through here so it is always marked as a lerd-initiated stop first:
+// launchd delivers a bootout as the same SIGTERM a logout does, and the watcher
+// tears the whole environment down when it reads one as a logout.
+func bootout(name, domain, label string) ([]byte, error) {
+	podman.MarkManagedWatcherStop(name)
+	return launchctl("bootout", domain+"/"+label)
+}
+
 // uidDomain returns the launchd GUI domain for the current user, e.g. "gui/501".
 func uidDomain() string {
 	return fmt.Sprintf("gui/%d", os.Getuid())
@@ -206,6 +215,13 @@ func buildPlist(lbl string, args []string, runAtLoad bool, keepAlive keepAlivePo
 		sb.WriteString("\t<key>StandardErrorPath</key>\n\t<string>")
 		sb.WriteString(xmlEscStr(stderrPath))
 		sb.WriteString("</string>\n")
+	}
+	// The watcher runs the full teardown (containers, then the Podman Machine
+	// VM) when launchd signals a logout, which does not fit the 5s grace
+	// launchd gives these jobs before SIGKILL. Every other job stops fast, and
+	// a longer timeout there would only slow down a hung unit.
+	if lbl == plistLabel(podman.WatcherUnit) {
+		sb.WriteString("\t<key>ExitTimeOut</key>\n\t<integer>60</integer>\n")
 	}
 	sb.WriteString("</dict>\n</plist>\n")
 	return sb.String()
@@ -668,7 +684,7 @@ func (m *darwinServiceManager) Start(name string) error {
 	alreadyInDomain := false
 	if _, err := launchctl("print", domain+"/"+label); err == nil {
 		alreadyInDomain = true
-		launchctl("bootout", domain+"/"+label) //nolint:errcheck
+		bootout(name, domain, label) //nolint:errcheck
 		// Brief pause so macOS Sequoia+ doesn't reject the immediately-following
 		// bootstrap with a spurious "already bootstrapped" (36) or EBUSY (5) error.
 		time.Sleep(200 * time.Millisecond)
@@ -783,7 +799,7 @@ func (m *darwinServiceManager) Stop(name string) error {
 	domain := uidDomain()
 	label := plistLabel(name)
 
-	out, err := launchctl("bootout", domain+"/"+label)
+	out, err := bootout(name, domain, label)
 	if err != nil {
 		s := string(out)
 		// 36 = not loaded / already gone — treat as success
@@ -812,7 +828,7 @@ func (m *darwinServiceManager) Restart(name string) error {
 	// Bootout so the subsequent Start (bootstrap) picks up the current
 	// plist on disk. kickstart -k would use launchd's cached copy.
 	if _, err := launchctl("print", domain+"/"+label); err == nil {
-		launchctl("bootout", domain+"/"+label) //nolint:errcheck
+		bootout(name, domain, label) //nolint:errcheck
 		time.Sleep(200 * time.Millisecond)
 	}
 	return m.Start(name)

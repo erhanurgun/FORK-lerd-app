@@ -1,15 +1,18 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"bytes"
@@ -25,6 +28,7 @@ import (
 	"github.com/geodro/lerd/internal/eventbus"
 	"github.com/geodro/lerd/internal/feedback"
 	gitpkg "github.com/geodro/lerd/internal/git"
+	"github.com/geodro/lerd/internal/lifecycle"
 	"github.com/geodro/lerd/internal/nginx"
 	nodeDet "github.com/geodro/lerd/internal/node"
 	phpDet "github.com/geodro/lerd/internal/php"
@@ -382,6 +386,33 @@ func printDNSDiagnostic(w io.Writer, diag dns.Diagnostic) {
 	}
 }
 
+// shutdownOnSignal blocks until a termination signal arrives, runs the teardown,
+// then cancels the watch loop so the process exits normally rather than being
+// killed with containers still writing. Signals after the first are ignored;
+// the teardown is already under way.
+//
+// A signal alone does not mean the machine is going away. `lerd install`,
+// `lerd update` and `lerd quit` all stop the watcher too, and both launchd and
+// systemd deliver those as the same SIGTERM a logout does. Tearing the whole
+// environment down there would stop the containers and the Podman Machine VM in
+// the middle of an install, so lerd marks its own stops and we exit quietly.
+func shutdownOnSignal(sigs <-chan os.Signal, quit func() error, cancel context.CancelFunc) {
+	sig, ok := <-sigs
+	if !ok {
+		return
+	}
+	if config.ConsumeWatcherManagedStop() {
+		fmt.Printf("lerd watcher: received %s from lerd itself, exiting without teardown\n", sig)
+		cancel()
+		return
+	}
+	fmt.Printf("lerd watcher: received %s, stopping lerd\n", sig)
+	if err := quit(); err != nil {
+		feedback.Warn("shutdown: %v", err)
+	}
+	cancel()
+}
+
 // newWatchCmd returns the watch command (used by the watcher systemd service).
 func newWatchCmd() *cobra.Command {
 	return &cobra.Command{
@@ -390,6 +421,17 @@ func newWatchCmd() *cobra.Command {
 		Hidden: true,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			daemon.TuneRuntime()
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			sigChan := make(chan os.Signal, 1)
+			signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+			defer signal.Stop(sigChan)
+			go shutdownOnSignal(sigChan, func() error {
+				return lifecycle.ShutdownForLogout(lifecycle.SimpleRunner)
+			}, cancel)
+
 			if os.Getenv("LERD_DEBUG") != "" {
 				watcher.SetLogger(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 					Level: slog.LevelDebug,
@@ -656,7 +698,7 @@ func newWatchCmd() *cobra.Command {
 			// (lerd-ui, lerd-tray, test harnesses), then reconcile.
 			notifyReadyThenScan(lerdSystemd.NotifyReady, func() { bootScan(cfg) })
 
-			return watcher.Watch(cfg.ParkedDirectories, func(projectPath string) {
+			return watcher.Watch(ctx, cfg.ParkedDirectories, func(projectPath string) {
 				fmt.Printf("New project detected: %s\n", projectPath)
 				registered, err := cli.RegisterProject(projectPath, cfg)
 				if err != nil {

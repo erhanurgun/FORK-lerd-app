@@ -15,6 +15,7 @@ import (
 	"github.com/geodro/lerd/internal/config"
 	"github.com/geodro/lerd/internal/dns"
 	"github.com/geodro/lerd/internal/feedback"
+	"github.com/geodro/lerd/internal/lifecycle"
 	"github.com/geodro/lerd/internal/nginx"
 	nodeDet "github.com/geodro/lerd/internal/node"
 	phpDet "github.com/geodro/lerd/internal/php"
@@ -1103,7 +1104,7 @@ func writeUserServiceWithReload(name, content string) error {
 // FrankenPHP runtimes. startRestoredServices only covers global services, so
 // without this, uninstall+reinstall leaves these quadlets stopped on disk.
 func startPerSiteContainers() {
-	units := installedCustomContainerUnits()
+	units := lifecycle.InstalledCustomContainerUnits()
 	if len(units) == 0 {
 		return
 	}

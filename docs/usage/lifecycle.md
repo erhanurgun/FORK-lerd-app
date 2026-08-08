@@ -85,9 +85,47 @@ The full off-switch:
 5. Stops the `lerd-dns` forwarder. Unlike `lerd stop`, quit is a full teardown, so it takes DNS down too. The watcher is stopped first (step 3) because it is the only thing that would restart `lerd-dns`.
 6. **macOS only:** stops the Podman Machine VM.
 
-After `lerd quit` there are no lerd processes left running. On macOS the Podman Machine VM is also shut down, so `lerd start` will bring it back up on the next run. This is the right command before a reinstall, a system reboot, or before pulling a major update.
+After `lerd quit` there are no lerd processes left running. On macOS the Podman Machine VM is also shut down, so `lerd start` will bring it back up on the next run. This is the right command before a reinstall or before pulling a major update. Before a reboot it is optional on macOS, where the watcher now runs the same teardown for you.
 
 The system tray's **Quit Lerd** menu item calls `lerd quit`.
+
+---
+
+## Shutdown on logout or restart (macOS)
+
+On macOS you no longer have to remember `lerd quit` before rebooting. When you log out, restart, or shut down, launchd sends the watcher a `SIGTERM` and the watcher tears lerd down before it exits:
+
+1. Stops containers, services, and workers.
+2. **Stops the Podman Machine VM.**
+3. Stops `lerd-ui`, `lerd-tray`, and `lerd-dns`.
+4. Exits, which lets launchd finish terminating the session.
+
+This matters most for databases. Killing the VM with a database mid-write leaves the data files dirty, and the container spends minutes replaying its write-ahead log on the next start; TimescaleDB and Postgres are the usual victims. Stopping the VM properly avoids that recovery pass entirely.
+
+The VM goes down at step 2 rather than last precisely because it is the step whose loss costs something. The host processes above it are ones launchd is terminating anyway, so if the exit grace ever runs out they are the right thing to lose. That grace is 60 seconds for the watcher; every other lerd job keeps launchd's default, which `launchctl print` reports as 5 seconds.
+
+The watcher never stops its own unit here. Asking launchd to bootout the job the watcher is running inside would block until that process exits, which it cannot do from inside the call, so the teardown would hang until the grace expired and never reach the VM at all.
+
+### Restarting the watcher does not tear anything down
+
+A signal on its own does not mean the machine is going away. `lerd install`, `lerd update` and `lerd quit` all stop the watcher too, and launchd and systemd deliver those as exactly the same `SIGTERM` a logout does. Tearing the environment down there would stop every container and the Podman Machine VM in the middle of an install.
+
+So lerd marks its own stops. Every path that stops or restarts the watcher writes a short-lived marker first, and the watcher reads it as "this came from lerd" and exits without running the teardown. You will see this in `~/Library/Logs/lerd/lerd-watcher.log`:
+
+```
+lerd watcher: received terminated from lerd itself, exiting without teardown
+lerd watcher: received terminated, stopping lerd
+```
+
+The first is lerd restarting its own watcher. The second is a real logout.
+
+The marker expires after a minute, so a watcher that was killed before it could read one can never leave a later logout suppressed. Stopping the watcher by hand (`launchctl bootout`, `systemctl --user stop lerd-watcher`) is not marked and does run the full teardown, which is the same thing `lerd quit` would have done.
+
+Because this runs the full teardown, lerd is left in the stopped state after a reboot, exactly as if you had run `lerd stop`. That is deliberate: `lerd-ui`'s health watcher may still be alive while the machine is powering off, and without the marker it would read every unit being stopped as a crash and fire heal attempts and notifications against the teardown. If [autostart](#autostart-on-login) is enabled the marker is cleared automatically when `lerd-ui` comes back up; otherwise run `lerd start`.
+
+::: tip Linux
+The watcher does the same on Linux, so containers get a graceful stop on logout instead of being torn down with the session. There is no VM step: podman runs natively, so that part is a no-op.
+:::
 
 ---
 
