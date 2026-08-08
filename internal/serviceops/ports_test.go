@@ -298,11 +298,15 @@ func TestSetPublishedPortRollsBackOnStartFailure(t *testing.T) {
 	fakeQuadletOnDisk(t, "mysql") // ServiceInstalled -> true
 
 	prevStatus, prevStop, prevStart := portsUnitStatus, portsStopUnit, portsStartUnit
-	prevWait, prevRerender := portsWaitReady, portsRerender
+	prevWait, prevRerender, prevAvail := portsWaitReady, portsRerender, portsPortAvailable
 	t.Cleanup(func() {
 		portsUnitStatus, portsStopUnit, portsStartUnit = prevStatus, prevStop, prevStart
-		portsWaitReady, portsRerender = prevWait, prevRerender
+		portsWaitReady, portsRerender, portsPortAvailable = prevWait, prevRerender, prevAvail
 	})
+	// The fixed ports below sit inside the ephemeral range, so the real bind
+	// pre-flight would fail whenever another test's listener on :0 happened to be
+	// handed one of them. This test is about the restart sequence, not the host.
+	portsPortAvailable = func(int) bool { return true }
 
 	startCalls := 0
 	portsUnitStatus = func(string) (string, error) { return "active", nil }
@@ -421,11 +425,15 @@ func TestSetPublishedPortForRollsBackOnStartFailure(t *testing.T) {
 	fakeQuadletOnDisk(t, "mailpit") // ServiceInstalled -> true
 
 	prevStatus, prevStop, prevStart := portsUnitStatus, portsStopUnit, portsStartUnit
-	prevWait, prevRerender := portsWaitReady, portsRerender
+	prevWait, prevRerender, prevAvail := portsWaitReady, portsRerender, portsPortAvailable
 	t.Cleanup(func() {
 		portsUnitStatus, portsStopUnit, portsStartUnit = prevStatus, prevStop, prevStart
-		portsWaitReady, portsRerender = prevWait, prevRerender
+		portsWaitReady, portsRerender, portsPortAvailable = prevWait, prevRerender, prevAvail
 	})
+	// The fixed ports below sit inside the ephemeral range, so the real bind
+	// pre-flight would fail whenever another test's listener on :0 happened to be
+	// handed one of them. This test is about the restart sequence, not the host.
+	portsPortAvailable = func(int) bool { return true }
 
 	startCalls := 0
 	portsUnitStatus = func(string) (string, error) { return "active", nil }
@@ -539,11 +547,15 @@ func TestRestorePublishedPorts_RefreshesHostProxyToRestoredPort(t *testing.T) {
 	fakeQuadletOnDisk(t, "mysql") // ServiceInstalled -> true
 
 	prevStatus, prevStop, prevStart := portsUnitStatus, portsStopUnit, portsStartUnit
-	prevWait, prevRerender := portsWaitReady, portsRerender
+	prevWait, prevRerender, prevAvail := portsWaitReady, portsRerender, portsPortAvailable
 	t.Cleanup(func() {
 		portsUnitStatus, portsStopUnit, portsStartUnit = prevStatus, prevStop, prevStart
-		portsWaitReady, portsRerender = prevWait, prevRerender
+		portsWaitReady, portsRerender, portsPortAvailable = prevWait, prevRerender, prevAvail
 	})
+	// The fixed ports below sit inside the ephemeral range, so the real bind
+	// pre-flight would fail whenever another test's listener on :0 happened to be
+	// handed one of them. This test is about the restart sequence, not the host.
+	portsPortAvailable = func(int) bool { return true }
 	portsUnitStatus = func(string) (string, error) { return "active", nil }
 	portsStopUnit = func(string) error { return nil }
 	portsStartUnit = func(string) error { return nil }
