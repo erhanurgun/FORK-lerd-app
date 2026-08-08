@@ -131,11 +131,28 @@ The installer walks you through starter kit selection, database setup, and other
 
 
 ```bash
-lerd new myapp                          # create using Laravel (default)
-lerd new myapp --framework=symfony      # create using Symfony's create command
+lerd new                                # ask for the name, the framework and the version
+lerd new myapp                          # ask which framework to use
+lerd new myapp --framework=symfony      # scaffold Symfony, no questions
 lerd new /path/to/myapp                 # create at an absolute path
 lerd new myapp -- --no-interaction      # pass extra flags to the scaffold command
 ```
+
+On a terminal it asks which framework to scaffold rather than assuming one,
+offering the catalogue [`lerd framework list`](#lerd-framework-list) shows, which
+your install seeds from the store. When the framework you pick has more than one
+major published it asks which, defaulting to the current release and pulling that
+major's definition before scaffolding. Called with no name at all it asks for
+that too. Naming a framework with `--framework` skips the question, and a run
+with no terminal skips all of them and scaffolds the default, so scripts and CI
+never start blocking on a prompt.
+
+The command then carries the project the rest of the way: it links the new
+directory, which routes a project with no `.lerd.yaml` through the
+[init wizard](/usage/sites) for PHP version, HTTPS and services, and offers setup
+at the end. What it cannot do is move your own shell, so it closes by telling you
+to `cd` into the project. A run with no terminal stops after scaffolding and
+prints the `lerd link && lerd setup` hint as before.
 
 `--framework` works before or after the name. The definition comes from the
 store, so a new project starts from the currently published create command rather
@@ -162,7 +179,12 @@ framework whose current release tops out below your default PHP is scaffolded on
 a version inside that range instead, and composer resolves against a PHP the
 framework actually supports rather than rejecting every candidate.
 
-After creation:
+After creation, move into the project:
+```bash
+cd myapp
+```
+
+A run with no terminal did not link or set the project up, so finish it by hand:
 ```bash
 cd myapp
 lerd link

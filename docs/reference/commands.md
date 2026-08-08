@@ -43,8 +43,9 @@
 
 | Command | Description |
 |---|---|
-| `lerd new <name-or-path>` | Scaffold a new PHP project using the framework's create command (default: Laravel) |
-| `lerd new <name> --framework=<name>` | Scaffold using a specific framework |
+| `lerd new` | Ask for the project name, framework and version, then scaffold, link and set it up |
+| `lerd new <name-or-path>` | Ask which framework to scaffold, then take the project through link and setup |
+| `lerd new <name> --framework=<name>` | Scaffold a specific framework, skipping the question |
 | `lerd new <name> -- <extra args>` | Pass extra args to the scaffold command |
 
 ## Project setup

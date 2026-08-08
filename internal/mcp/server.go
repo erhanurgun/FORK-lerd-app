@@ -3747,7 +3747,7 @@ func execProjectNew(args map[string]any) (any, *rpcError) {
 	}
 	extraArgs := strSliceArg(args, "args")
 
-	fw, ok := config.GetFrameworkForScaffold(frameworkName)
+	fw, ok := config.GetFrameworkForScaffold(frameworkName, "")
 	if !ok {
 		return toolErr(fmt.Sprintf("unknown framework %q — use framework_list to see available frameworks", frameworkName)), nil
 	}
