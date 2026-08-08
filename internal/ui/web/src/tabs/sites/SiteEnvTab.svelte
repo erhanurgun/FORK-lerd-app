@@ -21,7 +21,7 @@
   import { status } from '$stores/status';
   import { addedLineNumbers } from '$lib/diff';
   import { homeShorten } from '$lib/path';
-  import { findDuplicates, keepOnly } from '$lib/envDuplicates';
+  import { findDuplicates, keepOnlyEach } from '$lib/envDuplicates';
   import { m } from '../../paraglide/messages.js';
 
   interface Props {
@@ -69,14 +69,12 @@
 
   // Resolving in the modal drops the other occurrences from the buffer. That
   // leaves an ordinary unsaved change the user reviews and saves with the normal
-  // button, the same way a staged missing key does. Choices are applied from the
-  // bottom up so each removal leaves the earlier line numbers valid.
+  // button, the same way a staged missing key does. Every choice carries a line
+  // number read from the same buffer, so they are resolved in one pass: removing
+  // one key's extra lines renumbers the ones below, and applying the choices one
+  // after another would drop lines the user asked to keep.
   function applyDuplicateChoices(choices: { key: string; line: number }[]) {
-    let next = text;
-    for (const c of [...choices].sort((a, b) => b.line - a.line)) {
-      next = keepOnly(next, c.key, c.line);
-    }
-    text = next;
+    text = keepOnlyEach(text, choices);
   }
 
   function reviewDuplicates() {

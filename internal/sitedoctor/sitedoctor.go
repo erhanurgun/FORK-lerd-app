@@ -295,9 +295,17 @@ var (
 // installed it produced no finding at all.
 //
 // SQLite is excluded because it is a file the project owns rather than
-// something lerd runs.
+// something lerd runs, and so is anything the project names in
+// LERD_EXTERNAL_SERVICES: that is the developer saying they run it themselves,
+// which the wiring check and `lerd env` already respect. Reporting one of those
+// missing would offer to install a second copy alongside the real one.
 func declaredServices(path string, fw *config.Framework) []string {
 	seen := map[string]bool{"sqlite": true}
+	if _, external := envfile.ReadOverride(path); external != nil {
+		for name := range external {
+			seen[strings.ToLower(strings.TrimSpace(name))] = true
+		}
+	}
 	var out []string
 	add := func(name string) {
 		name = strings.ToLower(strings.TrimSpace(name))
@@ -550,8 +558,13 @@ func checkSQLiteDatabase(path, envPath, envFormat string, fw *config.Framework) 
 	for _, abs := range sqliteFilePaths(path, publicDirOf(fw), dbFile) {
 		info, err := os.Stat(abs)
 		switch {
-		case err != nil:
+		case os.IsNotExist(err):
 			continue // not here; the next candidate root may have it
+		case err != nil:
+			// A permission error, a flaky mount, a symlink loop: the file may be
+			// there and healthy. Saying it is missing would offer to migrate over
+			// a database this cannot even see.
+			return Check{}, false
 		case info.Size() == 0:
 			empty = true
 		default:

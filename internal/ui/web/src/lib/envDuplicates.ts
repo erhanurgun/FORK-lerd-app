@@ -40,14 +40,25 @@ export function findDuplicates(text: string): EnvDuplicate[] {
  * and saves like any other.
  */
 export function keepOnly(text: string, key: string, keepLine: number): string {
-  const lines = text.split("\n");
-  const out = lines.filter((raw, i) => {
-    if (i === keepLine) return true;
+  return keepOnlyEach(text, [{ key, line: keepLine }]);
+}
+
+/**
+ * Resolves several keys at once against the buffer the line numbers were read
+ * from. One pass, because dropping an occurrence renumbers every line under it:
+ * resolving the keys one after another would leave the later choices pointing at
+ * lines that have moved, and the file would lose keys nobody chose to drop.
+ */
+export function keepOnlyEach(text: string, choices: { key: string; line: number }[]): string {
+  if (choices.length === 0) return text;
+  const keep = new Map(choices.map((c) => [c.key, c.line]));
+  const out = text.split("\n").filter((raw, i) => {
     const line = raw.trim();
     if (!line || line.startsWith("#")) return true;
     const eq = line.indexOf("=");
     if (eq <= 0) return true;
-    return line.slice(0, eq).trim() !== key;
+    const keepLine = keep.get(line.slice(0, eq).trim());
+    return keepLine === undefined || keepLine === i;
   });
   return out.join("\n");
 }

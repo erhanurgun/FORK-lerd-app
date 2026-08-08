@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // writeStoreIndex caches a store index publishing one framework at the given
@@ -181,5 +182,67 @@ func TestClampFrameworkVersion_UnionsDiskAndPublished(t *testing.T) {
 
 	if got := clampFrameworkVersion("acme", "2"); got != "4" {
 		t.Errorf("clampFrameworkVersion(2) = %q, want 4 (installed, below the published range)", got)
+	}
+}
+
+// The gate that stops lerd asking for a version the store has never published
+// answers from the cached index, and that cache is written by the store's own
+// refresh, not by this call. The day a new major lands, every machine whose
+// cache predates it would skip the fetch and silently serve the project the
+// previous major's definition: its PHP clamp, its workers, its doctor checks.
+// A version above everything the cache knows about is exactly the case where
+// the cache is the stale party, so it is asked for.
+func TestGetFrameworkForDir_FetchesAMajorNewerThanTheCachedIndex(t *testing.T) {
+	setConfigDir(t)
+	// The cache predates the release: it lists 12 as the newest, and it was
+	// written before the store's refresh window, so what it omits proves nothing.
+	writeStoreIndex(t, "acme", "12", "12", "11", "10")
+	ageStoreIndex(t, 48*time.Hour)
+	// The store itself already publishes 13.
+	asked := recordFetches(t, "13", "12", "11", "10")
+
+	dir := t.TempDir()
+	writeLerdYAML(t, dir, "framework: acme\nframework_version: \"13\"\n")
+
+	fw, ok := GetFrameworkForDir("acme", dir)
+	if !ok {
+		t.Fatal("GetFrameworkForDir resolved nothing")
+	}
+	if fw.Version != "13" {
+		t.Errorf("version = %q, want 13: the project runs the major the store publishes", fw.Version)
+	}
+	if len(*asked) == 0 || (*asked)[0] != "13" {
+		t.Errorf("fetches = %v, want 13 asked for first", *asked)
+	}
+}
+
+// A version below the published floor is still never asked for: that request
+// can only 404, which is what the gate is there to prevent.
+func TestGetFrameworkForDir_StillSkipsAVersionBelowTheFloor(t *testing.T) {
+	setConfigDir(t)
+	// A current cache: what it does not list, the store does not publish.
+	writeStoreIndex(t, "acme", "12", "12", "11", "10")
+	asked := recordFetches(t, "12", "11", "10")
+
+	dir := t.TempDir()
+	writeLerdYAML(t, dir, "framework: acme\nframework_version: \"7\"\n")
+
+	if _, ok := GetFrameworkForDir("acme", dir); !ok {
+		t.Fatal("GetFrameworkForDir resolved nothing for a legacy project")
+	}
+	for _, v := range *asked {
+		if v == "7" {
+			t.Errorf("fetches = %v, want no request for the unpublished 7", *asked)
+		}
+	}
+}
+
+// ageStoreIndex backdates the cached index so it reads as one the store has not
+// refreshed lately.
+func ageStoreIndex(t *testing.T, age time.Duration) {
+	t.Helper()
+	when := time.Now().Add(-age)
+	if err := os.Chtimes(StoreIndexFile(), when, when); err != nil {
+		t.Fatal(err)
 	}
 }

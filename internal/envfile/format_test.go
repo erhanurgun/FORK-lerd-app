@@ -77,3 +77,38 @@ func TestKnownFormat(t *testing.T) {
 		t.Error("an unknown format reported as known")
 	}
 }
+
+// The dotenv writer is reachable directly, and a caller that resolved a path
+// without carrying its format alongside can hand it a PHP settings file. Writing
+// `KEY=value` after the closing tag leaves a file that no longer parses, so the
+// site is down: refuse instead, the same way an unknown format is refused.
+func TestApplyUpdates_refusesAFileThatIsNotDotenv(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"wp-config.php", "settings.php"} {
+		path := filepath.Join(dir, name)
+		original := "<?php\ndefine( 'DB_NAME', 'blog' );\n"
+		if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		err := ApplyUpdates(path, map[string]string{"APP_KEY": "base64:abc"})
+		if err == nil {
+			t.Fatalf("%s was written as dotenv rather than refused", name)
+		}
+		if body, _ := os.ReadFile(path); string(body) != original {
+			t.Errorf("%s was modified by a refused write:\n%s", name, body)
+		}
+	}
+
+	// A real dotenv file is still written, leading blank lines and all.
+	env := filepath.Join(dir, ".env")
+	if err := os.WriteFile(env, []byte("\nAPP_ENV=local\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := ApplyUpdates(env, map[string]string{"APP_KEY": "base64:abc"}); err != nil {
+		t.Fatalf("a dotenv file must still be writable: %v", err)
+	}
+	if body, _ := os.ReadFile(env); !strings.Contains(string(body), "APP_KEY=base64:abc") {
+		t.Errorf("key not written:\n%s", body)
+	}
+}

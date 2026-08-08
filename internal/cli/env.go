@@ -435,11 +435,36 @@ func envApplyLine(svc string, detectedFromEnv bool) {
 	}
 }
 
+// startableFrameworkService reports whether a service a framework declares is
+// one lerd can actually run. SQLite is a file the project owns: there is no
+// preset and no container, so trying to start it ends in "custom service
+// \"sqlite\" not found", which reads as a broken project when nothing is wrong.
+func startableFrameworkService(svc string) bool {
+	return svc != "sqlite"
+}
+
 // userPickedDBFromYAML returns true when the user has named any database
 // service in .lerd.yaml: sqlite, the built-in mysql/postgres, or a custom DB
 // family alternate (mysql-5-6, mariadb-11, postgres-14, mongo-6, …). This
 // signal is what lets us replace whatever the existing .env says about
 // DB_CONNECTION with the user's actual pick.
+// projectUsesSQLite reports whether the project's data lives in a file rather
+// than in a service. SQLite is deliberately not written into .lerd.yaml (it has
+// no preset, no container, nothing to install), so the pick has to be read from
+// the project's own configuration: the framework declares a sqlite wiring, its
+// detect rules match the env file, and no database service was chosen instead.
+// The .lerd.yaml entry is still honoured for projects linked before that.
+func projectUsesSQLite(lerdYAMLServices map[string]bool, envMap map[string]string, fw *config.Framework, externalDB bool) bool {
+	if lerdYAMLServices["sqlite"] {
+		return true
+	}
+	if fw == nil || externalDB || userPickedDBFromYAML(lerdYAMLServices) {
+		return false
+	}
+	def, ok := fw.Env.Services["sqlite"]
+	return ok && frameworkServiceDetected(def, envMap)
+}
+
 func userPickedDBFromYAML(lerdYAMLServices map[string]bool) bool {
 	if lerdYAMLServices["sqlite"] || lerdYAMLServices["mysql"] || lerdYAMLServices["postgres"] {
 		return true
@@ -736,6 +761,12 @@ func runEnv(_ *cobra.Command, _ []string) error {
 				continue
 			}
 
+			// The sqlite step below owns the file database entirely, vars and
+			// all, so reporting and applying it here too would say it twice and
+			// then try to start a container that does not exist.
+			if !startableFrameworkService(svc) {
+				continue
+			}
 			envApplyLine(svc, detectedFromEnv)
 			isDB := svc == "mysql" || svc == "postgres"
 			for _, kv := range def.Vars {
@@ -877,11 +908,11 @@ func runEnv(_ *cobra.Command, _ []string) error {
 	}
 
 	// 3a-bis. SQLite is not a containerized service but is a valid choice from
-	// the init wizard / runtime DB prompt. When listed in .lerd.yaml, apply the
-	// standard Laravel sqlite env vars and ensure the database file exists so
-	// migrations can run immediately. No service to start, no SQL DB to create.
-	if lerdYAMLServices["sqlite"] {
-		envApplyLine("sqlite", false)
+	// the init wizard / runtime DB prompt. Apply the framework's sqlite env vars
+	// and ensure the database file exists so migrations can run immediately. No
+	// service to start, no SQL DB to create.
+	if projectUsesSQLite(lerdYAMLServices, envMap, fw, externalDBPicked(extServices)) {
+		envApplyLine("sqlite", !lerdYAMLServices["sqlite"])
 		for _, kv := range serviceEnvVars("sqlite") {
 			k, v, _ := strings.Cut(kv, "=")
 			updates[k] = v
@@ -1101,17 +1132,11 @@ func runEnv(_ *cobra.Command, _ []string) error {
 				}
 			} else if kg.FallbackPrefix != "" {
 				envInfo("  Generating %s (vendor not installed yet)...\n", kg.EnvKey)
-				key := generateRandomKey(kg.FallbackPrefix)
-				if err := envfile.ApplyUpdates(envPath, map[string]string{kg.EnvKey: key}); err != nil {
-					feedback.Warn("writing %s: %v", kg.EnvKey, err)
-				}
+				writeGeneratedKey(envPath, envFormat, kg)
 			}
 		} else if kg.FallbackPrefix != "" {
 			envInfo("  Generating %s...\n", kg.EnvKey)
-			key := generateRandomKey(kg.FallbackPrefix)
-			if err := envfile.ApplyUpdates(envPath, map[string]string{kg.EnvKey: key}); err != nil {
-				feedback.Warn("writing %s: %v", kg.EnvKey, err)
-			}
+			writeGeneratedKey(envPath, envFormat, kg)
 		}
 	}
 
@@ -1660,5 +1685,17 @@ func patchDuskTestCase(dir string) {
 			return
 		}
 		fmt.Println("  Patched tests/DuskTestCase.php for lerd Selenium")
+	}
+}
+
+// writeGeneratedKey writes a locally generated application key through the
+// framework's own env format. The key is written to the file the definition
+// names, which for a PHP-configured framework is a settings file: the dotenv
+// writer would append a bare key=value line after the closing tag and take the
+// site down with a parse error.
+func writeGeneratedKey(envPath, envFormat string, kg *config.EnvKeyGeneration) {
+	key := generateRandomKey(kg.FallbackPrefix)
+	if err := envfile.ApplyUpdatesIn(envPath, envFormat, map[string]string{kg.EnvKey: key}); err != nil {
+		feedback.Warn("writing %s: %v", kg.EnvKey, err)
 	}
 }

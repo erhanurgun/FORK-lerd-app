@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -319,13 +320,21 @@ func runDbMoveOne(sitePath, siteName, from, to string) error {
 // runLerdEnv re-execs `lerd env` in the project directory so the existing env
 // setup (service start, .env rewrite, database provisioning) runs unchanged.
 func runLerdEnv(dir string) error {
+	return runLerdEnvTo(dir, os.Stdout)
+}
+
+// runLerdEnvTo runs `lerd env` in dir with the child's output sent to out. A
+// caller whose own stdout carries a machine-readable document passes stderr:
+// the child writes plain prose, and on stdout it lands in the middle of the
+// document and nothing can parse it.
+func runLerdEnvTo(dir string, out io.Writer) error {
 	self, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("resolving lerd executable: %w", err)
 	}
 	cmd := exec.Command(self, "env")
 	cmd.Dir = dir
-	cmd.Stdout = os.Stdout
+	cmd.Stdout = out
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }
