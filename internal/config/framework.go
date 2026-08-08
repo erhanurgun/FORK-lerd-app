@@ -967,23 +967,34 @@ func GetFramework(name string) (*Framework, bool) {
 // store's refresh window counts as current, so a repeat scaffold and an offline
 // one don't wait on the network. Falls back to what is installed, then to the
 // built-in, and reports false only when nothing knows the name.
-func GetFrameworkForScaffold(name string) (*Framework, bool) {
+// version pins the major to scaffold, for a caller offering the choice; empty
+// takes whatever the store publishes as its latest.
+func GetFrameworkForScaffold(name, version string) (*Framework, bool) {
 	if name == "" {
 		return nil, false
 	}
 
 	installed := storeFrameworkPath(name)
+	if version != "" {
+		installed = filepath.Join(StoreFrameworksDir(), name+"@"+version+".yaml")
+	}
+
 	var base *Framework
-	if installed != "" && !olderThan(installed, storeRefreshWindow) {
+	if !olderThan(installed, storeRefreshWindow) {
 		base = loadFrameworkYAML(installed)
 	}
 	if base == nil && frameworkFetchHook != nil {
-		if fetched, err := frameworkFetchHook(name, ""); err == nil {
+		if fetched, err := frameworkFetchHook(name, version); err == nil {
 			base = fetched
 		}
 	}
-	if base == nil && installed != "" {
+	if base == nil {
 		base = loadFrameworkYAML(installed)
+	}
+	// A pinned major nothing here or upstream serves resolves as if none had been
+	// asked for, rather than reporting a framework lerd does not know.
+	if base == nil && version != "" {
+		return GetFrameworkForScaffold(name, "")
 	}
 	// A definition that cannot scaffold is no reason to lose one that can. The
 	// store owns the create command and is free to publish a framework without

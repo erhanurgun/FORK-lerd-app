@@ -127,8 +127,9 @@ func TestApplyPhpVarsUpdates_rewritesInPlace(t *testing.T) {
 	}
 }
 
-// A key no assignment covers is appended as its own statement, so a project
-// missing a setting entirely still ends up with it.
+// A key no assignment covers is appended, so a project missing a setting
+// entirely still ends up with it, and the statement assigns the node it belongs
+// to rather than reaching an index below it.
 func TestApplyPhpVarsUpdates_appendsAKeyNoAssignmentCovers(t *testing.T) {
 	path := writeSettings(t, "<?php\n$settings['x'] = 'y';\n")
 
@@ -141,8 +142,12 @@ func TestApplyPhpVarsUpdates_appendsAKeyNoAssignmentCovers(t *testing.T) {
 		t.Errorf("host = %q, want lerd-mysql", vals["databases.default.default.host"])
 	}
 	body, _ := os.ReadFile(path)
-	if !strings.Contains(string(body), "$databases['default']['default']['host'] = 'lerd-mysql';") {
+	if !strings.Contains(string(body), "$databases['default']['default'] = [") {
 		t.Errorf("appended statement not as expected:\n%s", body)
+	}
+	// What was already in the file is left where it was.
+	if !strings.Contains(string(body), "$settings['x'] = 'y';") {
+		t.Errorf("rewrite disturbed the existing statement:\n%s", body)
 	}
 }
 
@@ -198,5 +203,62 @@ func TestReader_readsPhpVars(t *testing.T) {
 	}
 	if got := Reader(path, "php-vars")("databases.default.default.driver"); got != "sqlite" {
 		t.Errorf("Reader = %q, want sqlite", got)
+	}
+}
+
+// A settings file lerd creates from nothing has to hold its connection as one
+// array assigned to the node it belongs to, not a statement per leaf. Both run
+// the same in PHP, but Drupal's own installer rewrites settings.php by walking
+// it index by index against the settings it is about to write, and its new
+// value for that node is an object. Meeting another index below it, the walk
+// subscripts that object and the installer dies on "Cannot use object of type
+// stdClass as array" at the database step of a fresh install.
+func TestApplyPhpVarsUpdates_GroupsNewKeysUnderTheirParent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.php")
+
+	updates := map[string]string{
+		"databases.default.default.database": "third",
+		"databases.default.default.driver":   "mysql",
+		"databases.default.default.host":     "lerd-mysql",
+	}
+	if err := ApplyPhpVarsUpdates(path, updates); err != nil {
+		t.Fatalf("ApplyPhpVarsUpdates: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(data)
+
+	if !strings.Contains(got, "$databases['default']['default'] = [") {
+		t.Errorf("file does not assign the node as one array:\n%s", got)
+	}
+	if strings.Contains(got, "$databases['default']['default']['host']") {
+		t.Errorf("file still writes a statement per leaf:\n%s", got)
+	}
+
+	// Whatever the shape, the values have to read back under the same keys.
+	back, err := ReadPhpVars(path)
+	if err != nil {
+		t.Fatalf("ReadPhpVars: %v", err)
+	}
+	for key, want := range updates {
+		if back[key] != want {
+			t.Errorf("read back %s = %q, want %q", key, back[key], want)
+		}
+	}
+}
+
+// A key directly under its variable has no parent to group beneath, so it keeps
+// the plain assignment it always had.
+func TestApplyPhpVarsUpdates_LeavesShallowKeysAlone(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.php")
+
+	if err := ApplyPhpVarsUpdates(path, map[string]string{"settings.hash_salt": "abc"}); err != nil {
+		t.Fatalf("ApplyPhpVarsUpdates: %v", err)
+	}
+	data, _ := os.ReadFile(path)
+	if !strings.Contains(string(data), "$settings['hash_salt'] = 'abc';") {
+		t.Errorf("shallow key was not written plainly:\n%s", data)
 	}
 }

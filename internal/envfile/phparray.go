@@ -24,6 +24,15 @@ const (
 	phpNull
 	phpFloat
 	phpArray
+
+	// phpExpr is a value this reader cannot evaluate, held as the source text
+	// that produced it: a function call, a constant, a concatenation. Only PHP
+	// knows what it comes to, so lerd reports no value for the key and prints the
+	// expression back untouched. Refusing the file instead would cost every other
+	// key in it, and a framework whose defaults are written as calls (CakePHP's
+	// app_local.php opens with filter_var(env('DEBUG', true), ...)) keeps its
+	// whole configuration there.
+	phpExpr
 )
 
 // phpValue is a parsed PHP value. Arrays keep their entry order so a rewrite
@@ -32,6 +41,12 @@ type phpValue struct {
 	kind    phpKind
 	str     string
 	entries []phpEntry
+
+	// start and end bracket the value's source, so a write can replace just that
+	// span and leave the rest of the file alone. A value built in memory rather
+	// than parsed has both zero.
+	start int
+	end   int
 }
 
 type phpEntry struct {
@@ -74,9 +89,6 @@ func ApplyPhpArrayUpdates(path string, updates map[string]string) error {
 		return err
 	}
 	original := string(data)
-	if root == nil || root.kind != phpArray {
-		root = &phpValue{kind: phpArray}
-	}
 
 	// Sort so the emitted file is deterministic when several new paths are added.
 	keys := make([]string, 0, len(updates))
@@ -84,19 +96,176 @@ func ApplyPhpArrayUpdates(path string, updates map[string]string) error {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	for _, k := range keys {
-		setPath(root, strings.Split(k, "."), updates[k])
+
+	if root != nil && root.kind == phpArray {
+		return writePhpArrayInPlace(path, original, root, keys, updates)
 	}
 
+	// No array to edit: the file is new, or holds something this reader does not
+	// recognise as configuration. Print one.
+	fresh := &phpValue{kind: phpArray}
+	for _, k := range keys {
+		setPath(fresh, strings.Split(k, "."), updates[k])
+	}
 	var b strings.Builder
 	b.WriteString("<?php\nreturn ")
-	printValue(&b, root, 0)
+	printValue(&b, fresh, 0)
 	b.WriteString(";\n")
+	return writePhpArrayFile(path, original, b.String())
+}
 
-	// A rewrite reprints the whole file, so without this an env already holding
-	// every target value still gets its mtime bumped and its formatting churned
-	// on every call — and EnsureWorktreeEnv is called on every worktree sync.
-	if b.String() == original {
+// writePhpArrayInPlace edits only the spans that change, leaving the rest of the
+// file byte for byte. These files are read by people as much as by code:
+// CakePHP's app_local.php is mostly guidance on what each key does, and opens
+// with the `use function` import its own values depend on. Reprinting the parsed
+// tree would return a valid array and a file that had lost all of it.
+func writePhpArrayInPlace(path, original string, root *phpValue, keys []string, updates map[string]string) error {
+	type edit struct {
+		start, end int
+		text       string
+	}
+	var edits []edit
+
+	// Keys whose path does not exist yet are grafted onto the deepest array that
+	// does, one insertion per array however many keys land in it, so two new keys
+	// under the same new parent produce one entry rather than two of the same name.
+	grafts := map[*phpValue]*phpValue{}
+	var graftOrder []*phpValue
+
+	for _, key := range keys {
+		segs := strings.Split(key, ".")
+		node, rest := descendPhpArray(root, segs)
+		if len(rest) == 0 {
+			edits = append(edits, edit{node.start, node.end,
+				renderPhpValue(scalarValue(updates[key], node.kind), indentAt(original, node.start))})
+			continue
+		}
+		if node.kind != phpArray {
+			// Something that is not an array sits where one has to be. Replacing it
+			// is the only way through, and it is what the whole-file writer did.
+			replacement := &phpValue{kind: phpArray}
+			setPath(replacement, rest, updates[key])
+			edits = append(edits, edit{node.start, node.end, renderPhpValue(replacement, indentAt(original, node.start))})
+			continue
+		}
+		graft := grafts[node]
+		if graft == nil {
+			graft = &phpValue{kind: phpArray}
+			grafts[node] = graft
+			graftOrder = append(graftOrder, node)
+		}
+		setPath(graft, rest, updates[key])
+	}
+
+	for _, node := range graftOrder {
+		at, indent, ok := phpArrayInsertion(original, node)
+		if !ok {
+			// An array written on one line has nowhere to insert a line, so it is
+			// reprinted whole. It has no comments inside it to lose.
+			merged := clonePhpValue(node)
+			for _, e := range grafts[node].entries {
+				setPathValue(merged, []string{e.key}, e.val)
+			}
+			edits = append(edits, edit{node.start, node.end, renderPhpValue(merged, indentAt(original, node.start))})
+			continue
+		}
+		var b strings.Builder
+		for _, e := range grafts[node].entries {
+			b.WriteString(indent + "'" + escapeSingle(e.key) + "' => ")
+			printValue(&b, e.val, len(indent)/4)
+			b.WriteString(",\n")
+		}
+		edits = append(edits, edit{at, at, b.String()})
+	}
+
+	// Applied back to front so each splice leaves the earlier offsets valid.
+	sort.SliceStable(edits, func(i, j int) bool { return edits[i].start > edits[j].start })
+	out := original
+	for _, e := range edits {
+		out = out[:e.start] + e.text + out[e.end:]
+	}
+	return writePhpArrayFile(path, original, out)
+}
+
+// descendPhpArray walks as far into the tree as the file already goes, returning
+// the deepest node reached and the segments still to be created below it.
+func descendPhpArray(root *phpValue, segs []string) (*phpValue, []string) {
+	node := root
+	for i, seg := range segs {
+		if node.kind != phpArray {
+			return node, segs[i:]
+		}
+		next := (*phpValue)(nil)
+		for j := range node.entries {
+			if node.entries[j].key == seg {
+				next = node.entries[j].val
+				break
+			}
+		}
+		if next == nil {
+			return node, segs[i:]
+		}
+		node = next
+	}
+	return node, nil
+}
+
+// phpArrayInsertion returns where a new entry goes in an array written across
+// several lines, and the indentation to give it: the start of the line holding
+// the closing bracket, so the entry becomes the last one and the bracket keeps
+// its own line. Reports false for an array written on a single line.
+func phpArrayInsertion(src string, arr *phpValue) (int, string, bool) {
+	closer := arr.end - 1
+	if closer <= arr.start {
+		return 0, "", false
+	}
+	lineStart := strings.LastIndexByte(src[:closer], '\n') + 1
+	if lineStart <= arr.start {
+		return 0, "", false
+	}
+	closerIndent := src[lineStart:closer]
+	if strings.TrimSpace(closerIndent) != "" {
+		return 0, "", false
+	}
+	return lineStart, closerIndent + "    ", true
+}
+
+// indentAt returns the leading whitespace of the line offset sits on, so a
+// replacement renders at the nesting the file already uses there.
+func indentAt(src string, offset int) string {
+	if offset > len(src) {
+		return ""
+	}
+	lineStart := strings.LastIndexByte(src[:offset], '\n') + 1
+	indent := src[lineStart:offset]
+	if trimmed := strings.TrimLeft(indent, " \t"); trimmed != "" {
+		return indent[:len(indent)-len(trimmed)]
+	}
+	return indent
+}
+
+// renderPhpValue prints a value as it should read at a given indentation.
+func renderPhpValue(v *phpValue, indent string) string {
+	var b strings.Builder
+	printValue(&b, v, len(indent)/4)
+	return b.String()
+}
+
+// clonePhpValue copies a parsed value deeply enough to graft onto without
+// disturbing the offsets the edits are computed from.
+func clonePhpValue(v *phpValue) *phpValue {
+	out := &phpValue{kind: v.kind, str: v.str}
+	for _, e := range v.entries {
+		out.entries = append(out.entries, phpEntry{key: e.key, isInt: e.isInt, val: clonePhpValue(e.val)})
+	}
+	return out
+}
+
+// writePhpArrayFile persists a rewrite, skipping a write that changes nothing so
+// an env sync doesn't churn a file the user has open. EnsureWorktreeEnv reaches
+// here on every worktree sync.
+func writePhpArrayFile(path, original, out string) error {
+	if out == original {
 		return nil
 	}
 	if dir := filepath.Dir(path); dir != "." {
@@ -104,10 +273,15 @@ func ApplyPhpArrayUpdates(path string, updates map[string]string) error {
 			return err
 		}
 	}
-	return writeFile(path, []byte(b.String()), 0o644)
+	return writeFile(path, []byte(out), 0o644)
 }
 
 func flatten(prefix string, v *phpValue, out map[string]string) {
+	// An expression has no value until PHP runs it, so the key is left out
+	// rather than reported as whatever its source text happens to read like.
+	if v.kind == phpExpr {
+		return
+	}
 	if v.kind != phpArray {
 		out[prefix] = scalarString(v)
 		return
@@ -217,7 +391,7 @@ func printValue(b *strings.Builder, v *phpValue, depth int) {
 			b.WriteString(",\n")
 		}
 		b.WriteString(strings.Repeat("    ", depth) + "]")
-	case phpInt, phpFloat, phpBool:
+	case phpInt, phpFloat, phpBool, phpExpr:
 		b.WriteString(v.str)
 	case phpNull:
 		b.WriteString("null")
@@ -321,8 +495,20 @@ func (p *phpParser) skipTrivia() {
 	}
 }
 
+// parseValue records where the value it read begins and ends, so a writer can
+// splice a replacement over exactly that span.
 func (p *phpParser) parseValue() (*phpValue, error) {
 	p.skipTrivia()
+	start := p.pos
+	v, err := p.parseValueAt()
+	if err != nil {
+		return nil, err
+	}
+	v.start, v.end = start, p.pos
+	return v, nil
+}
+
+func (p *phpParser) parseValueAt() (*phpValue, error) {
 	if p.pos >= len(p.src) {
 		return nil, fmt.Errorf("unexpected end of file")
 	}
@@ -368,7 +554,51 @@ func (p *phpParser) parseValue() (*phpValue, error) {
 		}
 		return &phpValue{kind: kind, str: p.src[start:p.pos]}, nil
 	}
-	return nil, fmt.Errorf("unsupported value at offset %d", p.pos)
+	return p.parseExpression()
+}
+
+// parseExpression captures a value that is not a literal as the source text
+// that produced it, so the rest of the file stays readable and writable around
+// it. It ends where the value does: a comma or a closing bracket that belongs
+// to the array holding it, neither of which it consumes. Brackets, strings and
+// comments inside the expression are stepped over whole, so a comma within any
+// of them does not end it early.
+func (p *phpParser) parseExpression() (*phpValue, error) {
+	start := p.pos
+	depth := 0
+	for p.pos < len(p.src) {
+		c := p.src[p.pos]
+		switch {
+		case c == '\'' || c == '"':
+			if _, err := p.parseString(); err != nil {
+				return nil, err
+			}
+			continue
+		case strings.HasPrefix(p.src[p.pos:], "//"), c == '#',
+			strings.HasPrefix(p.src[p.pos:], "/*"):
+			p.skipTrivia()
+			continue
+		case c == '(' || c == '[' || c == '{':
+			depth++
+		case c == ')' || c == ']' || c == '}':
+			if depth == 0 {
+				return expressionValue(p.src[start:p.pos]), nil
+			}
+			depth--
+		case c == ',' && depth == 0:
+			return expressionValue(p.src[start:p.pos]), nil
+		case c == ';' && depth == 0:
+			return expressionValue(p.src[start:p.pos]), nil
+		}
+		p.pos++
+	}
+	return nil, fmt.Errorf("unterminated value at offset %d", start)
+}
+
+// expressionValue trims the trailing layout off captured source, so reprinting
+// an array does not carry the old spacing before its comma into the new one.
+func expressionValue(src string) *phpValue {
+	return &phpValue{kind: phpExpr, str: strings.TrimRight(src, " \t\r\n")}
 }
 
 func (p *phpParser) parseArrayBody(closer byte) (*phpValue, error) {
