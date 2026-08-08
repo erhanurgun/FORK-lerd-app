@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/geodro/lerd/internal/config"
@@ -119,7 +120,7 @@ func applySiteDoctorFixes(path, fwName string, resp sitedoctor.Response, quiet b
 				fixed = true
 			}
 		case sitedoctor.FixEnvSync:
-			if err := runLerdEnv(path); err != nil {
+			if err := runLerdEnvTo(path, fixOutput(quiet)); err != nil {
 				feedback.Warn("writing the env: %v", err)
 				continue
 			}
@@ -193,4 +194,14 @@ func doctorGlyph(status string) string {
 	default:
 		return feedback.Dim("?")
 	}
+}
+
+// fixOutput is where a fix's subprocess writes. `--json` puts a document on
+// stdout, so the child's prose goes to stderr instead: a caller parsing stdout
+// gets JSON and nothing else, and a human still sees what happened.
+func fixOutput(quiet bool) io.Writer {
+	if quiet {
+		return os.Stderr
+	}
+	return os.Stdout
 }

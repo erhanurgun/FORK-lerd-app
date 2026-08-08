@@ -65,10 +65,17 @@ func declaredCompanionValue(vals map[string]string, declared map[string]bool, co
 		candidates = append([]string{connKey[:i+1] + "database"}, candidates...)
 	}
 	for _, k := range candidates {
-		if declared[k] {
-			if v := strings.TrimSpace(vals[k]); v != "" {
-				return v
-			}
+		if !declared[k] {
+			continue
+		}
+		if v := strings.TrimSpace(vals[k]); v != "" {
+			return v
+		}
+		// An empty value only has a default where the convention exists. That is
+		// Laravel's, spelled DB_DATABASE; a framework that addresses its database
+		// by a dotted path has no such default, and inventing one sends the user
+		// to create a file the application will never open.
+		if k == "DB_DATABASE" {
 			return defaultFile
 		}
 	}

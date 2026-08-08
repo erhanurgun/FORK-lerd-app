@@ -425,3 +425,46 @@ func TestEnvFileFor(t *testing.T) {
 		t.Errorf("EnvFileFor(bare) = (%q, %q), want (.env, dotenv)", file, format)
 	}
 }
+
+// A database on someone else's server is not attributed to a lerd engine just
+// because the project's .lerd.yaml happens to list one. The .lerd.yaml fallback
+// exists for the host-proxy rewrite, where the host is loopback.
+func TestDBServiceFor_ExternalHostIsNobodys(t *testing.T) {
+	setConfigDir(t)
+	dir := t.TempDir()
+	writeProjectFile(t, dir, ".lerd.yaml", "services:\n  - mysql\n")
+
+	for _, host := range []string{"db.internal.example.com", "10.0.0.7", "db.example.com:3306"} {
+		if got := DBServiceFor(dir, host); got != "" {
+			t.Errorf("DBServiceFor(%q) = %q, want empty: that database is not ours", host, got)
+		}
+	}
+	// Loopback in its several spellings is the host-proxy rewrite, which does
+	// resolve through .lerd.yaml.
+	for _, host := range []string{"127.0.0.1", "127.0.0.1:3306", "localhost", "::1", "[::1]:3306"} {
+		if got := DBServiceFor(dir, host); got != "mysql" {
+			t.Errorf("DBServiceFor(%q) = %q, want mysql", host, got)
+		}
+	}
+}
+
+// A project moved to SQLite keeps DB_HOST as a leftover, because writing env
+// vars sets keys and never removes them. Reading the default pair anyway turns
+// a file path into a schema the doctor then reports missing from an engine.
+func TestDBTargetsFor_SQLiteProjectHasNoServerTarget(t *testing.T) {
+	setConfigDir(t)
+	dir := t.TempDir()
+	writeProjectFile(t, dir, ".lerd.yaml", "services:\n  - mysql\n")
+	writeProjectFile(t, dir, ".env", "DB_CONNECTION=sqlite\nDB_HOST=lerd-mysql\nDB_DATABASE=database/database.sqlite\n")
+
+	if got := DBTargetsFor(dir); len(got) != 0 {
+		t.Errorf("DBTargetsFor = %+v, want none for a project on SQLite", got)
+	}
+
+	// The same project on a server driver still resolves.
+	writeProjectFile(t, dir, ".env", "DB_CONNECTION=mysql\nDB_HOST=lerd-mysql\nDB_DATABASE=shop\n")
+	got := DBTargetsFor(dir)
+	if len(got) != 1 || got[0].Service != "mysql" || got[0].Database != "shop" {
+		t.Errorf("DBTargetsFor = %+v, want {mysql shop}", got)
+	}
+}

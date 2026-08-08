@@ -4,6 +4,7 @@ package envfile
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -40,6 +41,13 @@ func ApplyUpdates(path string, updates map[string]string) error {
 	original, err := os.ReadFile(path)
 	if err != nil {
 		return err
+	}
+	// This writer appends `key=value` lines, which is nonsense in a PHP settings
+	// file: the file stops parsing and every request to the site fails. A caller
+	// that knows the format goes through ApplyUpdatesIn; one that resolved a path
+	// without carrying the format is stopped here rather than breaking the site.
+	if isPHPSource(original) {
+		return fmt.Errorf("%s holds PHP, not dotenv lines; write it through ApplyUpdatesIn with the framework's format", filepath.Base(path))
 	}
 
 	var lines []string
@@ -343,4 +351,14 @@ func SyncPrimaryDomain(projectPath, envFile, urlKey, domain string, secured bool
 		return nil
 	}
 	return ApplyUpdates(envPath, updates)
+}
+
+// isPHPSource reports whether a file's contents open with a PHP tag, the one
+// shape the dotenv writer must never append to. A byte-order mark counts as
+// leading whitespace: editors leave them behind and they do not make a settings
+// file any less PHP.
+func isPHPSource(content []byte) bool {
+	body := bytes.TrimPrefix(content, []byte{0xEF, 0xBB, 0xBF})
+	body = bytes.TrimLeft(body, " \t\r\n")
+	return bytes.HasPrefix(body, []byte("<?php")) || bytes.HasPrefix(body, []byte("<?="))
 }

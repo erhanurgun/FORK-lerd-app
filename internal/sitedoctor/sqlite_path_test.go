@@ -75,3 +75,36 @@ func TestCheckSQLiteDatabase_missingFromEveryRoot(t *testing.T) {
 		t.Errorf("check = %+v (ok=%v), want a failure", c, ok)
 	}
 }
+
+// A stat that fails for a reason other than absence says nothing about whether
+// the database is there. Reading it as missing offers to run migrations over a
+// database this process merely could not look at.
+func TestCheckSQLiteDatabase_saysNothingWhenItCannotLook(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can traverse a directory with no execute bit")
+	}
+	project := t.TempDir()
+	dbDir := filepath.Join(project, "database")
+	if err := os.MkdirAll(dbDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dbDir, "database.sqlite"), []byte("healthy"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	env := filepath.Join(project, ".env")
+	if err := os.WriteFile(env, []byte("DB_CONNECTION=sqlite\nDB_DATABASE=database/database.sqlite\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Take away the execute bit so the file cannot be stat'ed through it.
+	if err := os.Chmod(dbDir, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dbDir, 0o755) })
+
+	fw := &config.Framework{Env: config.FrameworkEnvConf{File: ".env", Services: map[string]config.FrameworkServiceDef{
+		"sqlite": {Vars: []string{"DB_CONNECTION=sqlite", "DB_DATABASE=database/database.sqlite"}},
+	}}}
+	if c, ok := checkSQLiteDatabase(project, env, "dotenv", fw); ok {
+		t.Errorf("check = %+v, want no finding: the file could not be stat'ed, which is not the same as absent", c)
+	}
+}

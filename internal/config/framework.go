@@ -1408,7 +1408,25 @@ func frameworkVersionPublished(name, version string) bool {
 			return true
 		}
 	}
-	return false
+	// The index is a cache the store refreshes on its own schedule, and this
+	// answers from it without refreshing anything. While it is current, a version
+	// missing from it really is unpublished and asking would only 404. Once it is
+	// older than the store's own refresh window it is no longer evidence: the day
+	// a new major lands, every machine still holding yesterday's copy would
+	// otherwise skip the fetch and quietly serve the project the previous major's
+	// definition, with that major's PHP clamp, workers and doctor checks.
+	return staleStoreIndex()
+}
+
+// staleStoreIndex reports whether the cached store index is older than the
+// window definitions themselves are refreshed on, i.e. old enough that what it
+// does not list proves nothing.
+func staleStoreIndex() bool {
+	info, err := os.Stat(StoreIndexFile())
+	if err != nil {
+		return true
+	}
+	return time.Since(info.ModTime()) > 24*time.Hour
 }
 
 // latestPublishedFrameworkVersion returns the newest version the cached index

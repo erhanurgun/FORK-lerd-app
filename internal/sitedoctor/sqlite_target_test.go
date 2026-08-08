@@ -110,3 +110,40 @@ func TestDeclaredSQLiteFile_readsDottedKeys(t *testing.T) {
 		t.Errorf("declaredSQLiteFile = %q (ok=%v), want the path in the same block", file, ok)
 	}
 }
+
+// A framework that addresses its database by a dotted path has no Laravel
+// default to fall back on. Answering with one sends the user to create a file
+// the application will never open, and offers migrations against it.
+func TestDeclaredCompanionValue_noLaravelDefaultForADottedKey(t *testing.T) {
+	drupalish := &config.Framework{
+		Name: "drupalish",
+		Env: config.FrameworkEnvConf{File: "settings.php", Services: map[string]config.FrameworkServiceDef{
+			"mysql": {
+				Detect: []config.FrameworkServiceDetect{{Key: "databases.default.default.driver", ValuePrefix: "mysql"}},
+				Vars: []string{
+					"databases.default.default.driver=mysql",
+					"databases.default.default.database={{site}}",
+				},
+			},
+		}},
+	}
+	declared := declaredEnvKeys(drupalish)
+	vals := map[string]string{
+		"databases.default.default.driver":   "sqlite",
+		"databases.default.default.database": "",
+	}
+
+	if got := declaredCompanionValue(vals, declared, "databases.default.default.driver"); got != "" {
+		t.Errorf("companion = %q, want empty: this framework has no database/database.sqlite convention", got)
+	}
+
+	// The same empty value under Laravel's own key keeps its default, which is
+	// where the convention actually comes from.
+	lara := declaredEnvKeys(&config.Framework{Env: config.FrameworkEnvConf{Services: map[string]config.FrameworkServiceDef{
+		"sqlite": {Vars: []string{"DB_CONNECTION=sqlite", "DB_DATABASE="}},
+	}}})
+	got := declaredCompanionValue(map[string]string{"DB_CONNECTION": "sqlite", "DB_DATABASE": ""}, lara, "DB_CONNECTION")
+	if got != filepath.Join("database", "database.sqlite") {
+		t.Errorf("companion = %q, want Laravel's default", got)
+	}
+}

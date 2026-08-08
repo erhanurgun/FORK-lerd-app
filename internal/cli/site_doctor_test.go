@@ -91,3 +91,14 @@ func hasVhostWarning(resp sitedoctor.Response) bool {
 	}
 	return false
 }
+
+// `--json` writes a document to stdout, so a fix that shells out must not let
+// the child print there: the report stops being parseable.
+func TestFixOutput_keepsTheJSONDocumentAlone(t *testing.T) {
+	if got := fixOutput(true); got != os.Stderr {
+		t.Errorf("json mode writes subprocess output to %v, want stderr", got)
+	}
+	if got := fixOutput(false); got != os.Stdout {
+		t.Errorf("normal mode writes subprocess output to %v, want stdout", got)
+	}
+}

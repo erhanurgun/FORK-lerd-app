@@ -32,6 +32,26 @@ func TestMissingDeclaredServices_coversWhatTheProjectPicksNotJustWhatTheFramewor
 	}
 }
 
+// A service listed in LERD_EXTERNAL_SERVICES is one the developer runs
+// themselves. lerd writes its connection vars and otherwise stays out of the
+// way, so reporting it missing is wrong twice over: the fix button would install
+// a second copy that fights the real one for its port.
+func TestDeclaredServices_leavesOutTheOnesTheUserRunsThemselves(t *testing.T) {
+	withStubs(t, map[string]bool{}, map[string]string{})
+	dir := writeProject(t, "services:\n  - postgres\n  - redis\n")
+	if err := os.WriteFile(filepath.Join(dir, ".env.lerd_override"),
+		[]byte("LERD_EXTERNAL_SERVICES=postgres\n"), 0o644); err != nil {
+		t.Fatalf("write override: %v", err)
+	}
+
+	if got := declaredServices(dir, &config.Framework{Requires: []string{"postgres"}}); strings.Join(got, ",") != "redis" {
+		t.Errorf("declared = %v, want [redis]: postgres is the user's own", got)
+	}
+	if got := MissingDeclaredServices(dir, &config.Framework{Requires: []string{"postgres"}}); strings.Join(got, ",") != "redis" {
+		t.Errorf("missing = %v, want [redis]: an external service must not be offered for install", got)
+	}
+}
+
 func TestMissingDeclaredServices_ignoresSQLiteAndInstalledServices(t *testing.T) {
 	withStubs(t, map[string]bool{"lerd-mysql": true}, map[string]string{"lerd-mysql": "active"})
 	dir := writeProject(t, "services:\n  - mysql\n  - sqlite\n")

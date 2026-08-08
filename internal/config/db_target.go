@@ -1,6 +1,7 @@
 package config
 
 import (
+	"net"
 	"net/url"
 	"path/filepath"
 	"sort"
@@ -200,14 +201,31 @@ func DBTargetsFor(projectDir string) []DBTarget {
 	for _, t := range declaredDBTargets(projectDir, bindings, vals) {
 		add(t)
 	}
-	add(DBTarget{
-		Service:  dbServiceFor(projectDir, vals["DB_HOST"], ""),
-		Database: vals["DB_DATABASE"],
-	})
+	// The default pair is Laravel's vocabulary and only ever names a database an
+	// engine serves. Writing env vars sets keys and never removes them, so a
+	// project moved to SQLite keeps its DB_HOST, and reading the pair regardless
+	// would hand back a file path as a schema some lerd engine is missing.
+	if serverDBDriver(vals["DB_CONNECTION"]) {
+		add(DBTarget{
+			Service:  dbServiceFor(projectDir, vals["DB_HOST"], ""),
+			Database: vals["DB_DATABASE"],
+		})
+	}
 	for _, t := range dsnTargets(vals) {
 		add(t)
 	}
 	return out
+}
+
+// serverDBDriver reports whether a driver value names a database served by an
+// engine, the only kind a lerd service can hold. An unset value counts: a
+// project that names no driver is read by its host and database keys as before.
+func serverDBDriver(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "", "mysql", "mariadb", "pgsql", "postgres", "postgresql":
+		return true
+	}
+	return false
 }
 
 // declaredDBTargets resolves the databases the framework declaration accounts
@@ -294,6 +312,12 @@ func dbServiceFor(projectDir, host, declared string) string {
 	if svc, ok := strings.CutPrefix(host, "lerd-"); ok && svc != "" {
 		return strings.TrimSuffix(strings.Split(svc, ":")[0], "/")
 	}
+	// A host lerd does not serve is somebody else's database, whatever the
+	// project's .lerd.yaml happens to list. Only the host-proxy rewrite, which
+	// lands on loopback, is recovered from that list.
+	if host != "" && !isLoopbackHost(host) {
+		return ""
+	}
 	if proj, err := LoadProjectConfig(projectDir); err == nil {
 		for _, svc := range proj.Services {
 			if IsDBServiceName(svc.Name) && svc.Name != "sqlite" {
@@ -305,6 +329,22 @@ func dbServiceFor(projectDir, host, declared string) string {
 		return declared
 	}
 	return ""
+}
+
+// isLoopbackHost reports whether a host value from an env file points back at
+// this machine, in any of the spellings a project writes: with or without a
+// port, and IPv6 in brackets.
+func isLoopbackHost(host string) bool {
+	h := strings.TrimSpace(host)
+	if hostOnly, _, err := net.SplitHostPort(h); err == nil {
+		h = hostOnly
+	}
+	h = strings.Trim(h, "[]")
+	if strings.EqualFold(h, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(h)
+	return ip != nil && (ip.IsLoopback() || ip.IsUnspecified())
 }
 
 // dsnTargets returns the databases the values point at through a connection
