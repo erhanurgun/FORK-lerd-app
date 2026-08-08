@@ -41,6 +41,11 @@ var (
 	portsStartUnit  = podman.StartUnit
 	portsWaitReady  = podman.WaitReady
 	portsRerender   = rerenderServiceQuadlet
+	// The bind pre-flight is a seam too: a test that asks for a fixed port would
+	// otherwise depend on nothing else on the machine holding it, and the ports
+	// these tests use sit inside the ephemeral range the kernel hands out to
+	// every other test that listens on :0.
+	portsPortAvailable = PortAvailable
 )
 
 // SetPublishedPort moves a service's published host port (port > 0) or resets it
@@ -98,7 +103,7 @@ func SetPublishedPort(name string, port int) (PortChange, error) {
 	// Pre-flight on both loopback stacks so the restart can't fail to bind and
 	// leave the service down. Uses the guard's own bindability test, not a dial,
 	// so the surface and the guard agree on what "free" means.
-	if port > 0 && !PortAvailable(port) {
+	if port > 0 && !portsPortAvailable(port) {
 		return res, fmt.Errorf("%w: %d", ErrPortInUse, port)
 	}
 	svcCfg.PublishedPort = port
@@ -257,7 +262,7 @@ func SetPublishedPortFor(name string, containerPort, hostPort int) (PortChange, 
 		if portReservedByOther(name, hostPort) {
 			return res, fmt.Errorf("%w: %d", ErrPortReserved, hostPort)
 		}
-		if !PortAvailable(hostPort) {
+		if !portsPortAvailable(hostPort) {
 			return res, fmt.Errorf("%w: %d", ErrPortInUse, hostPort)
 		}
 	}
