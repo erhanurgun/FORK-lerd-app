@@ -23,6 +23,7 @@ import (
 	"github.com/geodro/lerd/internal/services"
 	"github.com/geodro/lerd/internal/shims"
 	"github.com/geodro/lerd/internal/siteops"
+	"github.com/geodro/lerd/internal/store"
 	lerdSystemd "github.com/geodro/lerd/internal/systemd"
 	"github.com/geodro/lerd/internal/tray"
 	"github.com/spf13/cobra"
@@ -352,6 +353,21 @@ func runInstall(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	ok()
+
+	// 3b. Framework store index, before the vhost pass below, which resolves a
+	// definition per site. A fresh machine has no index, and the only thing that
+	// refreshes it is the long-running watcher on a six-hour cadence, so until
+	// that first tick the only frameworks lerd can detect are the two compiled
+	// into the binary. The definitions it lists are fetched later in the run, once
+	// the containers that serve them are up. Best effort: an install with no
+	// network keeps working on the built-ins and picks the index up next time.
+	step("Fetching framework store index")
+	storeIndex, indexErr := store.NewClient().RefreshIndex()
+	if indexErr != nil {
+		feedback.Warn("could not reach the framework store, framework detection uses the built-in definitions until the next refresh")
+	} else {
+		ok()
+	}
 
 	// Ask before RunParallel steals stdin. Only offer the Laravel installer
 	// when at least one PHP version is already installed — composer needs a
@@ -1068,7 +1084,7 @@ func runInstall(cmd *cobra.Command, _ []string) error {
 		regenerateHostWorkers()
 	}
 
-	refreshStoreFrameworks()
+	refreshStoreFrameworks(storeIndex)
 	refreshStorePresets()
 	refreshGlobalMCPSkills()
 	refreshProjectMCPSkills()
