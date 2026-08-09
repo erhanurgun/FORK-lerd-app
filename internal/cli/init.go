@@ -14,6 +14,7 @@ import (
 	"github.com/geodro/lerd/internal/config"
 	"github.com/geodro/lerd/internal/envfile"
 	"github.com/geodro/lerd/internal/feedback"
+	"github.com/geodro/lerd/internal/linker"
 	nodeDet "github.com/geodro/lerd/internal/node"
 	phpPkg "github.com/geodro/lerd/internal/php"
 	"github.com/geodro/lerd/internal/podman"
@@ -179,6 +180,10 @@ func runWizard(cwd string, defaults *config.ProjectConfig) (*config.ProjectConfi
 		// phpChoice falls through to the PHP wizard below.
 	}
 
+	// Resolved before the seeding below, which fills defaults from the registry
+	// and would leave an unconfigured project looking like a configured one.
+	secured, httpsAvailable := resolveSecuredDefault(cwd, defaults, gcfg)
+
 	// Seed defaults from the site registry when no saved config exists yet,
 	// so already-set PHP version and HTTPS state are reflected on first run.
 	if defaults.PHPVersion == "" && !defaults.Secured {
@@ -273,8 +278,6 @@ func runWizard(cwd string, defaults *config.ProjectConfig) (*config.ProjectConfi
 
 	phpVersion := phpDefault
 	nodeVersion := defaults.NodeVersion
-	httpsAvailable := gcfg.DNSManaged()
-	secured := defaults.Secured && httpsAvailable
 
 	// FrankenPHP detection. If the project has signals we offer it as a
 	// choice in the wizard; default to whatever the existing config says.
@@ -550,7 +553,7 @@ func runWizard(cwd string, defaults *config.ProjectConfig) (*config.ProjectConfi
 func runCustomContainerWizard(cwd string, defaults *config.ProjectConfig, gcfg *config.GlobalConfig) (*config.ProjectConfig, error) {
 	portStr := "3000"
 	containerfile := "Containerfile.lerd"
-	secured, httpsAvailable := resolveSecuredDefault(cwd, defaults.Secured, gcfg)
+	secured, httpsAvailable := resolveSecuredDefault(cwd, defaults, gcfg)
 
 	if defaults.Container != nil {
 		if defaults.Container.Port > 0 {
@@ -769,7 +772,7 @@ func runHostProxyWizard(cwd string, defaults *config.ProjectConfig, gcfg *config
 		}
 	}
 	portStr := strconv.Itoa(port)
-	secured, httpsAvailable := resolveSecuredDefault(cwd, defaults.Secured, gcfg)
+	secured, httpsAvailable := resolveSecuredDefault(cwd, defaults, gcfg)
 
 	proxyFields := []huh.Field{
 		huh.NewInput().
@@ -1152,17 +1155,27 @@ func maybeCreateContainerfile(cwd, containerfile string, port int) {
 // resolveSecuredDefault computes a wizard's initial "secured" value and whether
 // the HTTPS prompt should be offered at all. HTTPS is only available when lerd
 // manages DNS; otherwise secured is forced off and the prompt is hidden so the
-// wizard never offers a choice that `lerd secure` would later refuse. When
-// available, an already-secured linked site seeds the default to on.
-func resolveSecuredDefault(cwd string, defaultsSecured bool, gcfg *config.GlobalConfig) (secured, httpsAvailable bool) {
-	httpsAvailable = gcfg.DNSManaged()
-	secured = defaultsSecured && httpsAvailable
-	if httpsAvailable && !secured {
-		if site, err := config.FindSiteByPath(cwd); err == nil && site.Secured {
-			secured = true
-		}
+// wizard never offers a choice that `lerd secure` would later refuse.
+//
+// A project with nothing committed is a new one, and a new site answers the
+// question with yes: the local CA is already trusted, so http is a choice worth
+// making deliberately rather than the one an unread prompt makes. A project that
+// is already configured keeps what it has, from .lerd.yaml or, when that never
+// recorded the field, from the site as it is registered today.
+func resolveSecuredDefault(cwd string, defaults *config.ProjectConfig, gcfg *config.GlobalConfig) (secured, httpsAvailable bool) {
+	if !gcfg.DNSManaged() {
+		return false, false
 	}
-	return secured, httpsAvailable
+	if defaults == nil || defaults.IsEmpty() {
+		return true, true
+	}
+	if defaults.Secured {
+		return true, true
+	}
+	if site, err := config.FindSiteByPath(cwd); err == nil && site.Secured {
+		return true, true
+	}
+	return false, true
 }
 
 // persistedSecured keeps the user's HTTPS intent in .lerd.yaml even when DNS is
@@ -1177,14 +1190,22 @@ func persistedSecured(chosen, httpsAvailable, committed bool) bool {
 	return committed
 }
 
-// appendHTTPSField adds the "Enable HTTPS?" confirm to a wizard's field list
+// appendHTTPSField adds the "Enable HTTPS?" question to a wizard's field list
 // only when HTTPS is available; in localhost mode the prompt is omitted. Shared
 // by all three wizards so the gating rule lives in one place.
+//
+// It is a vertical picker rather than a yes/no confirm. The confirm renders both
+// answers side by side as buttons and says which one is selected with background
+// colour alone, which reads as a pair of labels; the picker marks the answer with
+// a cursor, the way every other question in the wizard does.
 func appendHTTPSField(fields []huh.Field, httpsAvailable bool, secured *bool) []huh.Field {
 	if !httpsAvailable {
 		return fields
 	}
-	return append(fields, huh.NewConfirm().Title("Enable HTTPS?").Value(secured))
+	return append(fields, huh.NewSelect[bool]().
+		Title("Enable HTTPS?").
+		Options(huh.NewOption("Yes", true), huh.NewOption("No", false)).
+		Value(secured))
 }
 
 // validatePHPVersion checks that the input looks like a valid PHP version
@@ -1313,6 +1334,37 @@ func runSetupInit(cwd string, skipWizard bool) error {
 	return applyProjectConfig(cwd)
 }
 
+// settledRegistration returns the site registered for cwd when a link would
+// write exactly what the registry already holds, so there is nothing to apply.
+// The plan is resolved without a prompter: a question asked here would be asked
+// about a site that is already serving, and a framework detection that comes up
+// short simply reads as a change and lets the link run as before.
+func settledRegistration(cwd string) (config.Site, bool) {
+	existing, err := config.FindSiteByPath(cwd)
+	if err != nil || existing == nil {
+		return config.Site{}, false
+	}
+	cfg, err := config.LoadGlobal()
+	if err != nil {
+		return config.Site{}, false
+	}
+	plan, err := linker.Resolve(cwd, cfg, linker.CLIPolicy("", false, nil))
+	if err != nil || !plan.MatchesRegistration(*existing) {
+		return config.Site{}, false
+	}
+	return *existing, true
+}
+
+// siteAddress is the URL a site answers on, for the line that reports a link
+// there was no need to run.
+func siteAddress(site config.Site) string {
+	scheme := "http"
+	if site.Secured {
+		scheme = "https"
+	}
+	return scheme + "://" + site.PrimaryDomain()
+}
+
 func applyProjectConfig(cwd string) error {
 	// Suppress the "Run lerd setup?" prompt and the link summary inside runLink —
 	// we're already in init/setup, the caller handles worker steps, and the
@@ -1332,25 +1384,34 @@ func applyProjectConfig(cwd string) error {
 	// already done, so re-running it would just repeat the same output.
 	ranLink := false
 	if !linkApplied {
-		// Install PHP FPM with a progress loader if the version is not yet installed.
-		// runLink handles everything else (framework restore, node-version, secure, services).
-		if proj.PHPVersion != "" && !phpPkg.IsInstalled(proj.PHPVersion) {
-			phpVersion := proj.PHPVersion
-			jobs := []BuildJob{{
-				Label: "PHP " + phpVersion + " FPM",
-				Run: func(w io.Writer) error {
-					return ensureFPMQuadletTo(phpVersion, w)
-				},
-			}}
-			if err := RunParallel(jobs); err != nil {
-				feedback.Warn("PHP %s FPM: %v", phpVersion, err)
+		// linkApplied above covers one command doing both halves; this covers two.
+		// A link that would write the registration the registry already holds has
+		// no work in it, and running it anyway repeats every provisioning step and
+		// the summary for a site that is already being served.
+		if site, settled := settledRegistration(cwd); settled {
+			feedback.Start("already linked").OK(feedback.Val(siteAddress(site)))
+			linkApplied = true
+		} else {
+			// Install PHP FPM with a progress loader if the version is not yet installed.
+			// runLink handles everything else (framework restore, node-version, secure, services).
+			if proj.PHPVersion != "" && !phpPkg.IsInstalled(proj.PHPVersion) {
+				phpVersion := proj.PHPVersion
+				jobs := []BuildJob{{
+					Label: "PHP " + phpVersion + " FPM",
+					Run: func(w io.Writer) error {
+						return ensureFPMQuadletTo(phpVersion, w)
+					},
+				}}
+				if err := RunParallel(jobs); err != nil {
+					feedback.Warn("PHP %s FPM: %v", phpVersion, err)
+				}
 			}
-		}
 
-		if err := runLink([]string{}); err != nil {
-			return err
+			if err := runLink([]string{}); err != nil {
+				return err
+			}
+			ranLink = true
 		}
-		ranLink = true
 	}
 
 	// Apply the wizard's service choices (database, etc.) to .env so the user
