@@ -24,7 +24,7 @@ lerd init
 → Configuring site...
 ? PHP version: 8.5
 ? Node version (clear to follow the lerd default instead of pinning): 22
-? Enable HTTPS? No
+? Enable HTTPS? Yes
 ? Database: mysql
 ? Services: [mysql, redis]
 ? Workers to auto-start: [queue, schedule]
@@ -33,6 +33,8 @@ Linked: my-app -> my-app.test (PHP 8.5, Node 22, Framework: laravel)
 ```
 
 The answers are saved to `.lerd.yaml` in the project root and applied immediately: the site is linked, HTTPS is enabled if requested, the database is created, and the chosen services are started.
+
+The HTTPS question starts on yes for a project with nothing committed yet, so a new site ends up served over https without anyone having to answer for it. A project whose `.lerd.yaml` already exists keeps what that file asks for, and a site already registered on http stays there when the file never recorded the field.
 
 The Node version field asks which version, not whether. It is prefilled like the PHP field above it, from `.lerd.yaml` if a version is already saved and otherwise from `.nvmrc`, `.node-version`, `package.json` engines or the global default. Accepting it writes `node_version` to `.lerd.yaml`, which outranks all four from then on. Clear the field and no version is saved, so the project keeps resolving its own.
 

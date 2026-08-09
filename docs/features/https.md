@@ -19,7 +19,7 @@ lerd unsecure
 # Updates secured: false in .lerd.yaml if it exists
 ```
 
-HTTPS can also be enabled during `lerd init` or `lerd setup`, the wizard asks the question upfront and applies it as part of the configuration step.
+HTTPS can also be enabled during `lerd init` or `lerd setup`, the wizard asks the question upfront and applies it as part of the configuration step. A project with nothing committed yet, which is every project `lerd new` scaffolds, starts on the "Enable HTTPS?" answer already set to yes, so pressing enter through the wizard produces a site on https. A project that already has a `.lerd.yaml` keeps whatever that file asks for, and when the file never recorded the field the answer follows the site as it is registered today, so re-running the wizard on a site you deliberately left on http does not quietly turn it around.
 
 Certificates are stored in `~/.local/share/lerd/certs/sites/`.
 
