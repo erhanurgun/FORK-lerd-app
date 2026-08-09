@@ -5,7 +5,6 @@ package services
 import (
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/geodro/lerd/internal/config"
 )
@@ -18,16 +17,5 @@ func InstalledUnitBinary(name string) string {
 	if err != nil {
 		return ""
 	}
-	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "ExecStart=") {
-			continue
-		}
-		args := SplitExecStart(strings.TrimPrefix(line, "ExecStart="))
-		if len(args) == 0 {
-			return ""
-		}
-		return args[0]
-	}
-	return ""
+	return UnitExecBinary(string(data))
 }

@@ -538,7 +538,9 @@ func runStart(_ *cobra.Command, _ []string) error {
 
 	// Repair units and shims left pointing at a lerd binary that moved, which
 	// is what a package-manager upgrade of lerd itself does to an install.
-	healLerdBinaryMove()
+	if units, shims := healLerdBinaryMove(); len(units)+len(shims) > 0 {
+		fmt.Println("  " + repairSummary(units, shims))
+	}
 
 	// Restore quadlets and worker units that may be missing after an
 	// uninstall/reinstall cycle. Reads .lerd.yaml from each active site.
