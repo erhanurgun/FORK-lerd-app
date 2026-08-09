@@ -14,6 +14,7 @@ import (
 	"github.com/geodro/lerd/internal/config"
 	"github.com/geodro/lerd/internal/envfile"
 	"github.com/geodro/lerd/internal/feedback"
+	"github.com/geodro/lerd/internal/linker"
 	nodeDet "github.com/geodro/lerd/internal/node"
 	phpPkg "github.com/geodro/lerd/internal/php"
 	"github.com/geodro/lerd/internal/podman"
@@ -1313,6 +1314,37 @@ func runSetupInit(cwd string, skipWizard bool) error {
 	return applyProjectConfig(cwd)
 }
 
+// settledRegistration returns the site registered for cwd when a link would
+// write exactly what the registry already holds, so there is nothing to apply.
+// The plan is resolved without a prompter: a question asked here would be asked
+// about a site that is already serving, and a framework detection that comes up
+// short simply reads as a change and lets the link run as before.
+func settledRegistration(cwd string) (config.Site, bool) {
+	existing, err := config.FindSiteByPath(cwd)
+	if err != nil || existing == nil {
+		return config.Site{}, false
+	}
+	cfg, err := config.LoadGlobal()
+	if err != nil {
+		return config.Site{}, false
+	}
+	plan, err := linker.Resolve(cwd, cfg, linker.CLIPolicy("", false, nil))
+	if err != nil || !plan.MatchesRegistration(*existing) {
+		return config.Site{}, false
+	}
+	return *existing, true
+}
+
+// siteAddress is the URL a site answers on, for the line that reports a link
+// there was no need to run.
+func siteAddress(site config.Site) string {
+	scheme := "http"
+	if site.Secured {
+		scheme = "https"
+	}
+	return scheme + "://" + site.PrimaryDomain()
+}
+
 func applyProjectConfig(cwd string) error {
 	// Suppress the "Run lerd setup?" prompt and the link summary inside runLink —
 	// we're already in init/setup, the caller handles worker steps, and the
@@ -1332,25 +1364,34 @@ func applyProjectConfig(cwd string) error {
 	// already done, so re-running it would just repeat the same output.
 	ranLink := false
 	if !linkApplied {
-		// Install PHP FPM with a progress loader if the version is not yet installed.
-		// runLink handles everything else (framework restore, node-version, secure, services).
-		if proj.PHPVersion != "" && !phpPkg.IsInstalled(proj.PHPVersion) {
-			phpVersion := proj.PHPVersion
-			jobs := []BuildJob{{
-				Label: "PHP " + phpVersion + " FPM",
-				Run: func(w io.Writer) error {
-					return ensureFPMQuadletTo(phpVersion, w)
-				},
-			}}
-			if err := RunParallel(jobs); err != nil {
-				feedback.Warn("PHP %s FPM: %v", phpVersion, err)
+		// linkApplied above covers one command doing both halves; this covers two.
+		// A link that would write the registration the registry already holds has
+		// no work in it, and running it anyway repeats every provisioning step and
+		// the summary for a site that is already being served.
+		if site, settled := settledRegistration(cwd); settled {
+			feedback.Start("already linked").OK(feedback.Val(siteAddress(site)))
+			linkApplied = true
+		} else {
+			// Install PHP FPM with a progress loader if the version is not yet installed.
+			// runLink handles everything else (framework restore, node-version, secure, services).
+			if proj.PHPVersion != "" && !phpPkg.IsInstalled(proj.PHPVersion) {
+				phpVersion := proj.PHPVersion
+				jobs := []BuildJob{{
+					Label: "PHP " + phpVersion + " FPM",
+					Run: func(w io.Writer) error {
+						return ensureFPMQuadletTo(phpVersion, w)
+					},
+				}}
+				if err := RunParallel(jobs); err != nil {
+					feedback.Warn("PHP %s FPM: %v", phpVersion, err)
+				}
 			}
-		}
 
-		if err := runLink([]string{}); err != nil {
-			return err
+			if err := runLink([]string{}); err != nil {
+				return err
+			}
+			ranLink = true
 		}
-		ranLink = true
 	}
 
 	// Apply the wizard's service choices (database, etc.) to .env so the user

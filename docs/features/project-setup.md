@@ -76,6 +76,8 @@ MariaDB folds into MySQL because lerd's `mariadb` preset is an opt-in alternate;
 
 `lerd setup` is the one-shot bootstrap command for a fresh PHP project. It runs `lerd init` first (so the wizard described above appears), then shows a checkbox list of install/migrate/build steps:
 
+Running it on a site you linked a moment ago does not link it again. Before applying the configuration, setup compares what a link would register against what the registry already holds, and reports `already linked` in a single line when the two agree, rather than repeating the framework detection, the runtime provisioning, the certificate and the summary. A `.lerd.yaml` that has moved on since the link, a new domain, another PHP version, a runtime switch or HTTPS that is not on yet, is still applied the ordinary way.
+
 ```bash
 cd ~/Projects/my-app
 lerd setup
