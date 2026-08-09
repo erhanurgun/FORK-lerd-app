@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -409,6 +410,18 @@ func stripIPv6PublishPorts(content string) string {
 	return strings.Join(out, "\n")
 }
 
+// quadletStopTimeout reads the graceful-stop window the quadlet declares, so
+// macOS gives a container the same grace the Linux unit would. Falls back to
+// the default for a quadlet written before the key existed.
+func quadletStopTimeout(c map[string][]string) int {
+	if v := c["StopTimeout"]; len(v) > 0 {
+		if n, err := strconv.Atoi(strings.TrimSpace(v[0])); err == nil && n > 0 {
+			return n
+		}
+	}
+	return config.DefaultStopTimeout
+}
+
 // containerToPodmanArgs builds a podman run argument list from a parsed [Container] section.
 // On macOS we run detached (-d) so that launchctl bootstrap sees an immediate
 // exit 0 (success); podman's own --restart=always policy handles crash recovery.
@@ -417,8 +430,11 @@ func containerToPodmanArgs(c map[string][]string) ([]string, error) {
 
 	if names := c["ContainerName"]; len(names) > 0 {
 		// --replace removes any stale container with this name before starting.
-		// -t 5 limits the stop grace period so restart isn't slow.
-		args = append(args, "--name", names[0], "--replace", "--stop-timeout=5")
+		// --stop-timeout keeps a restart quick for images that exit promptly,
+		// and honours the longer grace a service declared for itself rather
+		// than killing it mid-write on the macOS path only.
+		args = append(args, "--name", names[0], "--replace",
+			fmt.Sprintf("--stop-timeout=%d", quadletStopTimeout(c)))
 	}
 	for _, net := range c["Network"] {
 		args = append(args, "--network", net)
