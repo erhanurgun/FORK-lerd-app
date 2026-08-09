@@ -585,9 +585,12 @@ func TestIsLerdBuiltImage_matchers(t *testing.T) {
 // exists to replace: an assistant that guesses from the tree's contents races
 // the watcher's installer, and no amount of probing files can tell it apart,
 // then 30800 → 31000 for the reverse-proxy public share, so the sharing rule
-// names every route rather than reading as though only tunnels exist.
+// names every route rather than reading as though only tunnels exist, then
+// 31000 → 31300 for the snapshot a data wipe now takes first: without it an
+// assistant hands back the renamed data dir as the recovery path, which after
+// a version change is a directory nothing installed can read.
 func TestLerdReference_underSizeCeiling(t *testing.T) {
-	const ceiling = 31000
+	const ceiling = 31300
 	if got := len(lerdReference); got > ceiling {
 		t.Errorf("lerd-reference.md is %d bytes, ceiling is %d — trim before raising", got, ceiling)
 	}
