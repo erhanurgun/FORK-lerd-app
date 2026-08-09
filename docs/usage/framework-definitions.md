@@ -249,6 +249,9 @@ setup:
       composer: doctrine/doctrine-migrations-bundle  # skipped if package not installed
   - label: "Install the app"                         # placeholders work here too
     command: "bin/install --url={{scheme}}://{{domain}}/ --db={{site}}"
+    default: false
+    check:
+      missing_file: config/installed.php             # only while the app is not installed yet
 
 # Application log files shown in the UI "App Logs" tab
 logs:
@@ -303,7 +306,7 @@ An app that keeps deployment state in its database cannot share the parent's. Ma
 
 The <code v-pre>{{site}}</code>, <code v-pre>{{site_testing}}</code>, <code v-pre>{{bucket}}</code>, <code v-pre>{{domain}}</code>, <code v-pre>{{scheme}}</code>, and <code v-pre>{{&lt;service&gt;_version}}</code> placeholders listed above are expanded in three places: the `env.services` vars, every `setup:` command, and every `commands:` entry. They resolve against the registered site the command runs for. A git worktree is not a registered site, so a command run against one resolves <code v-pre>{{site}}</code> but leaves <code v-pre>{{domain}}</code> and <code v-pre>{{scheme}}</code> alone.
 
-This is what lets a framework whose bootstrap needs to know where the site lives declare that step as data. Magento 2.4 removed its web installer, so a fresh store is installed with `bin/magento setup:install --base-url=… --db-name=…`; the definition can now express exactly that. A step that creates schema should carry `default: false` so it is opt-in rather than running on every `lerd setup`.
+This is what lets a framework whose bootstrap needs to know where the site lives declare that step as data. Magento 2.4 removed its web installer, so a fresh store is installed with `bin/magento setup:install --base-url=… --db-name=…`; the definition can now express exactly that. A step that creates schema should carry `default: false` so it is opt-in rather than running on every `lerd setup`, and it should gate itself on `check: missing_file:` naming the file the install writes, so it is offered on a project that has never been bootstrapped and nowhere else. `default: false` alone is not enough for that: `lerd setup --all` runs every step it is offered regardless of the default, and rerunning an installer over a working app is how its data goes away.
 
 A placeholder whose value is empty, or one lerd does not recognise, is left in the command verbatim rather than being replaced with an empty string, so a half-resolved context can never quietly produce `--base-url=://`.
 
@@ -324,7 +327,7 @@ The `commands:` list is the framework's own verbs: the things you would otherwis
 
 `confirm: true` puts the command behind a confirmation showing the exact command line before anything runs, and the dashboard, `lerd run` (unless you pass `--yes`) and MCP (unless the caller forces it) all honour it. This is what lets a genuinely destructive command ship as a command rather than as a setup step: Laravel's `migrate:fresh` drops every table, and Magento ships `setup:install` this way.
 
-`check` takes the same rule shape as a worker's or a setup step's, so `composer: <package>` or `file: <path>`, and a command whose check fails is dropped from the resolved set rather than merely hidden, which means it also disappears from `lerd run` and from any doctor `fix:` pointing at it. Use it for commands that only make sense when an optional package is installed.
+`check` takes the same rule shape as a worker's or a setup step's, so `composer: <package>`, `file: <path>`, or `missing_file: <path>` for the opposite reading, and a command whose check fails is dropped from the resolved set rather than merely hidden, which means it also disappears from `lerd run` and from any doctor `fix:` pointing at it. Use it for commands that only make sense when an optional package is installed.
 
 `icon` is drawn from a fixed vocabulary, and a name outside it renders a generic fallback rather than failing. The set is:
 
