@@ -412,6 +412,7 @@ func ValidatePHPIni(ini map[string]string) error {
 // Any matching rule is sufficient to identify the framework.
 type FrameworkRule struct {
 	File             string   `yaml:"file,omitempty" json:"file,omitempty"`                           // file must exist in project root
+	MissingFile      string   `yaml:"missing_file,omitempty" json:"missing_file,omitempty"`           // file must NOT exist in project root, for a step that bootstraps a project
 	Composer         string   `yaml:"composer,omitempty" json:"composer,omitempty"`                   // package must be in composer.json require/require-dev
 	ComposerSections []string `yaml:"composer_sections,omitempty" json:"composer_sections,omitempty"` // extra composer.json keys to search (e.g. flex-require)
 	VersionKey       string   `yaml:"version_key,omitempty" json:"version_key,omitempty"`             // dot-path to version in composer.json (e.g. extra.symfony.require)
@@ -2253,6 +2254,14 @@ func (fw *Framework) DetectProxy(dir string) (*WorkerProxy, string) {
 func MatchesRule(dir string, rule FrameworkRule) bool {
 	if rule.File != "" {
 		if _, err := os.Stat(filepath.Join(dir, rule.File)); err == nil {
+			return true
+		}
+	}
+	if rule.MissingFile != "" {
+		// Only a file that is genuinely not there counts as absent: an unreadable
+		// path says nothing about whether the project was bootstrapped, and a step
+		// gated this way is better left hidden than offered on a live project.
+		if _, err := os.Stat(filepath.Join(dir, rule.MissingFile)); os.IsNotExist(err) {
 			return true
 		}
 	}

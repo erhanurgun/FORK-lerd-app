@@ -160,6 +160,8 @@ Note the admin URI. Magento randomises it at install time, so yours will differ,
 
 Allow ten minutes or so. The command is confirm-gated in the dashboard and the TUI because it creates a schema and an admin user; `--yes` is what skips that prompt on the CLI.
 
+The same install is also offered as the first step of `lerd setup`, unticked, if you would rather stay in that flow. Both disappear the moment `app/etc/config.php` exists, so neither can be run a second time against a store that has data in it.
+
 ---
 
 ## 5. Run the remaining setup steps
@@ -186,7 +188,7 @@ Now that the store is installed the rest of the list appears:
 `setup:upgrade` and `cache:flush` are pre-selected because they are what a normal run after a pull needs. Switching to developer mode is worth doing on a local store: templates and static assets are then served without a deploy step, at the cost of speed.
 
 ::: info One-shot
-`lerd setup --all` skips the prompt and runs every pre-selected step. Note that this deliberately does not include `setup:install`, which is a quick command rather than a setup step precisely so a blanket run can never reinstall a store.
+`lerd setup --all` skips the prompt and runs every pre-selected step. Note that this cannot reinstall the store: the install step is gated on `app/etc/config.php` being absent, so once the store exists the step is not in the list for `--all` to reach.
 :::
 
 ---
@@ -259,7 +261,7 @@ Once the store is installed, the definition's actions are available on the site'
 
 | Command | Runs | What it does |
 |---|---|---|
-| `setup:install` | `bin/magento setup:install …` | Install a fresh store (confirm-gated) |
+| `setup:install` | `bin/magento setup:install …` | Install a fresh store (confirm-gated, and offered only before the store exists) |
 | `cache:flush` | `bin/magento cache:flush` | Purge every cache storage, full page cache included |
 | `cache:clean` | `bin/magento cache:clean` | Invalidate cached entries without emptying storage |
 | `setup:upgrade` | `bin/magento setup:upgrade` | Apply pending schema and data updates |
