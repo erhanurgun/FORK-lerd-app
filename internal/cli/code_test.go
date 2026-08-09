@@ -55,7 +55,9 @@ func TestCodeTargetDir_worktreeOpensItself(t *testing.T) {
 	if err != nil {
 		t.Fatalf("codeTargetDir: %v", err)
 	}
-	if dir != wtPath {
+	// SamePath, not string equality: the worktree comes back through os.Getwd,
+	// which resolves the /var symlink macOS puts in front of a temp dir.
+	if !config.SamePath(dir, wtPath) {
 		t.Errorf("dir = %q, want the worktree %q, not the parent", dir, wtPath)
 	}
 }
