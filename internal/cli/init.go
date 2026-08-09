@@ -14,6 +14,7 @@ import (
 	"github.com/geodro/lerd/internal/config"
 	"github.com/geodro/lerd/internal/envfile"
 	"github.com/geodro/lerd/internal/feedback"
+	nodeDet "github.com/geodro/lerd/internal/node"
 	phpPkg "github.com/geodro/lerd/internal/php"
 	"github.com/geodro/lerd/internal/podman"
 	"github.com/spf13/cobra"
@@ -94,6 +95,27 @@ func runInit(fresh bool) error {
 // for an absent-or-empty config, and `lerd init --fresh` for an explicit redo).
 func initShouldRunWizard(hasExisting, fresh bool) bool {
 	return !hasExisting || fresh
+}
+
+// nodeVersionDefault prefills the Node field the way the PHP one above it is
+// prefilled: a version already saved in .lerd.yaml wins, otherwise the version
+// the project resolves to on its own.
+func nodeVersionDefault(saved, resolved string) string {
+	if saved != "" {
+		return saved
+	}
+	return resolved
+}
+
+// nodeVersionDescription says what clearing the Node field does. An answer there
+// writes a node_version pin that outranks .nvmrc, .node-version, engines.node
+// and the machine default, and keeps outranking them, so an empty field is not
+// Node being turned off, it is the project going on resolving its own version.
+func nodeVersionDescription(source string) string {
+	if source == "" {
+		return "Clear to leave the version unpinned"
+	}
+	return fmt.Sprintf("Clear to follow %s instead of pinning", source)
 }
 
 func runWizard(cwd string, defaults *config.ProjectConfig) (*config.ProjectConfig, error) {
@@ -290,10 +312,12 @@ func runWizard(cwd string, defaults *config.ProjectConfig) (*config.ProjectConfi
 			}),
 	}
 	if lerdManagesNode() {
+		resolved, source := nodeDet.UnpinnedVersion(cwd)
+		nodeVersion = nodeVersionDefault(nodeVersion, resolved)
 		firstGroupFields = append(firstGroupFields,
 			huh.NewInput().
 				Title("Node version").
-				Description("Leave blank to skip").
+				Description(nodeVersionDescription(source)).
 				Value(&nodeVersion),
 		)
 	}
