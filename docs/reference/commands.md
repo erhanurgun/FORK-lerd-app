@@ -229,8 +229,8 @@ Switch the PHP runtime for the current site between shared PHP-FPM and per-site 
 | `lerd service add [file.yaml]` | Register a new custom service (from a YAML file or flags) |
 | `lerd service preset [name]` | List presets, or install one (use `--version` for multi-version presets); a store-only preset is fetched on demand |
 | `lerd service search [query]` | Browse the external service-preset store; filter by name, description, or family |
-| `lerd service remove <name> [--purge]` | Stop and remove a service (custom or default). With `--purge`, also rename the data dir aside (recoverable as `<name>.pre-remove-<ts>`) |
-| `lerd service reinstall <name> [--reset-data]` | Stop, remove, and reinstall at the current version. With `--reset-data`, rename the data dir aside and recreate linked sites' databases or buckets on the fresh service |
+| `lerd service remove <name> [--purge] [--no-snapshot]` | Stop and remove a service (custom or default). With `--purge`, snapshot every database on it, then rename the data dir aside (recoverable as `<name>.pre-remove-<ts>`). `--no-snapshot` skips the snapshot |
+| `lerd service reinstall <name> [--reset-data] [--no-snapshot]` | Stop, remove, and reinstall at the current version. With `--reset-data`, snapshot every database on it, rename the data dir aside, and recreate linked sites' databases or buckets on the fresh service. `--no-snapshot` skips the snapshot |
 | `lerd minio:migrate` | Migrate existing MinIO data to RustFS |
 
 ## Database

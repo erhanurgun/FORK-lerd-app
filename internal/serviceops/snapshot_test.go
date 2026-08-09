@@ -251,22 +251,22 @@ func TestSnapshotDumpCommand(t *testing.T) {
 		{
 			"mysql one database",
 			SnapshotTarget{Service: "mysql", Database: "myapp"},
-			`set -o pipefail 2>/dev/null; ( $(command -v mysqldump || command -v mariadb-dump) -h 127.0.0.1 -uroot --single-transaction --quick --no-tablespaces --routines --triggers --events myapp ) | gzip -c`,
+			`if (set -o pipefail) 2>/dev/null; then set -o pipefail; fi; ( $(command -v mysqldump || command -v mariadb-dump) -h 127.0.0.1 -uroot --single-transaction --quick --no-tablespaces --routines --triggers --events myapp ) | gzip -c`,
 		},
 		{
 			"mysql all databases",
 			SnapshotTarget{Service: "mysql", AllDatabases: true},
-			`set -o pipefail 2>/dev/null; ( $(command -v mysqldump || command -v mariadb-dump) -h 127.0.0.1 -uroot --single-transaction --quick --no-tablespaces --routines --triggers --events --add-drop-database --all-databases ) | gzip -c`,
+			`if (set -o pipefail) 2>/dev/null; then set -o pipefail; fi; ( $(command -v mysqldump || command -v mariadb-dump) -h 127.0.0.1 -uroot --single-transaction --quick --no-tablespaces --routines --triggers --events --add-drop-database --all-databases ) | gzip -c`,
 		},
 		{
 			"postgres one database",
 			SnapshotTarget{Service: "postgres", Database: "myapp"},
-			`set -o pipefail 2>/dev/null; ( pg_dump -U postgres --clean --if-exists myapp ) | gzip -c`,
+			`if (set -o pipefail) 2>/dev/null; then set -o pipefail; fi; ( pg_dump -U postgres --clean --if-exists myapp ) | gzip -c`,
 		},
 		{
 			"postgres all databases",
 			SnapshotTarget{Service: "postgres", AllDatabases: true},
-			`set -o pipefail 2>/dev/null; ( pg_dumpall -U postgres --clean --if-exists ) | gzip -c`,
+			`if (set -o pipefail) 2>/dev/null; then set -o pipefail; fi; ( pg_dumpall -U postgres --clean --if-exists ) | gzip -c`,
 		},
 	}
 	for _, tt := range tests {
