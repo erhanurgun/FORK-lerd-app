@@ -79,7 +79,7 @@ func ApplyPhpVarsUpdates(path string, updates map[string]string) error {
 	}
 
 	touched := map[int]bool{}
-	var appended []string
+	var unowned []string
 	for _, key := range keys {
 		segs := strings.Split(key, ".")
 		if i, rest := ownerOf(assignments, segs); i >= 0 {
@@ -94,8 +94,9 @@ func ApplyPhpVarsUpdates(path string, updates map[string]string) error {
 			touched[i] = true
 			continue
 		}
-		appended = append(appended, printAssignment(segs, updates[key]))
+		unowned = append(unowned, key)
 	}
+	appended := newAssignments(unowned, updates)
 
 	dirty := map[int]bool{}
 	for i := range assignments {
@@ -181,9 +182,53 @@ func ownerOf(assignments []phpAssignment, segs []string) (int, []string) {
 	return best, segs[bestLen:]
 }
 
-// printAssignment renders a statement for a key no assignment covers, assigning
-// the leaf directly: PHP creates the arrays above it on the way.
-func printAssignment(segs []string, value string) string {
+// newAssignments renders the statements for keys no assignment covers, one per
+// parent path with that parent's new leaves gathered into a single array.
+//
+// Assigning each leaf on its own line runs identically in PHP, but it is not the
+// shape a framework writes for itself, and one of them reads the file back that
+// way: Drupal's installer rewrites settings.php by walking it index by index
+// against the settings it is about to write, whose value for the connection node
+// is an object. An index below that node makes the walk subscript the object,
+// and the install dies at the database step. Assigning the node itself gives the
+// walk somewhere to stop.
+func newAssignments(keys []string, updates map[string]string) []string {
+	var order []string
+	byParent := map[string][]string{}
+	for _, key := range keys {
+		segs := strings.Split(key, ".")
+		parent := strings.Join(segs[:len(segs)-1], ".")
+		if _, seen := byParent[parent]; !seen {
+			order = append(order, parent)
+		}
+		byParent[parent] = append(byParent[parent], key)
+	}
+
+	var out []string
+	for _, parent := range order {
+		parentSegs := strings.Split(parent, ".")
+		// Only an indexed node is gathered. A key sitting directly under its
+		// variable would otherwise have the whole variable assigned to it, which
+		// discards everything else the application puts there.
+		if parent == "" || len(parentSegs) < 2 {
+			for _, key := range byParent[parent] {
+				out = append(out, printAssignment(strings.Split(key, "."), scalarValue(updates[key], phpString)))
+			}
+			continue
+		}
+		node := &phpValue{kind: phpArray}
+		for _, key := range byParent[parent] {
+			segs := strings.Split(key, ".")
+			setPath(node, segs[len(segs)-1:], updates[key])
+		}
+		out = append(out, printAssignment(parentSegs, node))
+	}
+	return out
+}
+
+// printAssignment renders one `$var['a']['b'] = <value>;` statement. PHP creates
+// the arrays above the assigned path on the way.
+func printAssignment(segs []string, value *phpValue) string {
 	var b strings.Builder
 	b.WriteString("$")
 	b.WriteString(segs[0])
@@ -193,7 +238,7 @@ func printAssignment(segs []string, value string) string {
 		b.WriteString("']")
 	}
 	b.WriteString(" = ")
-	printValue(&b, scalarValue(value, phpString), 0)
+	printValue(&b, value, 0)
 	b.WriteString(";\n")
 	return b.String()
 }

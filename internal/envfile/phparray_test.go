@@ -345,3 +345,143 @@ func TestApplyPhpArrayUpdates_NoOpWhenUnchanged(t *testing.T) {
 		t.Errorf("db.host = %q, want lerd-mariadb-11-8", got["db.host"])
 	}
 }
+
+// A returning-array config is read by people as much as by code: CakePHP's
+// app_local.php is mostly guidance on what each key is for, and its values call
+// a function it imports at the top. Rewriting a value must leave all of that
+// where it was, so the writer edits spans rather than reprinting the tree.
+const cakeAppLocalPHP = `<?php
+
+use function Cake\Core\env;
+
+/*
+ * Local configuration file.
+ */
+return [
+    'debug' => filter_var(env('DEBUG', true), FILTER_VALIDATE_BOOLEAN),
+
+    'Datasources' => [
+        'default' => [
+            'host' => 'localhost',
+            /*
+             * MAMP users will want to set the port.
+             */
+            //'port' => 'non_standard_port_number',
+
+            'username' => 'my_app',
+            'database' => 'my_app',
+
+            'url' => env('DATABASE_URL', null),
+        ],
+    ],
+];
+`
+
+func TestApplyPhpArrayUpdates_KeepsCommentsAndExpressions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "app_local.php")
+	if err := os.WriteFile(path, []byte(cakeAppLocalPHP), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ApplyPhpArrayUpdates(path, map[string]string{
+		"Datasources.default.host":     "lerd-mysql",
+		"Datasources.default.database": "fourth",
+	}); err != nil {
+		t.Fatalf("ApplyPhpArrayUpdates: %v", err)
+	}
+	body, _ := os.ReadFile(path)
+	got := string(body)
+
+	for _, keep := range []string{
+		"use function Cake\\Core\\env;",
+		"* Local configuration file.",
+		"* MAMP users will want to set the port.",
+		"//'port' => 'non_standard_port_number',",
+		"filter_var(env('DEBUG', true), FILTER_VALIDATE_BOOLEAN)",
+		"env('DATABASE_URL', null)",
+	} {
+		if !strings.Contains(got, keep) {
+			t.Errorf("rewrite dropped %q:\n%s", keep, got)
+		}
+	}
+	if !strings.Contains(got, "'host' => 'lerd-mysql',") {
+		t.Errorf("host was not rewritten:\n%s", got)
+	}
+	if strings.Contains(got, "'my_app'") && !strings.Contains(got, "'username' => 'my_app'") {
+		t.Errorf("rewrite disturbed a value it was not given:\n%s", got)
+	}
+}
+
+// A key the file does not have yet is inserted into the array it belongs to,
+// indented with its siblings, rather than reprinting the array around it.
+func TestApplyPhpArrayUpdates_InsertsMissingKeyInPlace(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "app_local.php")
+	if err := os.WriteFile(path, []byte(cakeAppLocalPHP), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ApplyPhpArrayUpdates(path, map[string]string{"Datasources.default.port": "3306"}); err != nil {
+		t.Fatalf("ApplyPhpArrayUpdates: %v", err)
+	}
+	body, _ := os.ReadFile(path)
+	if !strings.Contains(string(body), "\n            'port' => '3306',\n") {
+		t.Errorf("port was not inserted alongside its siblings:\n%s", body)
+	}
+	if !strings.Contains(string(body), "use function Cake\\Core\\env;") {
+		t.Errorf("insertion cost the file its import:\n%s", body)
+	}
+	vals, err := ReadPhpArray(path)
+	if err != nil {
+		t.Fatalf("re-read: %v", err)
+	}
+	if vals["Datasources.default.port"] != "3306" {
+		t.Errorf("port = %q, want 3306", vals["Datasources.default.port"])
+	}
+}
+
+// Several new keys under one absent parent produce a single entry for it, not
+// one per key, which would leave the array holding the same name twice.
+func TestApplyPhpArrayUpdates_GroupsKeysUnderOneNewParent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "app_local.php")
+	if err := os.WriteFile(path, []byte(cakeAppLocalPHP), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ApplyPhpArrayUpdates(path, map[string]string{
+		"Datasources.replica.host":     "lerd-mysql",
+		"Datasources.replica.database": "fourth",
+	}); err != nil {
+		t.Fatalf("ApplyPhpArrayUpdates: %v", err)
+	}
+	body, _ := os.ReadFile(path)
+	if n := strings.Count(string(body), "'replica' =>"); n != 1 {
+		t.Errorf("replica written %d times, want once:\n%s", n, body)
+	}
+	vals, _ := ReadPhpArray(path)
+	if vals["Datasources.replica.host"] != "lerd-mysql" || vals["Datasources.replica.database"] != "fourth" {
+		t.Errorf("replica values did not survive: %v", vals)
+	}
+}
+
+// A value the reader cannot evaluate is nobody's to report: the key is absent
+// from a read rather than carrying the source text as if it were the value.
+func TestReadPhpArray_OmitsExpressionValues(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "app_local.php")
+	if err := os.WriteFile(path, []byte(cakeAppLocalPHP), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	vals, err := ReadPhpArray(path)
+	if err != nil {
+		t.Fatalf("ReadPhpArray: %v", err)
+	}
+	if _, ok := vals["debug"]; ok {
+		t.Errorf("debug = %q, want no value for an expression", vals["debug"])
+	}
+	if _, ok := vals["Datasources.default.url"]; ok {
+		t.Errorf("url = %q, want no value for an expression", vals["Datasources.default.url"])
+	}
+	if vals["Datasources.default.host"] != "localhost" {
+		t.Errorf("host = %q, want the literal alongside the expressions", vals["Datasources.default.host"])
+	}
+}

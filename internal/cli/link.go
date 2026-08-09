@@ -246,12 +246,6 @@ func runLink(args []string) error {
 		}
 	}
 
-	if proj != nil && shouldSecureOnLink(proj.Secured, site.Secured, cfg.DNSManaged()) {
-		if err := runSecure(nil, []string{}); err != nil {
-			feedback.Warn("securing site: %v", err)
-		}
-	}
-
 	return linkApplyServices(cwd, proj)
 }
 
@@ -296,19 +290,6 @@ func printLinkSummary(site config.Site, start time.Time, wroteDataSource bool) {
 		sum.Row("IDE", "database connection written to .idea")
 	}
 	sum.Print()
-}
-
-// shouldSecureOnLink reports whether a link should turn HTTPS on because the
-// project asks for it. A link only ever turns HTTPS on: it is turned off with
-// `lerd unsecure`, never as a side effect of linking. secured is a plain bool,
-// so an absent .lerd.yaml, an empty one, and one that omits the field all read
-// as false — and treating that as "turn HTTPS off" silently dropped a secured
-// site back to HTTP every time it was re-linked, undoing the carry-over
-// CleanupRelink had just performed. The DNS gate is folded in so a secured:
-// true project on a localhost install stays on http rather than triggering a
-// runSecure the cert layer would only reject.
-func shouldSecureOnLink(projSecured, siteSecured, dnsManaged bool) bool {
-	return projSecured && !siteSecured && dnsManaged
 }
 
 // summaryEnvReader reads the site's live env file, resolved through the
