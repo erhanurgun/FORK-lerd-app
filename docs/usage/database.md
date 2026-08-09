@@ -141,6 +141,19 @@ lerd db:restore --service mysql --all-databases nightly
 
 An all-databases restore drops and recreates every database contained in the snapshot, but leaves databases that aren't in the snapshot untouched.
 
+### Snapshots before a data wipe
+
+`lerd service remove <name> --purge` and `lerd service reinstall <name> --reset-data` rename the data dir aside, and a renamed directory only reads back under the image that wrote it, which after a reinstall on another version is an image you no longer have. So before either wipes anything, lerd snapshots every database on the service, the same all-databases snapshot `db:snapshot -A` takes:
+
+```bash
+lerd db:snapshots --service mysql --all      # pre-remove-<ts> / pre-reset-data-<ts> are listed here
+lerd db:restore --service mysql -A pre-reset-data-20260809-141500
+```
+
+The name says where it came from, so it is still recognisable weeks later. Services that declare no export action, and services with no data dir yet, have nothing to snapshot and are skipped.
+
+The snapshot has to come off a running engine, so lerd starts the service if it is stopped. If the snapshot cannot be taken the operation stops before touching anything, rather than wiping without one. Pass `--no-snapshot` to go ahead anyway, for an engine that will not come up or data you know is disposable.
+
 ### Reserved names
 
 `db:snapshot` rejects names that look like command verbs (`list`, `rm`, `delete`, `restore`, …), so `lerd db snapshot list` errors with a hint instead of silently creating a snapshot literally named "list". Use `lerd db:snapshots` to list.
@@ -347,6 +360,8 @@ Whether a tool reads as installed is answered by the shim dir itself rather than
 
 `lerd service reinstall <name> --reset-data` wipes the database server's data dir (rename-aside, recoverable) and then walks every active site that depends on the service to recreate the database it expects via `CREATE DATABASE IF NOT EXISTS`. Database name resolution is the same as `lerd env`: `.lerd.yaml` `db.database` first, then `.env` `DB_DATABASE`, then a name derived from the site name.
 
-The DBs come back empty. The previous data lives next door as `~/.local/share/lerd/data/<name>.pre-remove-<timestamp>`. If you need the old contents, stop the service, rename the aside dir back over the new data dir, and start the service again.
+The DBs come back empty. To get the contents back, restore the snapshot the reinstall took before wiping: `lerd db:restore --service <name> -A pre-reset-data-<timestamp>` (see [snapshots before a data wipe](#snapshots-before-a-data-wipe)).
+
+The previous data also lives next door as `~/.local/share/lerd/data/<name>.pre-remove-<timestamp>`, but that directory is only readable by the image that wrote it. It is the fallback when the reinstall stayed on the same version, or when you passed `--no-snapshot`: stop the service, rename the aside dir back over the new data dir, and start the service again.
 
 If you only want to recreate a single missing database without wiping the whole server, use `lerd db:create` against the live service instead.

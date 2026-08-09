@@ -1556,12 +1556,14 @@ func execServiceRemove(args map[string]any) (any, *rpcError) {
 	}
 	removeData := boolArg(args, "remove_data")
 
-	if err := serviceops.RemoveService(name, serviceops.RemoveOptions{RemoveData: removeData}, nil); err != nil {
+	opts := serviceops.RemoveOptions{RemoveData: removeData, SkipSnapshot: boolArg(args, "no_snapshot")}
+	taken := ""
+	if err := serviceops.RemoveService(name, opts, snapshotNoter(&taken)); err != nil {
 		return toolErr(err.Error()), nil
 	}
 
 	if removeData {
-		return toolOK(fmt.Sprintf("Service %q removed. Data renamed aside as %s.pre-remove-<ts>.", name, config.DataSubDir(name))), nil
+		return toolOK(fmt.Sprintf("Service %q removed. Data renamed aside as %s.pre-remove-<ts>.%s", name, config.DataSubDir(name), taken)), nil
 	}
 	return toolOK(fmt.Sprintf("Service %q removed. Persistent data was NOT deleted.", name)), nil
 }
@@ -1572,13 +1574,26 @@ func execServiceReinstall(args map[string]any) (any, *rpcError) {
 		return toolErr("name is required"), nil
 	}
 	resetData := boolArg(args, "reset_data")
-	if err := serviceops.ReinstallService(name, resetData, nil); err != nil {
+	opts := serviceops.ReinstallOptions{ResetData: resetData, SkipSnapshot: boolArg(args, "no_snapshot")}
+	taken := ""
+	if err := serviceops.ReinstallService(name, opts, snapshotNoter(&taken)); err != nil {
 		return toolErr(err.Error()), nil
 	}
 	if resetData {
-		return toolOK(fmt.Sprintf("Service %q reinstalled with fresh data; linked sites' DBs/buckets were recreated.", name)), nil
+		return toolOK(fmt.Sprintf("Service %q reinstalled with fresh data; linked sites' DBs/buckets were recreated.%s", name, taken)), nil
 	}
 	return toolOK(fmt.Sprintf("Service %q reinstalled (data preserved).", name)), nil
+}
+
+// snapshotNoter collects the safety-snapshot line off the phase stream, so the
+// tool result can tell the caller what to restore from rather than leaving the
+// snapshot to be discovered in db:snapshots.
+func snapshotNoter(out *string) func(serviceops.PhaseEvent) {
+	return func(e serviceops.PhaseEvent) {
+		if e.Phase == "snapshot_taken" {
+			*out = " " + e.Message
+		}
+	}
 }
 
 // resolveTunableService returns the resolved service definition + the

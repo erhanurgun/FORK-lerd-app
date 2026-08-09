@@ -771,7 +771,7 @@ func MissingPresetDependencies(svc *config.CustomService) []string {
 
 // newServiceRemoveCmd returns the `service remove` command.
 func newServiceRemoveCmd() *cobra.Command {
-	var purge bool
+	var purge, noSnapshot bool
 	cmd := &cobra.Command{
 		Use:   "remove <service>",
 		Short: "Stop and remove a service (custom or default)",
@@ -786,6 +786,8 @@ func newServiceRemoveCmd() *cobra.Command {
 
 			emit := func(e serviceops.PhaseEvent) {
 				switch e.Phase {
+				case "snapshotting_data", "snapshot_taken":
+					feedback.Line(e.Message)
 				case "stopping_unit":
 					feedback.Line("stopping " + e.Unit)
 				case "removing_data":
@@ -795,7 +797,8 @@ func newServiceRemoveCmd() *cobra.Command {
 				}
 			}
 
-			if err := serviceops.RemoveService(name, serviceops.RemoveOptions{RemoveData: purge}, emit); err != nil {
+			opts := serviceops.RemoveOptions{RemoveData: purge, SkipSnapshot: noSnapshot}
+			if err := serviceops.RemoveService(name, opts, emit); err != nil {
 				return err
 			}
 
@@ -810,6 +813,7 @@ func newServiceRemoveCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&purge, "purge", false, "also rename the service data dir aside (recoverable as <dir>.pre-remove-<ts>)")
+	cmd.Flags().BoolVar(&noSnapshot, "no-snapshot", false, "with --purge, skip the snapshot of every database taken before the data goes")
 	return cmd
 }
 
@@ -817,11 +821,11 @@ func newServiceRemoveCmd() *cobra.Command {
 // removes, and reinstalls the same version. With --reset-data the data dir
 // is renamed-aside and per-site DBs/buckets are recreated on the fresh service.
 func newServiceReinstallCmd() *cobra.Command {
-	var resetData bool
+	var resetData, noSnapshot bool
 	cmd := &cobra.Command{
 		Use:   "reinstall <service>",
 		Short: "Stop, remove, and reinstall a service in place",
-		Long:  "Reinstall the service at its current version. With --reset-data the data dir is renamed-aside (recoverable) and any linked sites' databases or buckets are recreated on the fresh service.",
+		Long:  "Reinstall the service at its current version. With --reset-data every database on the service is snapshotted first, the data dir is renamed-aside (recoverable) and any linked sites' databases or buckets are recreated on the fresh service.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			name := args[0]
@@ -830,6 +834,8 @@ func newServiceReinstallCmd() *cobra.Command {
 				switch e.Phase {
 				case "reinstall_starting":
 					feedback.Line("reinstalling " + name)
+				case "snapshotting_data", "snapshot_taken":
+					feedback.Note(e.Message)
 				case "stopping_unit":
 					feedback.Note("stopping " + e.Unit)
 				case "removing_data":
@@ -850,7 +856,8 @@ func newServiceReinstallCmd() *cobra.Command {
 					feedback.Note("reprovisioning skipped: " + e.Message)
 				}
 			}
-			if err := serviceops.ReinstallService(name, resetData, emit); err != nil {
+			opts := serviceops.ReinstallOptions{ResetData: resetData, SkipSnapshot: noSnapshot}
+			if err := serviceops.ReinstallService(name, opts, emit); err != nil {
 				return err
 			}
 			fmt.Printf("Reinstalled %q.\n", name)
@@ -858,6 +865,7 @@ func newServiceReinstallCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&resetData, "reset-data", false, "wipe data dir (rename-aside) and recreate linked-site databases/buckets on the fresh service")
+	cmd.Flags().BoolVar(&noSnapshot, "no-snapshot", false, "with --reset-data, skip the snapshot of every database taken before the data goes")
 	return cmd
 }
 
