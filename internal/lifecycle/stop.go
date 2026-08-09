@@ -50,12 +50,17 @@ func Stop(runner ParallelRunner, skip ...string) error {
 
 // Quit is the full teardown behind `lerd quit`: everything Stop covers, then
 // the host process units, then the Podman Machine VM. skip removes units the
-// caller must not stop.
-func Quit(runner ParallelRunner, skip ...string) error {
+// caller must not stop. beforeMachineStop, when set, runs after the process
+// units and before the VM, for host cleanup that must not wait out a VM stop
+// that takes seconds; pass nil when there is none.
+func Quit(runner ParallelRunner, beforeMachineStop func(), skip ...string) error {
 	if err := Stop(runner, skip...); err != nil {
 		return err
 	}
 	stopProcessUnits(QuitProcessUnits(skip...))
+	if beforeMachineStop != nil {
+		beforeMachineStop()
+	}
 	stopPodmanMachineFn()
 	return nil
 }

@@ -130,7 +130,7 @@ func TestShutdownForLogout_MarksStopped(t *testing.T) {
 func TestQuit_StopsWatcherAndVMLast(t *testing.T) {
 	rec := captureTeardown(t)
 
-	if err := Quit(SimpleRunner); err != nil {
+	if err := Quit(SimpleRunner, nil); err != nil {
 		t.Fatalf("Quit: %v", err)
 	}
 	if !rec.contains(podman.WatcherUnit) {
@@ -161,5 +161,38 @@ func TestStop_LeavesDNSAndProcessUnitsAlone(t *testing.T) {
 	}
 	if rec.contains("podman-machine") {
 		t.Error("`lerd stop` must not stop the Podman Machine VM")
+	}
+}
+
+// TestQuit_RunsTheHostCleanupBeforeTheVMStop pins that `lerd quit` clears a
+// directly-launched tray before `podman machine stop`, not after. The VM stop
+// takes seconds, and a tray icon still on screen through it reads as a hung
+// quit.
+func TestQuit_RunsTheHostCleanupBeforeTheVMStop(t *testing.T) {
+	rec := captureTeardown(t)
+
+	if err := Quit(SimpleRunner, func() { rec.add("host-cleanup") }); err != nil {
+		t.Fatalf("Quit: %v", err)
+	}
+
+	cleanup, machine := rec.index("host-cleanup"), rec.index("podman-machine")
+	if cleanup < 0 {
+		t.Fatal("Quit never ran the host cleanup hook")
+	}
+	if cleanup > machine {
+		t.Error("host cleanup ran after the VM stop, so it waited out the whole machine stop")
+	}
+}
+
+// TestQuit_NilHookIsSkipped pins that the hook is optional, so the logout path
+// and the tests can pass nil without Quit panicking.
+func TestQuit_NilHookIsSkipped(t *testing.T) {
+	rec := captureTeardown(t)
+
+	if err := Quit(SimpleRunner, nil); err != nil {
+		t.Fatalf("Quit: %v", err)
+	}
+	if !rec.contains("podman-machine") {
+		t.Error("Quit must still stop the VM with no hook set")
 	}
 }

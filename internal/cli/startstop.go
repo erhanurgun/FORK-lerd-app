@@ -1142,10 +1142,10 @@ func runStop(_ *cobra.Command, _ []string) error {
 }
 
 func runQuit(_ *cobra.Command, _ []string) error {
-	err := lifecycle.Quit(spinnerRunner)
-	// Also kill any directly-launched tray instance not managed by launchd/systemd.
-	killTray()
-	return err
+	// killTray runs before the VM stop: it clears any directly-launched tray
+	// instance launchd and systemd know nothing about, and leaving the icon on
+	// screen for the seconds `podman machine stop` takes reads as a hung quit.
+	return lifecycle.Quit(spinnerRunner, killTray)
 }
 
 // canPromptForPassword reports whether sudo would have someone to ask. sudo reads

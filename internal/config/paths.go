@@ -607,6 +607,7 @@ func MarkWatcherManagedStop() error {
 // later logout is never mistaken for another managed stop.
 func ConsumeWatcherManagedStop() bool {
 	st, err := os.Stat(watcherManagedStopMarkerPath())
+	guardRealWrite(watcherManagedStopMarkerPath())
 	_ = os.Remove(watcherManagedStopMarkerPath())
 	return err == nil && time.Since(st.ModTime()) < watcherManagedStopTTL
 }
