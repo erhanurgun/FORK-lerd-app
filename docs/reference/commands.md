@@ -71,6 +71,7 @@ Setup steps include common tasks (composer install, npm install, lerd env) plus 
 | `lerd unlink [name]` | Stop serving the site; defaults to the site in the current directory, and naming one is the way to unlink a site whose directory has moved or been deleted |
 | `lerd sites` | Table view of all registered sites |
 | `lerd open [name]` | Open the site in the default browser |
+| `lerd code [name]` | Open the site's directory in your editor: the `editor` command from `~/.config/lerd/config.yaml` if set, otherwise the first known GUI editor found on PATH. Run from inside a git worktree it opens the worktree itself |
 | `lerd share [name]` | Expose the site publicly via ngrok, cloudflared, or Expose (auto-detected); `--serveo`, `--localhost-run` and `--pinggy` pick the SSH tunnels that need no signup |
 | `lerd share --domain <hostname>` | Expose the site on your own Cloudflare-managed hostname via a named tunnel (implies Cloudflare Tunnel) |
 | `lerd share:tool [tool]` | Show or set the default tunnel tool for `lerd share` (`auto` restores auto-detection) |

@@ -14,9 +14,12 @@ This page covers getting a project registered and served: the init wizard, linki
 | `lerd unlink` | Unlink the current directory site (removes all domains) |
 | `lerd sites` | Table view of all registered sites |
 | `lerd open [name]` | Open the site in the default browser |
+| `lerd code [name]` | Open the site's directory in the configured editor |
 | `lerd secure [name]` | Issue a mkcert TLS cert and enable HTTPS, updates `APP_URL` in `.env` |
 | `lerd unsecure [name]` | Remove TLS and switch back to HTTP, updates `APP_URL` in `.env` |
 | `lerd env` | Configure `.env` for the current project with lerd service connection settings |
+
+`lerd code` opens the project the way `lerd open` opens the browser: no argument uses the site rooted at the current directory, a name comes from the registry, and inside a git worktree it opens that checkout rather than the parent it inherits its registration from. It runs the `editor` command from `~/.config/lerd/config.yaml` when you have set one, with `{file}` standing for the directory (a `{line}` in the template is dropped, a directory has no line to jump to). With nothing configured it uses the first of VS Code, Cursor, VSCodium, Windsurf, Sublime, Zed, PhpStorm or IntelliJ IDEA it finds on PATH, and if none of them are there it says so instead of handing the directory to your file manager.
 
 The `lerd domain`, `lerd share`, `lerd pause` and `lerd workspace` commands are documented on the [Domains](domains.md), [Sharing Sites](sharing.md), [Pausing Sites](pausing.md) and [Workspaces](workspaces.md) pages.
 
