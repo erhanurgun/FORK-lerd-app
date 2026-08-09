@@ -282,6 +282,13 @@ type CustomService struct {
 	// handler when it runs as PID 1, which makes podman stop time out and
 	// systemctl restart wedge for ~90s.
 	Init bool `yaml:"init,omitempty" json:"init,omitempty"`
+	// StopTimeout is how many seconds podman waits after SIGTERM before it
+	// SIGKILLs the container. Zero means DefaultStopTimeout, which suits images
+	// that exit promptly and keeps a hung one from stalling a stop. Engines that
+	// need to finish writing before they die (a database checkpointing a large
+	// buffer pool) declare a longer one; past this window the process is killed
+	// mid-write and the next start pays for it in crash recovery.
+	StopTimeout int `yaml:"stop_timeout,omitempty" json:"stop_timeout,omitempty"`
 	// ClientShims lists the client tools this service exposes as host shims
 	// (mysqldump, pg_dump, psql…) so host tools and IDEs can run them against
 	// external databases. Empty for services with nothing to expose.
@@ -915,4 +922,29 @@ func ListCustomServices() ([]*CustomService, error) {
 		services = append(services, svc)
 	}
 	return services, nil
+}
+
+// DefaultStopTimeout is the graceful-stop window a service gets when its
+// definition declares none. It is deliberately short: an image with a slow
+// shutdown sequence (selenium/supervisord, chromium) would otherwise hold up
+// every stop, and most images exit as soon as they are asked to.
+const DefaultStopTimeout = 5
+
+// StopTimeoutSecs is the graceful-stop window podman must give this service.
+func (s *CustomService) StopTimeoutSecs() int {
+	if s.StopTimeout > 0 {
+		return s.StopTimeout
+	}
+	return DefaultStopTimeout
+}
+
+// UnitStopTimeoutSecs is the window the service manager must give the whole
+// stop, which has to outlast the container's own. podman only starts counting
+// StopTimeoutSecs once the stop reaches it, and still has to reap and remove
+// the container afterwards, so a manager timeout equal to it kills the unit
+// mid-shutdown and undoes the grace the service asked for. Distributions vary
+// here: Arch-family systems ship DefaultTimeoutStopSec=10s, which is already
+// tight for the default window and far too short for a database's.
+func (s *CustomService) UnitStopTimeoutSecs() int {
+	return s.StopTimeoutSecs() + 15
 }
