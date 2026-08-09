@@ -138,7 +138,7 @@ lerd init
 
 ```
 ? PHP version: 8.5
-? Node version (leave blank to skip): 22
+? Node version (clear to follow the lerd default instead of pinning): 22
 ? Enable HTTPS? Yes
 ? Database: mysql
 ? Services: [mailpit]

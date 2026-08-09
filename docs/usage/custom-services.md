@@ -127,6 +127,12 @@ userns: ""                             # written verbatim to UserNS= in the quad
 
 exec: ""                               # container command override
 
+stop_timeout: 0                        # seconds podman waits after SIGTERM before SIGKILL.
+                                       # 0 uses the 5s default, which suits images that exit
+                                       # promptly. Raise it for engines that flush on shutdown
+                                       # (a database killed mid-checkpoint replays its WAL on
+                                       # the next start). The unit gets this plus 15s.
+
 dashboard: http://localhost:8081       # URL shown as an "Open" button in the web UI
                                        # when the service is active
 
@@ -258,6 +264,18 @@ When `lerd env` runs in a project directory, it checks each custom service's `en
 `lerd start` and `lerd stop` include any custom service that has a quadlet file installed (i.e. has been started at least once via `lerd service start`). They are started and stopped alongside the built-in services. After the bulk start, lerd refreshes any `discover_family` and pinned-dependency-host consumers (phpMyAdmin, pgAdmin, RedisInsight, mongo-express) so their host lists include engines that came up in the same pass, otherwise a pre-start reconcile can leave `PMA_HOSTS` empty when MariaDB was not running yet.
 
 Custom service containers are given a 5-second graceful stop window before podman sends `SIGKILL`. This keeps `lerd service stop` and the web UI's Stop button responsive even for images with slow shutdown sequences (Selenium Chromium/supervisord, for example, can otherwise block for 30 s+). On Podman 5.0+ this is emitted as the native `StopTimeout=5` quadlet key; on Podman 4.x (e.g. Ubuntu 24.04's 4.9.3) lerd writes `PodmanArgs=--stop-timeout=5` instead, since the `StopTimeout=` key only exists in 5.0+. Existing installs of a slow-stopping service can pick up the change with `lerd service remove <name> && lerd service preset <name>`.
+
+Five seconds suits an image that exits as soon as it is asked to, but not one that has to finish writing first. A database checkpointing a large buffer pool needs longer, and being killed part-way through leaves its data files dirty, so the next start spends minutes replaying the write-ahead log. Those services declare their own window with `stop_timeout`:
+
+```yaml
+stop_timeout: 60
+```
+
+The unit that runs the container is given that window plus fifteen seconds, because podman only starts counting once the stop reaches it and still has to reap and remove the container afterwards. That matters more than it sounds: a unit inherits `DefaultTimeoutStopSec` when nothing sets it, and Arch-family distributions ship that at 10 seconds, so without the longer unit timeout systemd would `SIGKILL` the stop long before podman had spent the grace the service asked for.
+
+::: tip
+Raise this only for services that flush on shutdown. A longer window on an image that hangs rather than exits just makes every stop wait it out.
+:::
 
 ## Pinning services
 
