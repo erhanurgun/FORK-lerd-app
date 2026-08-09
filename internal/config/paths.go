@@ -160,6 +160,13 @@ func SystemdUserDir() string {
 }
 
 // PHPImageHashFile returns the path to the stored PHP-FPM Containerfile hash.
+// InstalledVersionFile records the lerd version whose `lerd install` last ran,
+// so a binary replaced by a package manager can be told from one this install
+// has already been set up for.
+func InstalledVersionFile() string {
+	return filepath.Join(DataDir(), "installed-version")
+}
+
 func PHPImageHashFile() string {
 	return filepath.Join(DataDir(), "php-image-hash")
 }

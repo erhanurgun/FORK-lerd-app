@@ -26,6 +26,7 @@ import (
 	"github.com/geodro/lerd/internal/store"
 	lerdSystemd "github.com/geodro/lerd/internal/systemd"
 	"github.com/geodro/lerd/internal/tray"
+	"github.com/geodro/lerd/internal/version"
 	"github.com/spf13/cobra"
 )
 
@@ -1088,6 +1089,10 @@ func runInstall(cmd *cobra.Command, _ []string) error {
 	refreshStorePresets()
 	refreshGlobalMCPSkills()
 	refreshProjectMCPSkills()
+
+	// Record which version this environment is set up for, so a binary a
+	// package manager swaps underneath it is recognised on the next command.
+	writeInstalledVersion(version.Version)
 
 	feedback.Begin()
 	feedback.Done("lerd installation complete")

@@ -152,6 +152,8 @@ Fetches the latest release from GitHub, downloads the binary for your architectu
 
 This applies to script and source installs in `~/.local/bin`. On a packaged install the binary is owned by apt or dnf, so `lerd update` prints that package manager's upgrade command instead of self-replacing; a Homebrew install updates with `brew upgrade lerd`.
 
+Replacing the binary is only half of an update: quadlets, DNS, nginx config, the user services and the shims all have to be reapplied, which `lerd update` does for you by re-running `lerd install`. A package manager does none of that, so the first lerd command you run at a terminal after the new binary lands reapplies it for you and says so. It runs once per version, and never on a machine where `lerd install` has not run yet, in a script, or from a daemon.
+
 You can also re-run the installer:
 
 ::: code-group
@@ -253,7 +255,7 @@ Recent Homebrew versions refuse to load formulae from third-party taps until the
 lerd update
 ```
 
-If you installed via Homebrew instead, update with `brew upgrade lerd && lerd install`.
+If you installed via Homebrew instead, update with `brew upgrade lerd`. The `lerd install` that finishes an update is applied for you by the first lerd command you run at a terminal afterwards, and running it yourself does no harm.
 
 If you're running a local development build (a `git describe` version like `1.25.0-6-g7d03`), the one-line installer and `--update` detect it and ask before replacing it with a release binary, so an ahead-of-release build isn't overwritten silently. Decline to keep your build, or reinstall one explicitly with `install.sh --local <path>`.
 
