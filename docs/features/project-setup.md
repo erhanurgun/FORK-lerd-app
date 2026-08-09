@@ -23,7 +23,7 @@ lerd init
 ```
 → Configuring site...
 ? PHP version: 8.5
-? Node version (leave blank to skip): 22
+? Node version (clear to follow the lerd default instead of pinning): 22
 ? Enable HTTPS? No
 ? Database: mysql
 ? Services: [mysql, redis]
@@ -33,6 +33,8 @@ Linked: my-app -> my-app.test (PHP 8.5, Node 22, Framework: laravel)
 ```
 
 The answers are saved to `.lerd.yaml` in the project root and applied immediately: the site is linked, HTTPS is enabled if requested, the database is created, and the chosen services are started.
+
+The Node version field asks which version, not whether. It is prefilled like the PHP field above it, from `.lerd.yaml` if a version is already saved and otherwise from `.nvmrc`, `.node-version`, `package.json` engines or the global default. Accepting it writes `node_version` to `.lerd.yaml`, which outranks all four from then on. Clear the field and no version is saved, so the project keeps resolving its own.
 
 The services list includes both built-in services and any custom services already registered with `lerd service add`. The workers step pre-selects workers based on the framework and detected packages; Horizon is shown automatically when `laravel/horizon` is in `composer.json`, replacing the generic queue option.
 
