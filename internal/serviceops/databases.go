@@ -242,11 +242,34 @@ func (r ImportReport) CreatedSummary() string {
 // the end. It counts psql and mysql error lines, plus psql's "invalid command"
 // lines, which are what a COPY block turns into once its table failed to exist.
 type ImportTally struct {
-	mu      sync.Mutex
-	streams []*tallyStream
-	seen    map[string]int
-	order   []string
-	errors  int
+	mu       sync.Mutex
+	streams  []*tallyStream
+	seen     map[string]int
+	order    []string
+	errors   int
+	expected []string
+}
+
+// Expect declares the complaints this load is known to make whatever the data,
+// which the tally then leaves out of the count. Call it before the output
+// streams past. The patterns come from the preset, not from Go: only the
+// definition that chose the image knows which of its engine's complaints are
+// structural.
+func (t *ImportTally) Expect(patterns []string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.expected = patterns
+}
+
+// isExpected reports whether a complaint is one the action declared. The caller
+// holds the tally's lock.
+func (t *ImportTally) isExpected(line string) bool {
+	for _, pat := range t.expected {
+		if pat != "" && strings.Contains(line, pat) {
+			return true
+		}
+	}
+	return false
 }
 
 // maxPartialLine bounds the unterminated tail a stream carries between writes,
@@ -288,7 +311,7 @@ func (s *tallyStream) Write(p []byte) (int, error) {
 // add records one complete line. The caller holds the tally's lock.
 func (t *ImportTally) add(line string) {
 	line = trimImportPrefix(strings.TrimRight(line, "\r "))
-	if !isImportErrorLine(line) {
+	if !isImportErrorLine(line) || t.isExpected(line) {
 		return
 	}
 	if t.seen == nil {
@@ -342,10 +365,32 @@ func (t *ImportTally) Report() ImportReport {
 	return rep
 }
 
-func parseImportOutput(out string) ImportReport {
+func parseImportOutput(out string, expected []string) ImportReport {
 	var tally ImportTally
+	tally.Expect(expected)
 	_, _ = tally.Stream().Write([]byte(out))
 	return tally.Report()
+}
+
+// expectedImportErrors returns the complaints a service's declared import says
+// it always makes. Empty for every engine that declares none, which is every
+// engine until its definition says otherwise.
+func expectedImportErrors(service, action string) []string {
+	act, ok := entityAction(EntityFor(service, "databases"), action)
+	if !ok {
+		return nil
+	}
+	return act.ExpectedErrors
+}
+
+// importActionName names the declared import a load of the given scope runs
+// through, so the command and its expected complaints are always read off the
+// same action.
+func importActionName(allDatabases bool) string {
+	if allDatabases {
+		return "import_all"
+	}
+	return "import"
 }
 
 // trimImportPrefix drops psql's "psql:<stdin>:412: " location prefix so the same
@@ -448,7 +493,7 @@ func ImportDatabase(service, database string, r io.Reader, opt ImportOptions) (I
 	if !sqlDump {
 		return ImportReport{}, nil
 	}
-	rep := parseImportOutput(string(out))
+	rep := parseImportOutput(string(out), act.ExpectedErrors)
 	n := notes()
 	rep.Skipped, rep.Created = n.Skipped, n.Created
 	return rep, nil

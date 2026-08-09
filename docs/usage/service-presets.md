@@ -433,6 +433,16 @@ flow uses. `format: sql` on the entity tells lerd the dump is SQL text, which
 turns on the import sanitizer and the per-statement error tally; leave it off for
 engines with their own archive format and the bytes stream through untouched.
 
+An import may declare `expected_errors:`, a list of substrings the engine's own
+complaint lines are matched against, and the tally leaves those out of its error
+count. It is for the complaints a load makes whatever the data, so a restore that
+produced only those reads as the success it is: a `pg_dumpall` replay drops and
+recreates the role it is connected as and the template databases the image ships,
+so `import_all` on the PostgreSQL preset expects those six lines and nothing else.
+Keep the list to what the dump does to itself. Anything a user's data can cause
+belongs in the count, which is why the per-database `import` on the same preset
+declares none.
+
 A service whose own image ships no client tooling can name an `image:` on the
 entity, and lerd runs every command in an ephemeral container of that image on
 the lerd network instead of exec-ing the service container, with the entity's
