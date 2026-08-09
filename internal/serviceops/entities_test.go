@@ -247,3 +247,14 @@ func TestEntitySnapshotDumpCommandFailsOnADeadDump(t *testing.T) {
 		t.Errorf("dump command lets a failed dump exit 0: %q", dump)
 	}
 }
+
+// dash is /bin/sh on the Ubuntu-based engine images and exits on a bare
+// `set -o pipefail`, which killed every dump on those images before the export
+// ran. The option has to be probed in a subshell so an unsupporting shell just
+// carries on without it.
+func TestEntitySnapshotDumpCommandSurvivesAShellWithoutPipefail(t *testing.T) {
+	dump := entitySnapshotDumpCommand("export-cmd shop")
+	if !strings.HasPrefix(dump, "if (set -o pipefail) 2>/dev/null; then set -o pipefail; fi;") {
+		t.Errorf("pipefail must be probed in a subshell before it is set: %q", dump)
+	}
+}

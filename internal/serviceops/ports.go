@@ -448,14 +448,16 @@ func rerenderServiceQuadlet(name string) error {
 // portReservedByOther reports whether host port p is already claimed by a lerd
 // service other than self: its effective primary, its extra ports, and — unlike a
 // bare HostPorts() read — a multi-port service's un-overridden SECONDARY default
-// ports too, so a stopped mailpit still reserves its 8025 web UI.
+// ports too, so a stopped mailpit still reserves its 8025 web UI. Entries left
+// behind by `service remove` claim nothing: they describe no service, so refusing
+// their port would take it out of circulation permanently.
 func portReservedByOther(self string, p int) bool {
 	cfg, err := config.LoadGlobal()
 	if err != nil || cfg == nil {
 		return false
 	}
 	for svcName, svc := range cfg.Services {
-		if svcName == self {
+		if svcName == self || config.ServiceEntryOrphaned(svcName) {
 			continue
 		}
 		for _, hp := range serviceEffectiveHostPorts(svcName, svc) {
