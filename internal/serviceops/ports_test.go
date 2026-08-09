@@ -213,6 +213,38 @@ func TestSetPublishedPortRejectsSiblingPort(t *testing.T) {
 	}
 }
 
+// TestSetPublishedPortFreesRemovedServicePort: `service remove` deletes a
+// service's YAML and quadlet but keeps its global config entry, so a reinstall
+// lands back on the same port. The reservation scan must stop honouring that entry
+// once nothing is installed behind it, otherwise the port is out of circulation
+// for good.
+func TestSetPublishedPortFreesRemovedServicePort(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmp)
+	t.Setenv("XDG_DATA_HOME", tmp)
+	prevAvail := portsPortAvailable
+	t.Cleanup(func() { portsPortAvailable = prevAvail })
+	portsPortAvailable = func(int) bool { return true }
+
+	sib := &config.CustomService{Name: "sib", Image: "example/x:1", Ports: []string{"3306:3306"}}
+	if err := config.SaveCustomService(sib); err != nil {
+		t.Fatalf("SaveCustomService: %v", err)
+	}
+	if err := persistPublishedPort("sib", 33061); err != nil {
+		t.Fatalf("persistPublishedPort: %v", err)
+	}
+	if _, err := SetPublishedPort("redis", 33061); !errors.Is(err, ErrPortReserved) {
+		t.Fatalf("while sib is installed on 33061, err = %v, want ErrPortReserved", err)
+	}
+
+	if err := config.RemoveCustomService("sib"); err != nil {
+		t.Fatalf("RemoveCustomService: %v", err)
+	}
+	if _, err := SetPublishedPort("redis", 33061); err != nil {
+		t.Fatalf("33061 must be free once sib is gone, got %v", err)
+	}
+}
+
 // TestSetPublishedPortRejectsOwnExtraPort refuses a published port that already
 // serves as one of the same service's extra ports.
 func TestSetPublishedPortRejectsOwnExtraPort(t *testing.T) {

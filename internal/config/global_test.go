@@ -824,6 +824,33 @@ func TestReservedHostPorts_FreesDefaultWhenPublishedOverrideMovesIt(t *testing.T
 	}
 }
 
+// `service remove` deletes a service's definition YAML and quadlet but keeps its
+// global config entry, so a reinstall lands back on the same port. That memory
+// must not hold the port against every other service while nothing is installed
+// behind it.
+func TestReservedHostPorts_IgnoresRemovedServiceEntry(t *testing.T) {
+	setConfigDir(t)
+	cfg, _ := LoadGlobal()
+	cfg.Services["mariadb-11-8"] = ServiceConfig{Port: 3306, PublishedPort: 33061}
+	if err := SaveGlobal(cfg); err != nil {
+		t.Fatalf("SaveGlobal: %v", err)
+	}
+	svc := &CustomService{Name: "mariadb-11-8", Image: "example/mariadb:11.8", Ports: []string{"3306:3306"}}
+	if err := SaveCustomService(svc); err != nil {
+		t.Fatalf("SaveCustomService: %v", err)
+	}
+	if !ReservedHostPorts()[33061] {
+		t.Error("an installed service's published port 33061 must stay reserved")
+	}
+
+	if err := RemoveCustomService("mariadb-11-8"); err != nil {
+		t.Fatalf("RemoveCustomService: %v", err)
+	}
+	if ReservedHostPorts()[33061] {
+		t.Error("33061 must be back in circulation once the service behind the entry is gone")
+	}
+}
+
 // ── HostPortsFor ─────────────────────────────────────────────────────────────
 
 // A default-preset service's ports come from its ServiceConfig entry, seeded
