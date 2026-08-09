@@ -163,6 +163,7 @@ func main() {
 	root.AddCommand(cli.NewBugReportCmd())
 	root.AddCommand(cli.NewLogsCmd())
 	root.AddCommand(cli.NewOpenCmd())
+	root.AddCommand(cli.NewCodeCmd())
 	root.AddCommand(cli.NewDashboardCmd())
 	root.AddCommand(cli.NewQueueCmd())
 	root.AddCommand(cli.NewQueueStartCmd())
