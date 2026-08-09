@@ -83,7 +83,7 @@ lerd init
 
 ```
 ? PHP version: 8.3
-? Node version (leave blank to skip):
+? Node version (clear to follow the lerd default instead of pinning): 22
 ? Enable HTTPS? Yes
 ? Services: [mysql]
 Saved .lerd.yaml

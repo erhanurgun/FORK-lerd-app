@@ -120,6 +120,12 @@ func WatchIndex(interval time.Duration) {
 	}
 }
 
+// CachedIndex reads the locally cached store index without touching the network,
+// for callers that need the published catalogue and have not just fetched it.
+func CachedIndex() (*Index, error) {
+	return loadCachedIndex()
+}
+
 // loadCachedIndex reads and parses the locally cached store index.
 func loadCachedIndex() (*Index, error) {
 	data, err := os.ReadFile(config.StoreIndexFile())
@@ -139,16 +145,30 @@ func loadCachedIndex() (*Index, error) {
 // fixed one lets two concurrent fetches truncate and fill the same temp, and the
 // rename then publishes their blend. Best effort: a cache we cannot write just
 // means the next read falls back to the network.
+// An unchanged index is still touched, because its mtime is what tells the
+// readers whether the cache still speaks for the store: skipping the touch ages
+// a catalogue that is refreshing perfectly well past the point where a version
+// missing from it counts as evidence, and every resolver starts asking for
+// versions the store does not publish again.
 func writeCachedIndex(data []byte) {
-	_, _ = atomicfile.WriteIfChanged(config.StoreIndexFile(), data, 0o644)
+	path := config.StoreIndexFile()
+	wrote, err := atomicfile.WriteIfChanged(path, data, 0o644)
+	if err != nil || wrote {
+		return
+	}
+	now := time.Now()
+	_ = os.Chtimes(path, now, now)
 }
 
 // FetchFramework downloads a framework definition from the store.
 // Always fetches from remote to ensure definitions are up to date.
 func (c *Client) FetchFramework(name, version string) (*config.Framework, error) {
 	if version == "" {
-		// Resolve latest from index
-		idx, err := c.FetchIndex()
+		// Resolve latest from the index, and keep the copy this pulls: the fetch
+		// that resolves a latest version is the one a machine with no cached index
+		// makes, and dropping it leaves offline detection blind until the watcher's
+		// first refresh hours later.
+		idx, err := c.RefreshIndex()
 		if err != nil {
 			return nil, err
 		}

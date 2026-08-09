@@ -289,10 +289,7 @@ func Set(tool string, enabled bool) error {
 	if _, ok := Targets()[tool]; !ok {
 		return fmt.Errorf("no installed service exposes the %q client tool", tool)
 	}
-	lerdBin, err := os.Executable()
-	if err != nil {
-		return err
-	}
+	lerdBin := config.LerdBinary()
 	binDir := config.BinDir()
 	if err := os.MkdirAll(binDir, 0755); err != nil {
 		return err
@@ -311,10 +308,7 @@ func Set(tool string, enabled bool) error {
 // rather than skipped quietly, and its decision stays unrecorded so the next
 // run tries again.
 func Reconcile(prompt Prompter) error {
-	lerdBin, err := os.Executable()
-	if err != nil {
-		return err
-	}
+	lerdBin := config.LerdBinary()
 	binDir := config.BinDir()
 	if err := os.MkdirAll(binDir, 0755); err != nil {
 		return err

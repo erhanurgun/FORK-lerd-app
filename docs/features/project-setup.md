@@ -23,8 +23,8 @@ lerd init
 ```
 → Configuring site...
 ? PHP version: 8.5
-? Node version (leave blank to skip): 22
-? Enable HTTPS? No
+? Node version (clear to follow the lerd default instead of pinning): 22
+? Enable HTTPS? Yes
 ? Database: mysql
 ? Services: [mysql, redis]
 ? Workers to auto-start: [queue, schedule]
@@ -33,6 +33,10 @@ Linked: my-app -> my-app.test (PHP 8.5, Node 22, Framework: laravel)
 ```
 
 The answers are saved to `.lerd.yaml` in the project root and applied immediately: the site is linked, HTTPS is enabled if requested, the database is created, and the chosen services are started.
+
+The HTTPS question starts on yes for a project with nothing committed yet, so a new site ends up served over https without anyone having to answer for it. A project whose `.lerd.yaml` already exists keeps what that file asks for, and a site already registered on http stays there when the file never recorded the field.
+
+The Node version field asks which version, not whether. It is prefilled like the PHP field above it, from `.lerd.yaml` if a version is already saved and otherwise from `.nvmrc`, `.node-version`, `package.json` engines or the global default. Accepting it writes `node_version` to `.lerd.yaml`, which outranks all four from then on. Clear the field and no version is saved, so the project keeps resolving its own.
 
 The services list includes both built-in services and any custom services already registered with `lerd service add`. The workers step pre-selects workers based on the framework and detected packages; Horizon is shown automatically when `laravel/horizon` is in `composer.json`, replacing the generic queue option.
 
@@ -73,6 +77,8 @@ MariaDB folds into MySQL because lerd's `mariadb` preset is an opt-in alternate;
 ## `lerd setup`
 
 `lerd setup` is the one-shot bootstrap command for a fresh PHP project. It runs `lerd init` first (so the wizard described above appears), then shows a checkbox list of install/migrate/build steps:
+
+Running it on a site you linked a moment ago does not link it again. Before applying the configuration, setup compares what a link would register against what the registry already holds, and reports `already linked` in a single line when the two agree, rather than repeating the framework detection, the runtime provisioning, the certificate and the summary. A `.lerd.yaml` that has moved on since the link, a new domain, another PHP version, a runtime switch or HTTPS that is not on yet, is still applied the ordinary way.
 
 ```bash
 cd ~/Projects/my-app

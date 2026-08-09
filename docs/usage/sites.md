@@ -37,7 +37,7 @@ lerd init
 
 ```
 ? PHP version: 8.5
-? Node version (leave blank to skip):
+? Node version (clear to follow the lerd default instead of pinning): 22
 ? Enable HTTPS? No
 ? Database:
   > SQLite (no service)
@@ -55,6 +55,7 @@ Linked: my-app -> my-app.test (PHP 8.5, Node 22, Framework: laravel)
 Wizard defaults are populated intelligently on first run:
 
 - **PHP version**: from the site registry if already linked, otherwise from `.php-version`, `composer.json`, or the global default
+- **Node version**: from `.lerd.yaml` if already saved, otherwise from `.nvmrc`, `.node-version`, `package.json` engines, or the global default; clear the field to save no version and keep following those
 - **Enable HTTPS**: pre-checked if the site is already secured
 - **Database**: pre-selected from any database already in `.lerd.yaml`, otherwise from `DB_CONNECTION` in `.env` (or `.env.example` for a fresh clone), falling back to SQLite (Laravel's default for new projects)
 - **Services**: pre-checked based on what's detected in the project's `.env` file (only non-database services here, since the database is its own step)

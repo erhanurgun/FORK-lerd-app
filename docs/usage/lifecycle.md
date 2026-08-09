@@ -42,6 +42,10 @@ A live spinner shows the per-unit progress. If a single SSL vhost references a m
 If you ran `lerd uninstall` and then reinstalled, worker units and service quadlets are recreated by `lerd start` from each site's `.lerd.yaml`. Sites with a committed `.lerd.yaml` come back fully wired up. Sites without one need their workers restarted manually.
 :::
 
+::: info After the binary moves
+The `lerd-ui`, `lerd-watcher` and `lerd-tray` services and the shims on your `PATH` (`php`, `composer`, `laravel`, the client tools) all record where the lerd binary is. A package manager that installs each version into its own directory, Homebrew above all, retires that path on the next upgrade. `lerd start` rewrites the services to point at the binary that is running and repoints any shim whose path has gone, and the shims themselves fall back to whatever `lerd` is on your `PATH`.
+:::
+
 ::: info Deleted project directories are auto-cleaned
 `lerd-watcher` removes sites from `sites.yaml` whenever their project directory disappears on disk. Two paths do this:
 
