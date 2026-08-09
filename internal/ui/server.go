@@ -2285,7 +2285,7 @@ func handleServiceAction(w http.ResponseWriter, r *http.Request) {
 		resetData := r.URL.Query().Get("resetData") == "true"
 		writeLine, _ := startNDJSONStream(w, r)
 		start := time.Now()
-		err := serviceops.ReinstallService(name, resetData, func(ev serviceops.PhaseEvent) { writeLine(ev) })
+		err := serviceops.ReinstallService(name, serviceops.ReinstallOptions{ResetData: resetData}, func(ev serviceops.PhaseEvent) { writeLine(ev) })
 		if err != nil {
 			writeLine(map[string]any{"phase": "error", "error": err.Error()})
 		}

@@ -41,6 +41,8 @@ lerd service remove mongodb --purge    # also wipes data dir
 
 Pass `--purge` to also wipe the persistent data. The data dir at `~/.local/share/lerd/data/<service>/` is **renamed aside** to `<service>.pre-remove-<timestamp>` (a sibling directory), not hard-deleted. To recover, rename it back before reinstalling. The orphaned aside copies can be cleaned up later by hand.
 
+A renamed directory only reads back under the image that wrote it, so before wiping the data lerd first takes a snapshot of every database on the service, named `pre-remove-<timestamp>`. That is what [`lerd db:restore`](database.md#snapshots) can bring back later, whatever version the service ends up on. See [snapshots before a data wipe](database.md#snapshots-before-a-data-wipe).
+
 Without `--purge`, data is preserved and a subsequent `lerd service preset install <name>` (for default presets) or `lerd service add` (for custom services) will pick up where you left off.
 
 ## Reinstalling a service
@@ -55,7 +57,7 @@ lerd service reinstall postgres --reset-data   # same version, fresh data
 - A service update produced data incompatible with the new image and you want a clean slate.
 - The container has drifted into a bad state and a full quadlet rewrite would be cleaner than a restart.
 
-`--reset-data` adds a data-dir rename-aside (same recovery semantics as `--purge`) and **automatically reprovisions linked-site state** on the freshly installed service:
+`--reset-data` adds a data-dir rename-aside (same recovery semantics as `--purge`, including the pre-wipe snapshot, named `pre-reset-data-<timestamp>` here) and **automatically reprovisions linked-site state** on the freshly installed service:
 
 - For database families (mysql, mariadb, postgres): each linked site's expected database is created via `CREATE DATABASE IF NOT EXISTS`. The database name comes from `.lerd.yaml` `db.database`, then `.env` `DB_DATABASE`, then the site name with hyphens converted to underscores.
 - For object-storage families (rustfs): each linked site's expected bucket is created via `mc mb`. The bucket name comes from `.env` `AWS_BUCKET`, otherwise derived from the site name.
