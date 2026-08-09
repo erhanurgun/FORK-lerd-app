@@ -6,7 +6,6 @@ import (
 	"net"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -367,11 +366,7 @@ func forwarderHolderFallbackHint(goos string, port int) string {
 // rendered as a systemd .service on Linux and a launchd plist on macOS
 // (see services/launchd_darwin.go::parseServiceUnit). Idempotent.
 func installDNSForwarderUnit(lanIP string) error {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
-	binPath := filepath.Join(home, ".local", "bin", "lerd")
+	binPath := config.LerdBinary()
 	content := fmt.Sprintf(`[Unit]
 Description=Lerd DNS LAN Forwarder (rootless pasta workaround)
 After=lerd-dns.service

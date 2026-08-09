@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -509,6 +510,32 @@ func TestAddShellShims_ComposerShimDelegatesToLerd(t *testing.T) {
 	}
 	if !strings.Contains(shim, "composer.phar") {
 		t.Errorf("composer shim should keep a composer.phar fallback path, got:\n%s", shim)
+	}
+}
+
+// A shim outlives the binary it was written against: `brew upgrade lerd` moves
+// lerd into a new keg and the recorded path stops resolving. The shim has to
+// reach for lerd on PATH rather than fail with no such file.
+func TestShimPreambleFallsBackToLerdOnPath(t *testing.T) {
+	dir := t.TempDir()
+	fake := filepath.Join(dir, "lerd")
+	if err := os.WriteFile(fake, []byte("#!/bin/sh\necho \"ran $*\"\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	script := filepath.Join(dir, "php")
+	body := shimPreamble("/retired/keg/bin/lerd") + "exec \"$LERD\" php \"$@\"\n"
+	if err := os.WriteFile(script, []byte(body), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := exec.Command(script, "-v")
+	cmd.Env = append(os.Environ(), "PATH="+dir)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("shim failed: %v\n%s\n%s", err, out, body)
+	}
+	if strings.TrimSpace(string(out)) != "ran php -v" {
+		t.Errorf("shim did not fall back to lerd on PATH, got: %q", out)
 	}
 }
 
