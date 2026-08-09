@@ -1,0 +1,120 @@
+package cli
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/geodro/lerd/internal/config"
+)
+
+// A Homebrew upgrade retires the keg the shims were written with, so every shim
+// execs a path that is no longer there. Starting lerd points them back at the
+// binary that is actually installed.
+func TestHealShimBinaryPathsRepointsShimsAtTheLiveBinary(t *testing.T) {
+	binDir, current := shimHealFixture(t)
+	gone := "/home/linuxbrew/.linuxbrew/Cellar/lerd/1.31.0/bin/lerd"
+	writeShim(t, binDir, "php", "#!/bin/sh\nLERD=\""+gone+"\"\n[ -x \"$LERD\" ] || LERD=lerd\nexec \"$LERD\" php \"$@\"\n")
+	writeShim(t, binDir, "mysql", "#!/bin/sh\n# lerd client shim\nexec "+gone+" client-exec mysql \"$@\"\n")
+
+	healShimBinaryPaths(current)
+
+	for _, tool := range []string{"php", "mysql"} {
+		shim := readShim(t, binDir, tool)
+		if strings.Contains(shim, gone) {
+			t.Errorf("%s shim still runs the retired %s:\n%s", tool, gone, shim)
+		}
+		if !strings.Contains(shim, current) {
+			t.Errorf("%s shim does not run %s:\n%s", tool, current, shim)
+		}
+	}
+}
+
+// A shim whose binary is where it says it is must be left exactly as written:
+// the heal is a repair, not a chance to repoint a working install at whatever
+// binary happens to be running.
+func TestHealShimBinaryPathsLeavesWorkingShimsAlone(t *testing.T) {
+	binDir, current := shimHealFixture(t)
+	other := filepath.Join(filepath.Dir(current), "lerd-other")
+	if err := os.WriteFile(other, []byte("#!/bin/sh\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	body := "#!/bin/sh\nexec " + other + " php \"$@\"\n"
+	writeShim(t, binDir, "php", body)
+
+	healShimBinaryPaths(current)
+
+	if got := readShim(t, binDir, "php"); got != body {
+		t.Errorf("php shim was rewritten:\n%s", got)
+	}
+}
+
+// Paths that are not a lerd binary stay untouched, notably the composer.phar
+// the composer shim falls back to.
+func TestHealShimBinaryPathsKeepsNonBinaryPaths(t *testing.T) {
+	binDir, current := shimHealFixture(t)
+	gone := "/opt/homebrew/Cellar/lerd/1.31.0/bin/lerd"
+	phar := filepath.Join(binDir, "composer.phar")
+	writeShim(t, binDir, "composer", "#!/bin/sh\nLERD=\""+gone+"\"\nexec \"$LERD\" php "+phar+" \"$@\"\n")
+
+	healShimBinaryPaths(current)
+
+	shim := readShim(t, binDir, "composer")
+	if !strings.Contains(shim, phar) {
+		t.Errorf("composer shim lost the phar path %s:\n%s", phar, shim)
+	}
+	if !strings.Contains(shim, current) {
+		t.Errorf("composer shim does not run %s:\n%s", current, shim)
+	}
+}
+
+// Nothing is rewritten when the replacement is not on disk either, so a probe
+// that cannot resolve the binary never makes matters worse.
+func TestHealShimBinaryPathsSkipsWhenTheBinaryIsMissing(t *testing.T) {
+	binDir, current := shimHealFixture(t)
+	body := "#!/bin/sh\nexec /gone/lerd php \"$@\"\n"
+	writeShim(t, binDir, "php", body)
+
+	healShimBinaryPaths(filepath.Join(filepath.Dir(current), "absent"))
+
+	if got := readShim(t, binDir, "php"); got != body {
+		t.Errorf("php shim was rewritten:\n%s", got)
+	}
+}
+
+// shimHealFixture points lerd's data dir at a temp dir and returns the shim dir
+// alongside an installed lerd binary to heal towards.
+func shimHealFixture(t *testing.T) (binDir, lerdBin string) {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", dir)
+	binDir = config.BinDir()
+	if err := os.MkdirAll(binDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	lerdBin = filepath.Join(dir, "opt", "lerd", "bin", "lerd")
+	if err := os.MkdirAll(filepath.Dir(lerdBin), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(lerdBin, []byte("#!/bin/sh\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	return binDir, lerdBin
+}
+
+func writeShim(t *testing.T, binDir, name, body string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(binDir, name), []byte(body), 0755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func readShim(t *testing.T, binDir, name string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(binDir, name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}

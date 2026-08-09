@@ -1710,18 +1710,24 @@ func readLine(r io.Reader) string {
 	return b.String()
 }
 
+// shimPreamble opens a shim with the lerd binary it should run: the path
+// recorded when the shim was written, or plain `lerd` from PATH when that path
+// has gone. A package manager that moves the binary under lerd's feet (a
+// Homebrew upgrade retires the previous version's keg) would otherwise leave
+// every shim pointing at a file that is no longer there.
+func shimPreamble(lerdBin string) string {
+	return fmt.Sprintf("#!/bin/sh\nLERD=%q\n[ -x \"$LERD\" ] || LERD=lerd\n", lerdBin)
+}
+
 func addShellShims(manageNode bool) error {
 	home, _ := os.UserHomeDir()
 	binDir := config.BinDir()
 	// Use the running binary so shims work regardless of install method
-	// (Homebrew at /opt/homebrew/bin/lerd, manual at ~/.local/bin/lerd, etc.).
-	lerdBin, _ := os.Executable()
-	if lerdBin == "" {
-		lerdBin = filepath.Join(home, ".local", "bin", "lerd")
-	}
+	// (Homebrew at /opt/homebrew/opt/lerd/bin/lerd, manual at ~/.local/bin/lerd).
+	lerdBin := config.LerdBinary()
 
 	// Write php shim
-	phpShim := fmt.Sprintf("#!/bin/sh\nexec %s php \"$@\"\n", lerdBin)
+	phpShim := shimPreamble(lerdBin) + "exec \"$LERD\" php \"$@\"\n"
 	if err := os.WriteFile(filepath.Join(binDir, "php"), []byte(phpShim), 0755); err != nil {
 		return fmt.Errorf("writing php shim: %w", err)
 	}
@@ -1730,7 +1736,7 @@ func addShellShims(manageNode bool) error {
 	// land in lerd's bin dir as wrappers (mirroring the npm flow), falling
 	// back to a direct `lerd php composer.phar` invocation when the lerd
 	// binary is not reachable (containers where the glibc binary can't run).
-	composerShim := fmt.Sprintf("#!/bin/sh\nLERD=%q\nif [ -x \"$LERD\" ]; then\n  exec \"$LERD\" composer \"$@\"\nfi\nexec %s php %s/.local/share/lerd/bin/composer.phar \"$@\"\n", lerdBin, lerdBin, home)
+	composerShim := shimPreamble(lerdBin) + fmt.Sprintf("if [ -x \"$LERD\" ]; then\n  exec \"$LERD\" composer \"$@\"\nfi\nexec \"$LERD\" php %s/.local/share/lerd/bin/composer.phar \"$@\"\n", home)
 	if err := os.WriteFile(filepath.Join(binDir, "composer"), []byte(composerShim), 0755); err != nil {
 		return fmt.Errorf("writing composer shim: %w", err)
 	}
@@ -1744,7 +1750,7 @@ func addShellShims(manageNode bool) error {
 		}
 		composerHome = filepath.Join(xdgConfig, "composer")
 	}
-	laravelShim := fmt.Sprintf("#!/bin/sh\nexec %s php %s/vendor/bin/laravel \"$@\"\n", lerdBin, composerHome)
+	laravelShim := shimPreamble(lerdBin) + fmt.Sprintf("exec \"$LERD\" php %s/vendor/bin/laravel \"$@\"\n", composerHome)
 	if err := os.WriteFile(filepath.Join(binDir, "laravel"), []byte(laravelShim), 0755); err != nil {
 		return fmt.Errorf("writing laravel shim: %w", err)
 	}
