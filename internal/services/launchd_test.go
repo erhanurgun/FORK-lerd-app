@@ -147,6 +147,29 @@ func TestBuildPlistExitTimeoutOnlyForWatcher(t *testing.T) {
 	}
 }
 
+// TestBuildPlistAbandonProcessGroupForMachineOwners pins which jobs keep their
+// process group alive on exit. vfkit and gvproxy reparent to init but stay in
+// the group of whatever ran `podman machine start`, and launchd kills what is
+// left in a job's group when the job exits, so any unit that can bring the VM
+// up has to abandon its group or it takes the VM down with it.
+func TestBuildPlistAbandonProcessGroupForMachineOwners(t *testing.T) {
+	for _, unit := range []string{"lerd-autostart", "lerd-ui", "lerd-tray", podman.WatcherUnit} {
+		plist := buildPlist(plistLabel(unit), []string{"/bin/true"}, true, keepAliveAlways, "", "")
+		if !strings.Contains(plist, "<key>AbandonProcessGroup</key>") {
+			t.Errorf("%s can start the Podman Machine, so it must abandon its process group on exit", unit)
+		}
+	}
+
+	// Container and worker jobs never start the VM, and the group kill is how
+	// their strays get cleaned up.
+	for _, unit := range []string{"lerd-nginx", "lerd-horizon-app"} {
+		plist := buildPlist(plistLabel(unit), []string{"/bin/true"}, false, keepAliveNever, "", "")
+		if strings.Contains(plist, "AbandonProcessGroup") {
+			t.Errorf("%s must keep launchd's process group cleanup", unit)
+		}
+	}
+}
+
 func TestBuildPlistOnFailureEmitsSuccessfulExitDict(t *testing.T) {
 	plist := buildPlist("com.lerd.onfail", []string{"/bin/true"}, false, keepAliveOnFailure, "", "")
 

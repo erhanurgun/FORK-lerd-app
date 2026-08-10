@@ -224,8 +224,30 @@ func buildPlist(lbl string, args []string, runAtLoad bool, keepAlive keepAlivePo
 	if lbl == plistLabel(podman.WatcherUnit) {
 		sb.WriteString("\t<key>ExitTimeOut</key>\n\t<integer>60</integer>\n")
 	}
+	if ownsPodmanMachine(lbl) {
+		sb.WriteString("\t<key>AbandonProcessGroup</key>\n\t<true/>\n")
+	}
 	sb.WriteString("</dict>\n</plist>\n")
 	return sb.String()
+}
+
+// machineOwningUnits are the host jobs that can bring the Podman Machine up:
+// lerd-autostart and lerd-tray by running `lerd start`, lerd-ui in-process from
+// the dashboard, and lerd-watcher when it remounts stale container storage.
+var machineOwningUnits = []string{"lerd-autostart", "lerd-ui", "lerd-tray", podman.WatcherUnit}
+
+// ownsPodmanMachine reports whether a job needs AbandonProcessGroup. vfkit and
+// gvproxy reparent to init but keep the process group of whatever started them,
+// and launchd's default is to kill what remains in a job's group once the job
+// exits, taking the VM with it. Container and worker jobs never start the VM
+// and want that cleanup, so the key stays scoped to the units above.
+func ownsPodmanMachine(lbl string) bool {
+	for _, unit := range machineOwningUnits {
+		if lbl == plistLabel(unit) {
+			return true
+		}
+	}
+	return false
 }
 
 func ensurePlistDirs(name string) error {
