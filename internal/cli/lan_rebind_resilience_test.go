@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -33,6 +34,18 @@ func (m *rebindMgr) Restart(name string) error {
 	return nil
 }
 
+// isolateLaunchAgents redirects HOME so a test that regenerates units cannot
+// write into the real ~/Library/LaunchAgents. Only macOS derives that directory
+// from HOME; the Linux unit dir already follows XDG_CONFIG_HOME, and moving HOME
+// there would put podman's container storage in the temp dir, which the test
+// then cannot clean up.
+func isolateLaunchAgents(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "darwin" {
+		t.Setenv("HOME", t.TempDir())
+	}
+}
+
 func writeServiceQuadlet(t *testing.T, name, ports string) {
 	t.Helper()
 	dir := config.QuadletDir()
@@ -49,9 +62,7 @@ func writeServiceQuadlet(t *testing.T, name, ports string) {
 // their old LAN bind while every status surface claims loopback-only.
 func TestRegenerateLANQuadletsRestartsEveryUnitDespiteFailure(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	// The quadlet dir follows XDG_CONFIG_HOME but the launchd plist dir follows
-	// HOME, so without this the regenerated units land in the real LaunchAgents.
-	t.Setenv("HOME", t.TempDir())
+	isolateLaunchAgents(t)
 	cfg := &config.GlobalConfig{}
 	cfg.LAN.Exposed = true
 	if err := config.SaveGlobal(cfg); err != nil {
@@ -85,7 +96,7 @@ func TestRegenerateLANQuadletsRestartsEveryUnitDespiteFailure(t *testing.T) {
 // notice a container still bound to the LAN, and it must drive a restart.
 func TestRegenerateLANQuadletsHealsRuntimeDrift(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("HOME", t.TempDir())
+	isolateLaunchAgents(t)
 	cfg := &config.GlobalConfig{}
 	if err := config.SaveGlobal(cfg); err != nil {
 		t.Fatalf("SaveGlobal: %v", err)
