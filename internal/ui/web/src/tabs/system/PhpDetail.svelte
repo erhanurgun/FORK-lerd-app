@@ -5,11 +5,11 @@
   import PhpIniTab from './PhpIniTab.svelte';
   import PhpPortsTab from './PhpPortsTab.svelte';
   import PhpExtensionsTab from './PhpExtensionsTab.svelte';
+  import SitesPopover from '$components/SitesPopover.svelte';
   import { status, loadStatus } from '$stores/status';
   import { setDefaultPhp, startPhp, stopPhp, checkPhpUpdates } from '$stores/phpVersions';
   import { sites, sitesByPhp } from '$stores/sites';
   import { xdebugOn, xdebugOff, XDEBUG_MODES, type XdebugMode } from '$stores/xdebug';
-  import { goToTab } from '$stores/route';
   import { openPhpRemoveModal, openPhpRebuildModal } from '$stores/modals';
   import { notifyLocalInfo } from '$lib/notify';
   import { m } from '../../paraglide/messages.js';
@@ -26,7 +26,7 @@
   const xdebugEnabled = $derived(Boolean(fpm?.xdebug_enabled));
   const xdebugMode = $derived<XdebugMode>((fpm?.xdebug_mode as XdebugMode) || 'debug');
   const container = $derived('lerd-php' + version.replace('.', '') + '-fpm');
-  const sitesUsing = $derived($sites.filter((s) => s.php_version === version));
+  const sitesUsing = $derived($sites.filter((s) => s.php_version === version).map((s) => s.domain));
   const baseUpdate = $derived(Boolean(fpm?.update_available));
 
   let defaultBusy = $state(false);
@@ -67,18 +67,17 @@
     };
   });
 
-  type TabId = 'logs' | 'sites' | 'config' | 'ports' | 'extensions';
+  type TabId = 'logs' | 'config' | 'ports' | 'extensions';
   let active = $state<TabId>('logs');
   const tabs = $derived<TabItem<TabId>[]>([
     { id: 'logs', label: m.services_tabs_logs(), hidden: !running },
-    { id: 'sites', label: m.system_php_sites() },
     { id: 'config', label: m.system_php_iniTab() },
     { id: 'ports', label: m.system_php_portsTab() },
     { id: 'extensions', label: m.system_php_extensionsTab() }
   ]);
 
   $effect(() => {
-    if (active === 'logs' && !running) active = 'sites';
+    if (active === 'logs' && !running) active = 'config';
   });
 
   async function onSetDefault() {
@@ -304,30 +303,13 @@
       {/if}
     {/if}
   </div>
+  <SitesPopover domains={sitesUsing} />
   <ButtonMenu actions={versionActions} busy={versionBusy} />
 {/snippet}
 
 <DetailTabs {tabs} {active} onchange={(id) => (active = id)} actions={detailActions} />
 {#if active === 'logs' && running}
   <LogViewer path={'/api/logs/' + container} />
-{:else if active === 'sites'}
-  <div class="px-3 sm:px-5 py-3 shrink-0">
-    {#if sitesUsing.length === 0}
-      <p class="text-sm text-gray-400">{m.system_noSitesUsingPhp({ version })}</p>
-    {:else}
-      <div class="flex flex-wrap gap-2">
-        {#each sitesUsing as s (s.domain)}
-          <button
-            onclick={() => goToTab('sites', s.domain)}
-            class="inline-flex items-center gap-1.5 text-xs font-medium bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 border border-gray-200 dark:border-lerd-border text-gray-700 dark:text-gray-300 rounded-full px-2.5 py-1 transition-colors"
-          >
-            <span class="w-1.5 h-1.5 rounded-full shrink-0 {s.fpm_running ? 'bg-emerald-500' : 'bg-gray-400'}"></span>
-            {s.domain}
-          </button>
-        {/each}
-      </div>
-    {/if}
-  </div>
 {:else if active === 'config'}
   <PhpIniTab {version} />
 {:else if active === 'ports'}
