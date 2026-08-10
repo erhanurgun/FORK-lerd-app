@@ -15,6 +15,7 @@
   import { loadIdle } from '$stores/idle';
   import { loadSites } from '$stores/sites';
   import { loadServices } from '$stores/services';
+  import { loadServiceIcons } from '$stores/serviceIcons';
   import { loadWorkerHealth } from '$stores/workerHealth';
   import { connectWs, disconnectWs } from '$lib/ws';
   import { initDashboardRoute } from '$stores/dashboard';
@@ -52,6 +53,7 @@
     loadIdle();
     loadSites();
     loadServices();
+    loadServiceIcons();
     loadWorkerHealth();
     connectWs();
     initDashboardRoute();

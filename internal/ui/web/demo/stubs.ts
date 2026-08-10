@@ -571,6 +571,8 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
   if (path === '/api/sites') return jsonResponse(sites);
   if (path === '/api/services') return jsonResponse(services);
   if (path === '/api/services/presets') return jsonResponse(presets);
+  // The demo ships no store cache, so every service draws its built-in glyph.
+  if (path === '/api/services/icons') return jsonResponse({});
 
   if (path === '/api/lan/status' && method === 'POST') {
     const body = JSON.parse(String(init?.body || '{}')) as { action?: string };
