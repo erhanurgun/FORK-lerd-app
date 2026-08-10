@@ -125,6 +125,8 @@ The first is lerd restarting its own watcher. The second is a real logout.
 
 The marker expires after a minute, so a watcher that was killed before it could read one can never leave a later logout suppressed. Stopping the watcher by hand (`launchctl bootout`, `systemctl --user stop lerd-watcher`) is not marked and does run the full teardown, which is the same thing `lerd quit` would have done.
 
+Only `SIGTERM` counts as a logout. Neither launchd nor systemd signals a shutdown any other way, so running `lerd watch` in a terminal and pressing Ctrl-C exits the watcher and leaves everything else running.
+
 Because this runs the full teardown, lerd is left in the stopped state after a reboot, exactly as if you had run `lerd stop`. That is deliberate: `lerd-ui`'s health watcher may still be alive while the machine is powering off, and without the marker it would read every unit being stopped as a crash and fire heal attempts and notifications against the teardown. If [autostart](#autostart-on-login) is enabled the marker is cleared automatically when `lerd-ui` comes back up; otherwise run `lerd start`.
 
 ::: tip Linux

@@ -622,7 +622,7 @@ func TestShutdownOnSignal_QuitErrorStillExits(t *testing.T) {
 	defer cancel()
 
 	sigs := make(chan os.Signal, 1)
-	sigs <- syscall.SIGINT
+	sigs <- syscall.SIGTERM
 	shutdownOnSignal(sigs, func() error { return errors.New("boom") }, cancel)
 
 	select {
@@ -684,5 +684,49 @@ func TestShutdownOnSignal_ManagedStopIsConsumedOnce(t *testing.T) {
 
 	if !tore {
 		t.Error("a stale marker suppressed a real logout teardown")
+	}
+}
+
+// TestShutdownOnSignal_InterruptSkipsTeardown pins that Ctrl-C on a hand-run
+// `lerd watch` does not tear the environment down. launchd and systemd only
+// ever signal a shutdown with SIGTERM, so a SIGINT means a person at a
+// terminal who wants their shell back, not their containers stopped.
+func TestShutdownOnSignal_InterruptSkipsTeardown(t *testing.T) {
+	isolateConfig(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigs := make(chan os.Signal, 1)
+	sigs <- syscall.SIGINT
+	tore := false
+	shutdownOnSignal(sigs, func() error { tore = true; return nil }, cancel)
+
+	if tore {
+		t.Error("Ctrl-C must not stop every container and the Podman Machine VM")
+	}
+	select {
+	case <-ctx.Done():
+	default:
+		t.Error("the watcher must still exit on Ctrl-C")
+	}
+}
+
+// TestShutdownOnSignal_InterruptLeavesTheMarkerAlone pins that the SIGINT exit
+// does not consume a managed-stop marker it never earned. Eating one here would
+// leave the SIGTERM that follows reading as a logout mid-install.
+func TestShutdownOnSignal_InterruptLeavesTheMarkerAlone(t *testing.T) {
+	isolateConfig(t)
+	if err := config.MarkWatcherManagedStop(); err != nil {
+		t.Fatalf("MarkWatcherManagedStop: %v", err)
+	}
+
+	_, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sigs := make(chan os.Signal, 1)
+	sigs <- syscall.SIGINT
+	shutdownOnSignal(sigs, func() error { return nil }, cancel)
+
+	if !config.ConsumeWatcherManagedStop() {
+		t.Error("a SIGINT exit must leave the managed-stop marker for the real stop")
 	}
 }

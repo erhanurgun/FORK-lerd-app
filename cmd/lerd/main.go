@@ -401,9 +401,19 @@ func printDNSDiagnostic(w io.Writer, diag dns.Diagnostic) {
 // systemd deliver those as the same SIGTERM a logout does. Tearing the whole
 // environment down there would stop the containers and the Podman Machine VM in
 // the middle of an install, so lerd marks its own stops and we exit quietly.
+//
+// Only SIGTERM is read as a logout. launchd and systemd never signal a shutdown
+// with SIGINT, so the only thing that sends one is a person who ran `lerd watch`
+// in a terminal and pressed Ctrl-C, who wants their shell back and not their
+// containers and Podman Machine stopped.
 func shutdownOnSignal(sigs <-chan os.Signal, quit func() error, cancel context.CancelFunc) {
 	sig, ok := <-sigs
 	if !ok {
+		return
+	}
+	if sig == syscall.SIGINT {
+		fmt.Printf("lerd watcher: received %s from a terminal, exiting without teardown\n", sig)
+		cancel()
 		return
 	}
 	if config.ConsumeWatcherManagedStop() {

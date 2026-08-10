@@ -761,6 +761,11 @@ func (m *darwinServiceManager) Start(name string) error {
 					return nil
 				}
 			}
+			// kickstart -k kills the running job first, which reaches the
+			// watcher as the same SIGTERM a logout does. Nothing booted it
+			// out on this path (print said it wasn't in the domain), so the
+			// mark has to happen here or a start tears the environment down.
+			podman.MarkManagedWatcherStop(name)
 			if kout, kerr := launchctl("kickstart", "-k", domain+"/"+label); kerr != nil {
 				ks := string(kout)
 				// 37 = EALREADY — job is already running, treat as success.
