@@ -32,7 +32,7 @@ A service worker ships with the dashboard, so when lerd is stopped (including vi
 
 The default landing page is a **Dashboard** with at-a-glance widgets across sites, services, workers, and system health. Selecting Sites, Services, or System switches to a three-pane layout:
 
-- **Left icon rail**: the lerd logo at the top is the link back to the Dashboard; below it sit the Sites, Services, and System icon buttons; a separator further down lists a per-service icon for every running service that exposes a dashboard (phpMyAdmin, pgAdmin, Mailpit, RustFS, Meilisearch, Mongo Express, Selenium, etc.), and clicking one opens that dashboard inline as a full-width iframe over the middle and detail panels; the notification bell, theme switcher and docs link at the bottom. The bell keeps recent notifications with an unread count; the theme switcher is a single icon showing the mode in effect (sun, moon, or a half circle for following the system) that opens a menu to pick between Light, Dark and System, with the tooltip naming what System currently resolves to. Hovering any rail icon reveals its label in a floating tooltip to the right, so the collapsed rail stays readable at a glance
+- **Left icon rail**: the lerd logo at the top is the link back to the Dashboard; below it sit the Sites, Services, and System icon buttons; a separator further down lists a per-service icon for every running service that exposes a dashboard (phpMyAdmin, pgAdmin, Mailpit, RustFS, Meilisearch, Mongo Express, Selenium, etc.), and clicking one opens that dashboard inline as a full-width iframe over the middle and detail panels; the notification bell, theme switcher and documentation button at the bottom, the last of which opens the [built-in documentation](#documentation) rather than the website. The bell keeps recent notifications with an unread count; the theme switcher is a single icon showing the mode in effect (sun, moon, or a half circle for following the system) that opens a menu to pick between Light, Dark and System, with the tooltip naming what System currently resolves to. Hovering any rail icon reveals its label in a floating tooltip to the right, so the collapsed rail stays readable at a glance
 - **Middle list panel**: scrollable list of all items in the active section; status dots, compact rows, collapsible groups (hidden on the Dashboard)
 - **Detail panel**: full controls and live logs for the selected item
 
@@ -167,6 +167,12 @@ Selecting an item opens its detail panel:
 - **Lerd card**: shows the current version and a **Check for updates** button. Clicking it spins the button and queries GitHub live, bypassing the 24-hour cache, so the result reflects the newest release right now rather than a stale cached answer. The status dot next to the entry is green when DNS, nginx, and the watcher are all running, red when any of them is down, and yellow when an update is available. When an update is available, an **Open terminal & update** button spawns the host's preferred terminal emulator with `lerd update` pre-filled. A small yellow dot also appears on the lerd logo in the left rail; clicking the logo always returns to the Dashboard, where the same update banner is surfaced on the Dashboard tab.
 
 The **Start** / **Stop** buttons in the System panel header start or stop all core services (DNS, nginx, and all PHP-FPM containers for versions that have active sites).
+
+## Documentation
+
+The book icon at the bottom of the icon rail opens this documentation inside the dashboard. The pages are the ones embedded in the binary, the same set [`lerd man`](../reference/commands.md) reads in the terminal, so they open on a machine with no internet instead of sending you to lerd.sh. Pick a page from the list on the left, or type in the search box above it to search the full text of every page; each result shows the sentence the match sits in.
+
+Links between pages stay inside the dashboard and headings scroll into view, so a cross-reference reads the way it does on the website. The address follows along (`#docs/usage/sites`), which makes any page a bookmark, and the header keeps a link to the same page on lerd.sh for when you do want the website. Screenshots come out of the binary too, and because the pages are ordinary requests to the daemon, the service worker keeps the ones you have opened for later.
 
 ## Updates
 

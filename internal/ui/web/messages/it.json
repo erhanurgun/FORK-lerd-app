@@ -1304,5 +1304,10 @@
   "shareToken_configure": "Configura il token ngrok",
   "share_tunnelViaCli": "Tunnel via {tool}, dalla CLI",
   "sites_sharedPublicly": "Condiviso pubblicamente su {url}",
-  "sites_sharedOnLan": "Condiviso sulla tua rete su {url}"
+  "sites_sharedOnLan": "Condiviso sulla tua rete su {url}",
+  "docs_index_failed": "Impossibile caricare la documentazione.",
+  "docs_load_failed": "Impossibile caricare questa pagina.",
+  "docs_no_results": "Nessuna pagina corrisponde.",
+  "docs_pick_page": "Scegli una pagina da leggere.",
+  "docs_search_placeholder": "Cerca nella documentazione"
 }

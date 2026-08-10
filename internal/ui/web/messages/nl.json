@@ -1304,5 +1304,10 @@
   "shareToken_configure": "ngrok-token instellen",
   "share_tunnelViaCli": "Tunnel via {tool}, vanaf de CLI",
   "sites_sharedPublicly": "Publiek gedeeld op {url}",
-  "sites_sharedOnLan": "Gedeeld op je netwerk op {url}"
+  "sites_sharedOnLan": "Gedeeld op je netwerk op {url}",
+  "docs_index_failed": "De documentatie kon niet worden geladen.",
+  "docs_load_failed": "Deze pagina kon niet worden geladen.",
+  "docs_no_results": "Geen pagina komt overeen.",
+  "docs_pick_page": "Kies een pagina om te lezen.",
+  "docs_search_placeholder": "Zoek in de documentatie"
 }

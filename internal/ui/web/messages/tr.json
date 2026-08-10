@@ -1304,5 +1304,10 @@
   "shareToken_configure": "ngrok belirtecini yapılandır",
   "share_tunnelViaCli": "{tool} üzerinden tünel, CLI'dan",
   "sites_sharedPublicly": "{url} adresinde herkese açık paylaşıldı",
-  "sites_sharedOnLan": "Ağınızda {url} adresinde paylaşıldı"
+  "sites_sharedOnLan": "Ağınızda {url} adresinde paylaşıldı",
+  "docs_index_failed": "Belgeler yüklenemedi.",
+  "docs_load_failed": "Bu sayfa yüklenemedi.",
+  "docs_no_results": "Eşleşen sayfa yok.",
+  "docs_pick_page": "Okumak için bir sayfa seç.",
+  "docs_search_placeholder": "Belgelerde ara"
 }
