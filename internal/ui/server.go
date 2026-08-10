@@ -232,6 +232,7 @@ func Start(currentVersion string) error {
 	})
 
 	mux.HandleFunc("/api/services/presets", withCORS(handleServicePresets))
+	mux.HandleFunc("/api/services/icons", withCORS(handleServiceIcons))
 	mux.HandleFunc("/api/services/presets/", withCORS(publishAfter(handleServicePresetInstall, eventbus.KindServices, eventbus.KindStatus)))
 	mux.HandleFunc("/api/services/", withCORS(publishAfter(handleServiceAction, eventbus.KindServices, eventbus.KindStatus, eventbus.KindSites)))
 	mux.HandleFunc("/api/databases", withCORS(handleDatabases))
@@ -1218,6 +1219,7 @@ type ServiceResponse struct {
 	ConnectionURL     string            `json:"connection_url,omitempty"`
 	Category          string            `json:"category,omitempty"`
 	Icon              string            `json:"icon,omitempty"`
+	Color             string            `json:"color,omitempty"`
 	AdminFor          []string          `json:"admin_for,omitempty"`
 	// Preset this service was installed from ("mariadb" for "mariadb-11-8"), so
 	// the UI can match it against another preset's admin_for without guessing.
@@ -1372,21 +1374,31 @@ func presetNameOf(name string, custom *config.CustomService) string {
 	return ""
 }
 
-// servicePresentation resolves a service's discovery metadata from its preset,
-// so a service installed before these fields existed still renders correctly.
-// A genuinely user-defined service falls back to its own stored YAML.
-func servicePresentation(name string, custom *config.CustomService) (category, icon string, adminFor []string) {
+// servicePresentation is a service's discovery metadata as the dashboard needs
+// it: the section it groups under, the glyph and brand colour it draws with,
+// and the services its UI administers.
+type presentation struct {
+	Category string
+	Icon     string
+	Color    string
+	AdminFor []string
+}
+
+// resolvePresentation reads that metadata from the service's preset, so a
+// service installed before these fields existed still renders correctly. A
+// genuinely user-defined service falls back to its own stored YAML.
+func resolvePresentation(name string, custom *config.CustomService) presentation {
 	presetName := name
 	if custom != nil && custom.Preset != "" {
 		presetName = custom.Preset
 	}
 	if p, err := config.LoadPreset(presetName); err == nil {
-		return p.Category, p.Icon, p.AdminFor
+		return presentation{p.Category, p.Icon, config.NormalizeBrandColor(p.Color), p.AdminFor}
 	}
 	if custom != nil {
-		return custom.Category, custom.Icon, custom.AdminFor
+		return presentation{custom.Category, custom.Icon, config.NormalizeBrandColor(custom.Color), custom.AdminFor}
 	}
-	return "", "", nil
+	return presentation{}
 }
 
 // list rebuild so it is not re-read and an error cannot blank the card); pass
@@ -1456,7 +1468,7 @@ func buildServiceResponseWithPortList(services map[string]config.ServiceConfig, 
 	if image == "" && custom != nil {
 		image = custom.Image
 	}
-	category, icon, adminFor := servicePresentation(name, custom)
+	pres := resolvePresentation(name, custom)
 	resp := ServiceResponse{
 		Name:              name,
 		Status:            status,
@@ -1465,9 +1477,10 @@ func buildServiceResponseWithPortList(services map[string]config.ServiceConfig, 
 		Dashboard:         serviceops.WithDashboardPort(dashboardRaw, presetPorts, services[name]),
 		DashboardExternal: dashExternal,
 		ConnectionURL:     serviceops.WithURLPort(connURL, hostPort),
-		Category:          category,
-		Icon:              icon,
-		AdminFor:          adminFor,
+		Category:          pres.Category,
+		Icon:              pres.Icon,
+		Color:             pres.Color,
+		AdminFor:          pres.AdminFor,
 		Preset:            presetNameOf(name, custom),
 		Port:              hostPort,
 		SiteCount:         countSitesUsingService(name),
@@ -1736,6 +1749,7 @@ type PresetResponse struct {
 	InstalledTags  []string               `json:"installed_tags,omitempty"`
 	Category       string                 `json:"category,omitempty"`
 	Icon           string                 `json:"icon,omitempty"`
+	Color          string                 `json:"color,omitempty"`
 	AdminFor       []string               `json:"admin_for,omitempty"`
 }
 
@@ -1796,10 +1810,27 @@ func handleServicePresets(w http.ResponseWriter, r *http.Request) {
 			InstalledTags:  installedTags,
 			Category:       p.Category,
 			Icon:           p.Icon,
+			Color:          p.Color,
 			AdminFor:       p.AdminFor,
 		})
 	}
 	writeJSON(w, out)
+}
+
+// handleServiceIcons returns every store icon lerd has cached, keyed by preset
+// name. The dashboard reads the marks from here rather than from the store
+// origin, so they keep rendering offline and over remote access, and the markup
+// it inlines is the sanitized copy this binary wrote.
+func handleServiceIcons(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	icons := config.PresetIcons()
+	if icons == nil {
+		icons = map[string]string{}
+	}
+	writeJSON(w, icons)
 }
 
 // handleServicePresetInstall installs a bundled preset and streams per-phase

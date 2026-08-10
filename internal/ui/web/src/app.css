@@ -261,3 +261,26 @@ button {
 .dark .docs-prose hr {
   border-color: var(--color-lerd-border);
 }
+
+/* A store preset brings its own mark and brand colour, so neither can be a
+   Tailwind class: the colour arrives as a custom property and the badge derives
+   its background from it at low alpha, the glyph taking the solid tone. Each
+   theme gets its own tone (see brandTint) so a dark brand still reads on the
+   dark card. The mark itself is injected markup, hence the global rule. */
+.svc-tint {
+  background-color: color-mix(in srgb, var(--svc-tint) 12%, transparent);
+  color: var(--svc-tint);
+}
+.dark .svc-tint {
+  background-color: color-mix(in srgb, var(--svc-tint-dark) 16%, transparent);
+  color: var(--svc-tint-dark);
+}
+.svc-mark {
+  display: block;
+}
+.svc-mark > svg {
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+  stroke: none;
+}

@@ -54,6 +54,7 @@ files:
       loose-restrict-fk-on-non-standard-key=OFF
 category: databases
 icon: database
+color: "#4479a1"
 introspect:
   entities:
     - kind: databases

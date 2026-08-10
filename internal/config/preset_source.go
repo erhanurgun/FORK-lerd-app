@@ -158,6 +158,9 @@ func RemoveStorePreset(name string) error {
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
+	if err := removeStorePresetIcon(name); err != nil {
+		return err
+	}
 	presetCache.Delete(name)
 	return nil
 }
