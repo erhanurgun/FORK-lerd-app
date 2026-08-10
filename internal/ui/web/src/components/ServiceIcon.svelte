@@ -3,7 +3,7 @@
   import { serviceMeta } from '$lib/serviceMeta';
   import { serviceIcons } from '$stores/serviceIcons';
   import { brandTintStyle } from '$lib/brandTint';
-  import { tintFor, asCategory } from '$lib/presetCategories';
+  import { tintFor, inkTintFor, asCategory } from '$lib/presetCategories';
 
   interface Props {
     name: string;
@@ -12,8 +12,11 @@
     color?: string;
     preset?: string;
     compact?: boolean;
+    // Drops the tinted plate and draws the mark on its own, larger, taking the
+    // brand tone as its ink. For a header, where the plate is one box too many.
+    bare?: boolean;
   }
-  let { name, category, icon, color, preset, compact = false }: Props = $props();
+  let { name, category, icon, color, preset, compact = false, bare = false }: Props = $props();
 
   // A caller holding the preset or service passes its declared values; one
   // holding only a name resolves them through the registry.
@@ -29,12 +32,25 @@
   const storeIcon = $derived($serviceIcons[resolvedPreset]);
   const brand = $derived(brandTintStyle(color ?? meta?.color));
 
-  const tint = $derived(brand ? 'mark-tint' : tintFor(resolvedCategory));
-  const box = $derived(compact ? 'w-8 h-8' : 'w-9 h-9 transition-transform group-hover:scale-105');
-  const glyph = $derived(compact ? 'w-4 h-4' : 'w-5 h-5');
+  const tint = $derived(
+    bare
+      ? brand
+        ? 'mark-brand'
+        : inkTintFor(resolvedCategory)
+      : brand
+        ? 'mark-tint'
+        : tintFor(resolvedCategory)
+  );
+  const box = $derived(
+    bare ? '' : compact ? 'w-8 h-8' : 'w-9 h-9 transition-transform group-hover:scale-105'
+  );
+  const glyph = $derived(bare ? 'w-7 h-7' : compact ? 'w-4 h-4' : 'w-5 h-5');
 </script>
 
-<span class="shrink-0 inline-flex items-center justify-center rounded-lg {tint} {box}" style={brand}>
+<span
+  class="shrink-0 inline-flex items-center justify-center {bare ? '' : 'rounded-lg'} {tint} {box}"
+  style={brand}
+>
   {#if storeIcon}
     <span class="mark-glyph {glyph}">{@html storeIcon}</span>
   {:else}

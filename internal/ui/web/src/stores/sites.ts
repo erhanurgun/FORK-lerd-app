@@ -225,6 +225,17 @@ export function siteHasLogSources(s: Site): boolean {
   );
 }
 
+export type SiteDotColor = 'green' | 'amber' | 'gray';
+
+// The state a site is actually in, in the colors the dashboard tile already
+// gives it: serving, paused, or stopped. An unknown domain reads as stopped
+// rather than inventing a state for a site the store has never seen.
+export function siteDotColor(s: Site | undefined): SiteDotColor {
+  if (!s) return 'gray';
+  if (s.paused) return 'amber';
+  return s.fpm_running ? 'green' : 'gray';
+}
+
 export type WorkerDotColor = 'amber' | 'violet' | 'emerald' | 'sky' | 'indigo';
 
 // Colors for each running worker, used as little status dots in list rows and

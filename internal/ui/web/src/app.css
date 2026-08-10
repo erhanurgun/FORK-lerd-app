@@ -302,3 +302,13 @@ button {
 .dark .mark-ink {
   color: var(--mark-tint-dark);
 }
+
+/* The brand tone on its own, for a plateless mark that holds a sized glyph
+   rather than the raw svg. It says nothing about what it contains, so a
+   built-in outline glyph keeps its own box and its stroke. */
+.mark-brand {
+  color: var(--mark-tint);
+}
+.dark .mark-brand {
+  color: var(--mark-tint-dark);
+}
