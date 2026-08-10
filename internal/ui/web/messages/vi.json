@@ -1304,5 +1304,10 @@
   "shareToken_configure": "Cấu hình token ngrok",
   "share_tunnelViaCli": "Tunnel qua {tool}, từ CLI",
   "sites_sharedPublicly": "Đang chia sẻ công khai tại {url}",
-  "sites_sharedOnLan": "Đang chia sẻ trong mạng của bạn tại {url}"
+  "sites_sharedOnLan": "Đang chia sẻ trong mạng của bạn tại {url}",
+  "docs_index_failed": "Không thể tải tài liệu.",
+  "docs_load_failed": "Không thể tải trang này.",
+  "docs_no_results": "Không có trang nào khớp.",
+  "docs_pick_page": "Chọn một trang để đọc.",
+  "docs_search_placeholder": "Tìm trong tài liệu"
 }

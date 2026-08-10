@@ -1304,5 +1304,10 @@
   "shareToken_configure": "配置 ngrok 令牌",
   "share_tunnelViaCli": "通过 {tool} 的隧道，来自 CLI",
   "sites_sharedPublicly": "已公开分享于 {url}",
-  "sites_sharedOnLan": "已在你的网络中分享于 {url}"
+  "sites_sharedOnLan": "已在你的网络中分享于 {url}",
+  "docs_index_failed": "无法加载文档。",
+  "docs_load_failed": "无法加载此页面。",
+  "docs_no_results": "没有匹配的页面。",
+  "docs_pick_page": "请选择要阅读的页面。",
+  "docs_search_placeholder": "搜索文档"
 }

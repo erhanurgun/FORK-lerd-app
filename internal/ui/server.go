@@ -309,6 +309,10 @@ func Start(currentVersion string) error {
 	mux.HandleFunc("/api/lan/status", withCORS(handleLANStatus))
 	mux.HandleFunc("/api/remote-setup/generate", withCORS(handleRemoteSetupGenerate))
 	mux.HandleFunc("/api/remote-setup", handleRemoteSetup) // intentional: no CORS, no withCORS, served as plain script
+	mux.HandleFunc("/docs/index.json", withCORS(handleDocsIndex))
+	mux.HandleFunc("/docs/search", withCORS(handleDocsSearch))
+	mux.HandleFunc("/docs/page/", withCORS(handleDocsPage))
+	mux.HandleFunc("/docs/", handleDocsAsset)
 	mux.HandleFunc("/manifest.webmanifest", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/manifest+json")
 		base := "http://" + r.Host
