@@ -354,6 +354,39 @@ func CreateSnapshot(t SnapshotTarget, name string, ctx SnapshotMeta, emit func(P
 	return &snap, nil
 }
 
+// snapshotBeforeDataReset dumps every database on a service into a named
+// snapshot, before an operation that renames the service's data dir aside. That
+// directory carries the on-disk format of the image that wrote it, so once the
+// service comes back on another version it is only readable by an image that is
+// no longer installed; a dump is what db:restore can actually bring back. A
+// service that declares no dump, and one with no data dir yet, have nothing to
+// take. Failures stop the caller: the point of the snapshot is that the user
+// finds it afterwards, so silently wiping without one defeats it.
+func snapshotBeforeDataReset(name, label string, emit func(PhaseEvent)) error {
+	if emit == nil {
+		emit = func(PhaseEvent) {}
+	}
+	if !SnapshotSupported(name, true) {
+		return nil
+	}
+	if _, err := os.Stat(config.DataSubDir(name)); err != nil {
+		return nil
+	}
+	family := familyOf(name)
+	emit(PhaseEvent{Phase: "snapshotting_data", Message: "snapshotting every database on " + name + " first"})
+	if err := startEngineForDump(name, family, emit); err != nil {
+		return fmt.Errorf("%w — retry once it starts, or pass --no-snapshot to wipe without a snapshot", err)
+	}
+	target := SnapshotTarget{Service: name, Family: family, AllDatabases: true}
+	snap, err := CreateSnapshot(target, label, SnapshotMeta{}, nil)
+	if err != nil {
+		return fmt.Errorf("snapshotting %s before its data is wiped: %w — fix it and retry, or pass --no-snapshot to wipe without a snapshot", name, err)
+	}
+	emit(PhaseEvent{Phase: "snapshot_taken",
+		Message: "snapshot " + snap.Name + " taken; restore it with `lerd db:restore -s " + name + " -A " + snap.Name + "`"})
+	return nil
+}
+
 // RestoreSnapshot loads a stored snapshot back into its database. A per-database
 // restore drops and recreates the target database first so no orphan tables
 // survive; an all-databases restore replays the self-cleaning dump as-is.

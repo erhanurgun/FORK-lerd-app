@@ -4,6 +4,10 @@ update_strategy: minor
 track_latest: true
 description: PostgreSQL with PostGIS
 family: postgres
+# The image stops with SIGINT (fast shutdown), which still checkpoints before it
+# exits. Five seconds does not cover that on a warm buffer cache, and a killed
+# checkpoint costs a recovery pass on the next start.
+stop_timeout: 60
 default_version: "16"
 versions:
   - tag: "18"

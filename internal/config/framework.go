@@ -412,6 +412,7 @@ func ValidatePHPIni(ini map[string]string) error {
 // Any matching rule is sufficient to identify the framework.
 type FrameworkRule struct {
 	File             string   `yaml:"file,omitempty" json:"file,omitempty"`                           // file must exist in project root
+	MissingFile      string   `yaml:"missing_file,omitempty" json:"missing_file,omitempty"`           // file must NOT exist in project root, for a step that bootstraps a project
 	Composer         string   `yaml:"composer,omitempty" json:"composer,omitempty"`                   // package must be in composer.json require/require-dev
 	ComposerSections []string `yaml:"composer_sections,omitempty" json:"composer_sections,omitempty"` // extra composer.json keys to search (e.g. flex-require)
 	VersionKey       string   `yaml:"version_key,omitempty" json:"version_key,omitempty"`             // dot-path to version in composer.json (e.g. extra.symfony.require)
@@ -959,22 +960,51 @@ func GetFramework(name string) (*Framework, bool) {
 	return mergeBuiltinTinker(mergeBuiltinFrankenPHP(mergeUserOverlay(base))), true
 }
 
-// GetFrameworkOrFetch is like GetFramework but, when the framework is not
-// installed locally, fetches its latest definition from the store and saves it,
-// the way linking pulls a definition for a project whose framework isn't
-// installed yet. It returns false only when the store doesn't publish the name
-// either. Scaffolding a project you've never built before lands here.
-func GetFrameworkOrFetch(name string) (*Framework, bool) {
-	if fw, ok := GetFramework(name); ok {
-		return fw, true
-	}
-	if frameworkFetchHook == nil {
+// GetFrameworkForScaffold returns the definition to scaffold a new project with.
+// Unlike GetFramework it asks the store first, even for a name that is built in:
+// the create command compiled into the binary is a snapshot of a published one,
+// so a just-installed machine would otherwise scaffold from a definition every
+// established install has already replaced. A copy installed here inside the
+// store's refresh window counts as current, so a repeat scaffold and an offline
+// one don't wait on the network. Falls back to what is installed, then to the
+// built-in, and reports false only when nothing knows the name.
+// version pins the major to scaffold, for a caller offering the choice; empty
+// takes whatever the store publishes as its latest.
+func GetFrameworkForScaffold(name, version string) (*Framework, bool) {
+	if name == "" {
 		return nil, false
 	}
-	if _, err := frameworkFetchHook(name, ""); err != nil {
-		return nil, false
+
+	installed := storeFrameworkPath(name)
+	if version != "" {
+		installed = filepath.Join(StoreFrameworksDir(), name+"@"+version+".yaml")
 	}
-	return GetFramework(name)
+
+	var base *Framework
+	if !olderThan(installed, storeRefreshWindow) {
+		base = loadFrameworkYAML(installed)
+	}
+	if base == nil && frameworkFetchHook != nil {
+		if fetched, err := frameworkFetchHook(name, version); err == nil {
+			base = fetched
+		}
+	}
+	if base == nil {
+		base = loadFrameworkYAML(installed)
+	}
+	// A pinned major nothing here or upstream serves resolves as if none had been
+	// asked for, rather than reporting a framework lerd does not know.
+	if base == nil && version != "" {
+		return GetFrameworkForScaffold(name, "")
+	}
+	// A definition that cannot scaffold is no reason to lose one that can. The
+	// store owns the create command and is free to publish a framework without
+	// one, and that reaches every binary within the day, with nothing gating it
+	// per version. So a name whose built-in can still scaffold keeps it.
+	if base == nil || (base.Create == "" && builtinFramework(name) != nil) {
+		return GetFramework(name)
+	}
+	return mergeBuiltinTinker(mergeBuiltinFrankenPHP(mergeUserOverlay(base))), true
 }
 
 // loadBaseFramework returns the base definition for a framework:
@@ -990,6 +1020,20 @@ func loadBaseFramework(name string) *Framework {
 		return fw
 	}
 	return loadBestVersionedFramework(name, "")
+}
+
+// storeFrameworkPath returns the path of the store-installed definition for a
+// framework: the unversioned file if it exists (backwards compatible), otherwise
+// the highest version installed. Empty when the store has installed none.
+func storeFrameworkPath(name string) string {
+	unversioned := filepath.Join(StoreFrameworksDir(), name+".yaml")
+	if _, err := os.Stat(unversioned); err == nil {
+		return unversioned
+	}
+	if paths := versionedFrameworkPaths(name); len(paths) > 0 {
+		return paths[0]
+	}
+	return ""
 }
 
 // copyBuiltin returns a deep-enough copy of a built-in framework so callers
@@ -1141,9 +1185,7 @@ func GetFrameworkForDir(name, projectDir string) (*Framework, bool) {
 	if version != "" && frameworkFetchHook != nil && frameworkVersionPublished(name, version) {
 		shouldFetch := base == nil
 		if !shouldFetch && versionedPath != "" {
-			if info, err := os.Stat(versionedPath); err == nil {
-				shouldFetch = time.Since(info.ModTime()) > 24*time.Hour
-			}
+			shouldFetch = olderThan(versionedPath, storeRefreshWindow)
 		}
 		if shouldFetch {
 			if fetched, err := frameworkFetchHook(name, version); err == nil && fetched != nil {
@@ -1418,15 +1460,26 @@ func frameworkVersionPublished(name, version string) bool {
 	return staleStoreIndex()
 }
 
+// storeRefreshWindow is how long a copy of store data stays current. Younger
+// than this, what is on disk is taken as what the store publishes; older, it is
+// re-fetched and what it does not say proves nothing.
+const storeRefreshWindow = 24 * time.Hour
+
 // staleStoreIndex reports whether the cached store index is older than the
 // window definitions themselves are refreshed on, i.e. old enough that what it
 // does not list proves nothing.
 func staleStoreIndex() bool {
-	info, err := os.Stat(StoreIndexFile())
+	return olderThan(StoreIndexFile(), storeRefreshWindow)
+}
+
+// olderThan reports whether a file was last written further back than d. A file
+// that cannot be stat'ed counts as older, so the caller re-fetches it.
+func olderThan(path string, d time.Duration) bool {
+	info, err := os.Stat(path)
 	if err != nil {
 		return true
 	}
-	return time.Since(info.ModTime()) > 24*time.Hour
+	return time.Since(info.ModTime()) > d
 }
 
 // latestPublishedFrameworkVersion returns the newest version the cached index
@@ -1470,23 +1523,31 @@ func clampFrameworkVersion(name, detected string) string {
 	return ""
 }
 
-// loadBestVersionedFramework scans StoreFrameworksDir for <name>@<version>.yaml files.
-// If preferVersion is set, it tries that first. Otherwise picks the first match
-// alphabetically (which for numeric versions gives the latest).
+// versionedFrameworkPaths returns the store's <name>@<version>.yaml paths for a
+// framework, highest version first. The order is numeric on purpose: sorting the
+// file names as strings ranks @9 above @12, which hands a caller asking for the
+// newest definition the older one on any machine holding both.
+func versionedFrameworkPaths(name string) []string {
+	matches, _ := filepath.Glob(filepath.Join(StoreFrameworksDir(), name+"@*.yaml"))
+	prefix := name + "@"
+	version := func(path string) int {
+		n, _ := strconv.Atoi(strings.TrimPrefix(strings.TrimSuffix(filepath.Base(path), ".yaml"), prefix))
+		return n
+	}
+	sort.SliceStable(matches, func(i, j int) bool { return version(matches[i]) > version(matches[j]) })
+	return matches
+}
+
+// loadBestVersionedFramework scans StoreFrameworksDir for <name>@<version>.yaml
+// files. If preferVersion is set, it tries that first. Otherwise it takes the
+// highest version that parses.
 func loadBestVersionedFramework(name, preferVersion string) *Framework {
 	if preferVersion != "" {
 		if fw := loadFrameworkYAML(filepath.Join(StoreFrameworksDir(), name+"@"+preferVersion+".yaml")); fw != nil {
 			return fw
 		}
 	}
-	pattern := filepath.Join(StoreFrameworksDir(), name+"@*.yaml")
-	matches, _ := filepath.Glob(pattern)
-	if len(matches) == 0 {
-		return nil
-	}
-	// Reverse sort so highest version comes first (e.g. @7 before @6).
-	sort.Sort(sort.Reverse(sort.StringSlice(matches)))
-	for _, path := range matches {
+	for _, path := range versionedFrameworkPaths(name) {
 		if fw := loadFrameworkYAML(path); fw != nil {
 			return fw
 		}
@@ -2193,6 +2254,14 @@ func (fw *Framework) DetectProxy(dir string) (*WorkerProxy, string) {
 func MatchesRule(dir string, rule FrameworkRule) bool {
 	if rule.File != "" {
 		if _, err := os.Stat(filepath.Join(dir, rule.File)); err == nil {
+			return true
+		}
+	}
+	if rule.MissingFile != "" {
+		// Only a file that is genuinely not there counts as absent: an unreadable
+		// path says nothing about whether the project was bootstrapped, and a step
+		// gated this way is better left hidden than offered on a live project.
+		if _, err := os.Stat(filepath.Join(dir, rule.MissingFile)); os.IsNotExist(err) {
 			return true
 		}
 	}

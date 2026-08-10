@@ -18,7 +18,7 @@ The feature exists for the actions you'd otherwise ssh in for: clearing caches, 
 
 Destructive commands (`migrate:fresh`, `cim`, `doctrine:fixtures:load`) are gated by a confirmation modal before running.
 
-Some commands include a `check:` rule and only surface when the relevant package or file is present (`doctrine:migrations:migrate` requires `doctrine/doctrine-migrations-bundle`, CakePHP `migrate` requires `cakephp/migrations`). Magento uses this to hide every command that needs a deployment config until the store is installed, so a fresh checkout offers only `setup:install`.
+Some commands include a `check:` rule and only surface when the relevant package or file is present (`doctrine:migrations:migrate` requires `doctrine/doctrine-migrations-bundle`, CakePHP `migrate` requires `cakephp/migrations`). A rule can also read the other way round, with `missing_file:`, for a command that belongs only on a project nobody has bootstrapped yet. Magento uses both: every command that needs a deployment config is hidden until the store is installed, so a fresh checkout offers only `setup:install`, and `setup:install` itself is hidden once it exists.
 
 ## How a run works
 

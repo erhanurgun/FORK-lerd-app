@@ -56,6 +56,9 @@ func BatchStopContainers(_ []string) {
 	if len(names) == 0 {
 		return
 	}
-	podman.RunSilent(append([]string{"stop", "-t", "5"}, names...)...) //nolint:errcheck
-	podman.RunSilent(append([]string{"rm", "-f"}, names...)...)        //nolint:errcheck
+	// No -t: podman then honours each container's own --stop-timeout, so a
+	// database keeps the longer grace its definition asked for instead of every
+	// container being held to one flat window.
+	podman.RunSilent(append([]string{"stop"}, names...)...)     //nolint:errcheck
+	podman.RunSilent(append([]string{"rm", "-f"}, names...)...) //nolint:errcheck
 }

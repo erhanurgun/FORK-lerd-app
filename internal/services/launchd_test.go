@@ -5,6 +5,7 @@ package services
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -735,5 +736,62 @@ func TestBootout_MarksWatcherStops(t *testing.T) {
 	bootout("lerd-nginx", "gui/4294967290", "com.lerd.does-not-exist") //nolint:errcheck
 	if config.ConsumeWatcherManagedStop() {
 		t.Error("booting out any other unit must not mark a watcher stop")
+	}
+}
+
+// TestQuadletStopTimeout_ReadsBothSpellings pins that macOS honours the declared
+// window whichever way the generator wrote it. It emits StopTimeout= only when it
+// could confirm podman is 5.0 or newer, and falls back to PodmanArgs= whenever the
+// version probe fails to run, which is exactly what happens under launchd's
+// restricted PATH. Reading only the first spelling would silently hold a database
+// to the five second default on the platform this matters most on.
+func TestQuadletStopTimeout_ReadsBothSpellings(t *testing.T) {
+	cases := []struct {
+		name string
+		in   map[string][]string
+		want int
+	}{
+		{"native key", map[string][]string{"StopTimeout": {"60"}}, 60},
+		{"podmanargs fallback", map[string][]string{"PodmanArgs": {"--stop-timeout=60"}}, 60},
+		{"fallback among other args", map[string][]string{"PodmanArgs": {"--init", "--stop-timeout=45"}}, 45},
+		{"declared nowhere", map[string][]string{}, config.DefaultStopTimeout},
+		{"unparseable", map[string][]string{"StopTimeout": {"soon"}}, config.DefaultStopTimeout},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := quadletStopTimeout(tc.in); got != tc.want {
+				t.Errorf("quadletStopTimeout = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestContainerToPodmanArgs_StopTimeoutAppearsOnce pins that the fallback
+// spelling does not also reach podman through the PodmanArgs passthrough. Two
+// copies of the flag would leave which one applies resting on argument order.
+func TestContainerToPodmanArgs_StopTimeoutAppearsOnce(t *testing.T) {
+	args, err := containerToPodmanArgs(map[string][]string{
+		"ContainerName": {"lerd-postgres"},
+		"Image":         {"docker.io/library/postgres:17"},
+		"PodmanArgs":    {"--init --stop-timeout=60"},
+	})
+	if err != nil {
+		t.Fatalf("containerToPodmanArgs: %v", err)
+	}
+
+	seen := 0
+	for _, a := range args {
+		if strings.HasPrefix(a, stopTimeoutFlag+"=") {
+			seen++
+			if a != stopTimeoutFlag+"=60" {
+				t.Errorf("stop timeout = %q, want the declared 60", a)
+			}
+		}
+	}
+	if seen != 1 {
+		t.Errorf("%s appeared %d times, want exactly once: %v", stopTimeoutFlag, seen, args)
+	}
+	if !slices.Contains(args, "--init") {
+		t.Errorf("the other PodmanArgs must still pass through: %v", args)
 	}
 }

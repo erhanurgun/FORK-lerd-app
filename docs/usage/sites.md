@@ -14,9 +14,12 @@ This page covers getting a project registered and served: the init wizard, linki
 | `lerd unlink` | Unlink the current directory site (removes all domains) |
 | `lerd sites` | Table view of all registered sites |
 | `lerd open [name]` | Open the site in the default browser |
+| `lerd code [name]` | Open the site's directory in the configured editor |
 | `lerd secure [name]` | Issue a mkcert TLS cert and enable HTTPS, updates `APP_URL` in `.env` |
 | `lerd unsecure [name]` | Remove TLS and switch back to HTTP, updates `APP_URL` in `.env` |
 | `lerd env` | Configure `.env` for the current project with lerd service connection settings |
+
+`lerd code` opens the project the way `lerd open` opens the browser: no argument uses the site rooted at the current directory, a name comes from the registry, and inside a git worktree it opens that checkout rather than the parent it inherits its registration from. It runs the `editor` command from `~/.config/lerd/config.yaml` when you have set one, with `{file}` standing for the directory (a `{line}` in the template is dropped, a directory has no line to jump to). With nothing configured it uses the first of VS Code, Cursor, VSCodium, Windsurf, Sublime, Zed, PhpStorm or IntelliJ IDEA it finds on PATH, and if none of them are there it says so instead of handing the directory to your file manager.
 
 The `lerd domain`, `lerd share`, `lerd pause` and `lerd workspace` commands are documented on the [Domains](domains.md), [Sharing Sites](sharing.md), [Pausing Sites](pausing.md) and [Workspaces](workspaces.md) pages.
 
@@ -37,7 +40,7 @@ lerd init
 
 ```
 ? PHP version: 8.5
-? Node version (leave blank to skip):
+? Node version (clear to follow the lerd default instead of pinning): 22
 ? Enable HTTPS? No
 ? Database:
   > SQLite (no service)
@@ -55,6 +58,7 @@ Linked: my-app -> my-app.test (PHP 8.5, Node 22, Framework: laravel)
 Wizard defaults are populated intelligently on first run:
 
 - **PHP version**: from the site registry if already linked, otherwise from `.php-version`, `composer.json`, or the global default
+- **Node version**: from `.lerd.yaml` if already saved, otherwise from `.nvmrc`, `.node-version`, `package.json` engines, or the global default; clear the field to save no version and keep following those
 - **Enable HTTPS**: pre-checked if the site is already secured
 - **Database**: pre-selected from any database already in `.lerd.yaml`, otherwise from `DB_CONNECTION` in `.env` (or `.env.example` for a fresh clone), falling back to SQLite (Laravel's default for new projects)
 - **Services**: pre-checked based on what's detected in the project's `.env` file (only non-database services here, since the database is its own step)

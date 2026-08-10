@@ -90,6 +90,10 @@ func main() {
 		// this runs for every command.
 		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
+			// A package manager that upgraded lerd swapped the binary and ran
+			// nothing else, so the environment step `lerd update` performs for a
+			// self-updating install happens here instead. No-op otherwise.
+			cli.ApplyPendingUpgrade(cmd)
 			return nil
 		},
 		// After any command that rebuilt a PHP image, reclaim the now-orphaned
@@ -167,6 +171,7 @@ func main() {
 	root.AddCommand(cli.NewBugReportCmd())
 	root.AddCommand(cli.NewLogsCmd())
 	root.AddCommand(cli.NewOpenCmd())
+	root.AddCommand(cli.NewCodeCmd())
 	root.AddCommand(cli.NewDashboardCmd())
 	root.AddCommand(cli.NewQueueCmd())
 	root.AddCommand(cli.NewQueueStartCmd())

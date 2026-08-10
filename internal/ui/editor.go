@@ -7,11 +7,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
-	"strconv"
 	"strings"
 
-	"github.com/geodro/lerd/internal/config"
+	"github.com/geodro/lerd/internal/editor"
 )
 
 // handleOpenEditor opens a file at a line in the host's editor for dashboard
@@ -49,7 +47,7 @@ func handleOpenEditor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	argv := editorCommand(path, req.Line)
+	argv := editor.Command(path, req.Line)
 	if len(argv) == 0 {
 		http.Error(w, "no editor found; set `editor` in ~/.config/lerd/config.yaml", http.StatusInternalServerError)
 		return
@@ -61,49 +59,4 @@ func handleOpenEditor(w http.ResponseWriter, r *http.Request) {
 	}
 	go func() { _ = cmd.Wait() }() // reap; the editor detaches
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// editorCommand resolves the argv to open file:line. A configured `editor`
-// template wins (with {file}/{line} substitution, or the file appended when it
-// has neither placeholder); otherwise the first GUI editor found on PATH is
-// used, falling back to the platform opener.
-func editorCommand(file string, line int) []string {
-	if cfg, _ := config.LoadGlobal(); cfg != nil && strings.TrimSpace(cfg.Editor) != "" {
-		tmpl := strings.TrimSpace(cfg.Editor)
-		if strings.Contains(tmpl, "{file}") || strings.Contains(tmpl, "{line}") {
-			tmpl = strings.ReplaceAll(tmpl, "{file}", file)
-			tmpl = strings.ReplaceAll(tmpl, "{line}", strconv.Itoa(line))
-			return strings.Fields(tmpl)
-		}
-		return append(strings.Fields(tmpl), file)
-	}
-
-	loc := fmt.Sprintf("%s:%d", file, line)
-	ls := strconv.Itoa(line)
-	for _, c := range []struct {
-		bin  string
-		args []string
-	}{
-		{"code", []string{"-g", loc}},
-		{"cursor", []string{"-g", loc}},
-		{"codium", []string{"-g", loc}},
-		{"windsurf", []string{"-g", loc}},
-		{"subl", []string{loc}},
-		{"zed", []string{loc}},
-		{"phpstorm", []string{"--line", ls, file}},
-		{"idea", []string{"--line", ls, file}},
-	} {
-		if p, err := exec.LookPath(c.bin); err == nil {
-			return append([]string{p}, c.args...)
-		}
-	}
-	// Last resort: hand the file to the platform opener (uses the default app).
-	opener := "xdg-open"
-	if runtime.GOOS == "darwin" {
-		opener = "open"
-	}
-	if p, err := exec.LookPath(opener); err == nil {
-		return []string{p, file}
-	}
-	return nil
 }

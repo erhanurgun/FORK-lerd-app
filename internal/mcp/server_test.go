@@ -264,8 +264,11 @@ func TestToolList_underSizeCeiling(t *testing.T) {
 	// install from a running one and races the watcher inside the tree. The
 	// worktree description was merged and trimmed to pay for half of it, then
 	// 22450 → 22900 for the `items` schema on every array-typed property
-	// (required by the MCP spec).
-	const ceiling = 22900
+	// (required by the MCP spec), then 22900 → 23050 for the `no_snapshot`
+	// property: a data wipe now snapshots the databases first and refuses when
+	// it cannot, so an assistant that does not know the flag reads a blocked
+	// remove as a broken service.
+	const ceiling = 23050
 	got, err := json.Marshal(toolList())
 	if err != nil {
 		t.Fatalf("marshal tool list: %v", err)
