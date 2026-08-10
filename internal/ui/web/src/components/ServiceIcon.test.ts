@@ -78,6 +78,26 @@ describe('ServiceIcon', () => {
     expect(svg.getAttribute('fill')).toBe('none');
   });
 
+  it('draws a bare mark at icon size when compact', () => {
+    serviceIcons.set({ mysql: MARK });
+    const { container } = render(ServiceIcon, { props: { name: 'mysql', bare: true, compact: true } });
+    expect(container.querySelector('.mark-glyph')?.getAttribute('class')).toContain('w-5');
+  });
+
+  // In a chrome strip the mark is one of a row of icons and has to answer to
+  // the same hover and active states they do, so it takes no tone of its own.
+  it('inherits the surrounding colour when the tint is off', () => {
+    serviceIcons.set({ mysql: MARK });
+    presets.set([{ name: 'mysql', category: 'databases', icon: 'database', color: '#e02419' }]);
+    const { container } = render(ServiceIcon, {
+      props: { name: 'mysql', bare: true, compact: true, tint: false }
+    });
+    expect(container.querySelector('.mark-glyph path')).not.toBeNull();
+    expect(box(container).className).not.toContain('mark-brand');
+    expect(box(container).className).not.toContain('indigo');
+    expect(box(container).getAttribute('style') || '').not.toContain('--mark-tint');
+  });
+
   it('renders the service glyph', () => {
     const { container } = render(ServiceIcon, { props: { name: 'mysql' } });
     expect(container.querySelector('svg')?.innerHTML.length).toBeGreaterThan(0);
