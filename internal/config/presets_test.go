@@ -532,6 +532,32 @@ func TestCustomService_ExpandEnvRoundTrip(t *testing.T) {
 	}
 }
 
+// The first host an admin UI discovers is the server it opens on, so the order
+// the spec declares has to survive: installing an engine whose name sorts
+// earlier must not displace the family named ahead of it.
+func TestResolveDynamicEnv_DiscoverFamily_KeepsDeclaredOrder(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmp)
+	t.Setenv("XDG_DATA_HOME", tmp)
+
+	if err := SaveCustomService(&CustomService{
+		Name: "mariadb-11-8", Image: "x", Family: "mariadb",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := &CustomService{
+		Name: "phpmyadmin", Image: "x",
+		DynamicEnv: map[string]string{"PMA_HOSTS": "discover_family:mysql,mariadb"},
+	}
+	if err := ResolveDynamicEnv(svc); err != nil {
+		t.Fatalf("ResolveDynamicEnv: %v", err)
+	}
+	if got := svc.Environment["PMA_HOSTS"]; got != "lerd-mysql,lerd-mariadb-11-8" {
+		t.Errorf("PMA_HOSTS = %q, want lerd-mysql,lerd-mariadb-11-8", got)
+	}
+}
+
 func TestResolveDynamicEnv_RepeatFamily(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmp)

@@ -623,10 +623,14 @@ func continuesHostName(v string, i int) bool {
 	return c == '-' || (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z')
 }
 
-// uniqueFamilyHosts returns sorted, de-duplicated container hostnames across a
-// comma-separated list of family names. When ServiceRunning is set (production),
-// only members whose unit is active are included so admin UIs do not list
-// offline hosts.
+// uniqueFamilyHosts returns de-duplicated container hostnames across a
+// comma-separated list of family names, in the order the families are named.
+// The first host is the server an admin UI opens on, so a spec that names
+// mysql before mariadb keeps mysql leading however the member names sort;
+// ServicesInFamily already orders within a family, which is all the stability
+// the generated env var needs. When ServiceRunning is set (production), only
+// members whose unit is active are included so admin UIs do not list offline
+// hosts.
 func uniqueFamilyHosts(families string) []string {
 	seen := map[string]bool{}
 	var all []string
@@ -648,7 +652,6 @@ func uniqueFamilyHosts(families string) []string {
 		}
 		all = running
 	}
-	sort.Strings(all)
 	return all
 }
 
