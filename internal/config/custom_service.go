@@ -201,8 +201,11 @@ type CustomService struct {
 	DependsOn     []string          `yaml:"depends_on,omitempty"`
 	// Category groups the service under a discovery heading and Icon names an
 	// entry in the UI's icon set, so a new preset needs no UI edit to appear.
+	// Color is the brand tint the dashboard paints the mark with, a plain hex
+	// literal; anything else is dropped rather than reaching the page as CSS.
 	Category string `yaml:"category,omitempty" json:"category,omitempty"`
 	Icon     string `yaml:"icon,omitempty" json:"icon,omitempty"`
+	Color    string `yaml:"color,omitempty" json:"color,omitempty"`
 	// AdminFor lists the services this preset's UI administers. It is not
 	// DependsOn: phpMyAdmin starts after a mysql satisfier but administers
 	// mariadb too, and RedisInsight administers valkey while depending on redis

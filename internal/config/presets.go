@@ -17,7 +17,10 @@ import (
 // exercising platform-specific preset behaviour. Production code never assigns it.
 var runtimeGOOS = func() string { return runtime.GOOS }
 
-//go:embed presets/*.yaml
+// The default stack ships its marks alongside its definitions: it is never
+// fetched from the store, so an embedded icon is the only way it can carry one.
+//
+//go:embed presets/*.yaml presets/*.svg
 var presetFS embed.FS
 
 // PresetVersion is a single selectable image tag for a multi-version preset
@@ -94,6 +97,7 @@ type PresetMeta struct {
 	DefaultVersion string          `json:"default_version,omitempty"`
 	Category       string          `json:"category,omitempty"`
 	Icon           string          `json:"icon,omitempty"`
+	Color          string          `json:"color,omitempty"`
 	AdminFor       []string        `json:"admin_for,omitempty"`
 }
 
@@ -124,6 +128,7 @@ func ListPresets() ([]PresetMeta, error) {
 			DefaultVersion: p.DefaultVersion,
 			Category:       p.Category,
 			Icon:           p.Icon,
+			Color:          NormalizeBrandColor(p.Color),
 			AdminFor:       p.AdminFor,
 		})
 	}
