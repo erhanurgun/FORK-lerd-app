@@ -233,6 +233,7 @@ func Start(currentVersion string) error {
 
 	mux.HandleFunc("/api/services/presets", withCORS(handleServicePresets))
 	mux.HandleFunc("/api/services/icons", withCORS(handleServiceIcons))
+	mux.HandleFunc("/api/frameworks/marks", withCORS(handleFrameworkMarks))
 	mux.HandleFunc("/api/services/presets/", withCORS(publishAfter(handleServicePresetInstall, eventbus.KindServices, eventbus.KindStatus)))
 	mux.HandleFunc("/api/services/", withCORS(publishAfter(handleServiceAction, eventbus.KindServices, eventbus.KindStatus, eventbus.KindSites)))
 	mux.HandleFunc("/api/databases", withCORS(handleDatabases))
@@ -1831,6 +1832,23 @@ func handleServiceIcons(w http.ResponseWriter, r *http.Request) {
 		icons = map[string]string{}
 	}
 	writeJSON(w, icons)
+}
+
+// handleFrameworkMarks returns the mark and brand colour of every framework
+// this install has a definition for, keyed by framework name. The dashboard
+// reads them from here rather than from the store origin, so a site's framework
+// keeps drawing offline and over remote access, and the markup it inlines is the
+// sanitized copy this binary wrote.
+func handleFrameworkMarks(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	marks := config.FrameworkMarks()
+	if marks == nil {
+		marks = map[string]config.FrameworkMark{}
+	}
+	writeJSON(w, marks)
 }
 
 // handleServicePresetInstall installs a bundled preset and streams per-phase

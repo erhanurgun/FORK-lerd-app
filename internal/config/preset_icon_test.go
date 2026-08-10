@@ -7,16 +7,16 @@ import (
 	"testing"
 )
 
-func TestSanitizeServiceIcon_KeepsTheDrawingAndDropsItsColours(t *testing.T) {
+func TestSanitizeStoreIcon_KeepsTheDrawingAndDropsItsColours(t *testing.T) {
 	raw := `<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 24 24" fill="#00758f" class="brand" id="mysql">
 	  <g transform="translate(1 1)" style="fill:red">
 	    <path d="M4 4h16v16H4z" fill="#ff0000" stroke="blue" fill-rule="evenodd"/>
 	    <circle cx="12" cy="12" r="5"/>
 	  </g>
 	</svg>`
-	got, err := SanitizeServiceIcon([]byte(raw))
+	got, err := SanitizeStoreIcon([]byte(raw))
 	if err != nil {
-		t.Fatalf("SanitizeServiceIcon: %v", err)
+		t.Fatalf("SanitizeStoreIcon: %v", err)
 	}
 	out := string(got)
 	for _, want := range []string{`viewBox="0 0 24 24"`, `d="M4 4h16v16H4z"`, `fill-rule="evenodd"`, `transform="translate(1 1)"`, `<circle`, `r="5"`} {
@@ -31,7 +31,7 @@ func TestSanitizeServiceIcon_KeepsTheDrawingAndDropsItsColours(t *testing.T) {
 	}
 }
 
-func TestSanitizeServiceIcon_DropsScriptExternalRefsAndHandlers(t *testing.T) {
+func TestSanitizeStoreIcon_DropsScriptExternalRefsAndHandlers(t *testing.T) {
 	raw := `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 24 24" onload="alert(1)">
 	  <script>alert(2)</script>
 	  <foreignObject><div>hi</div></foreignObject>
@@ -39,9 +39,9 @@ func TestSanitizeServiceIcon_DropsScriptExternalRefsAndHandlers(t *testing.T) {
 	  <use href="#x"/>
 	  <path d="M1 1h2v2H1z" onclick="alert(3)"/>
 	</svg>`
-	got, err := SanitizeServiceIcon([]byte(raw))
+	got, err := SanitizeStoreIcon([]byte(raw))
 	if err != nil {
-		t.Fatalf("SanitizeServiceIcon: %v", err)
+		t.Fatalf("SanitizeStoreIcon: %v", err)
 	}
 	out := string(got)
 	if !strings.Contains(out, `d="M1 1h2v2H1z"`) {
@@ -54,18 +54,18 @@ func TestSanitizeServiceIcon_DropsScriptExternalRefsAndHandlers(t *testing.T) {
 	}
 }
 
-func TestSanitizeServiceIcon_DerivesAViewBoxFromWidthAndHeight(t *testing.T) {
+func TestSanitizeStoreIcon_DerivesAViewBoxFromWidthAndHeight(t *testing.T) {
 	raw := `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><path d="M0 0h1v1H0z"/></svg>`
-	got, err := SanitizeServiceIcon([]byte(raw))
+	got, err := SanitizeStoreIcon([]byte(raw))
 	if err != nil {
-		t.Fatalf("SanitizeServiceIcon: %v", err)
+		t.Fatalf("SanitizeStoreIcon: %v", err)
 	}
 	if !strings.Contains(string(got), `viewBox="0 0 48 48"`) {
 		t.Errorf("width/height should become a viewBox, got %s", got)
 	}
 }
 
-func TestSanitizeServiceIcon_RejectsWhatIsNotADrawing(t *testing.T) {
+func TestSanitizeStoreIcon_RejectsWhatIsNotADrawing(t *testing.T) {
 	cases := map[string]string{
 		"not svg":       `<html><body>hi</body></html>`,
 		"no drawing":    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><script>x</script></svg>`,
@@ -75,16 +75,16 @@ func TestSanitizeServiceIcon_RejectsWhatIsNotADrawing(t *testing.T) {
 		"unknown enity": `<svg viewBox="0 0 24 24"><path d="&xxe;"/></svg>`,
 	}
 	for name, raw := range cases {
-		if _, err := SanitizeServiceIcon([]byte(raw)); err == nil {
+		if _, err := SanitizeStoreIcon([]byte(raw)); err == nil {
 			t.Errorf("%s: expected a rejection, got none", name)
 		}
 	}
 }
 
-func TestSanitizeServiceIcon_RejectsAnOversizedIcon(t *testing.T) {
+func TestSanitizeStoreIcon_RejectsAnOversizedIcon(t *testing.T) {
 	raw := `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="` +
 		strings.Repeat("M0 0h1v1H0z", maxIconBytes/10) + `"/></svg>`
-	if _, err := SanitizeServiceIcon([]byte(raw)); err == nil {
+	if _, err := SanitizeStoreIcon([]byte(raw)); err == nil {
 		t.Error("an icon past the size cap should be rejected")
 	}
 }
@@ -178,7 +178,7 @@ func TestPresetIcon_ShippedMarksAreAlreadySanitized(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 
 	for name, svg := range PresetIcons() {
-		clean, err := SanitizeServiceIcon([]byte(svg))
+		clean, err := SanitizeStoreIcon([]byte(svg))
 		if err != nil {
 			t.Errorf("%s ships a mark the sanitizer rejects: %v", name, err)
 			continue

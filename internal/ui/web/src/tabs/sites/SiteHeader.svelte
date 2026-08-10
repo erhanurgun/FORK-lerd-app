@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import Badge from '$components/Badge.svelte';
+  import FrameworkMark from '$components/FrameworkMark.svelte';
   import {
     type Site,
     pauseSite,
@@ -464,7 +465,12 @@
 
       <span class="flex items-center gap-1.5 shrink-0">
         {#if activeFrameworkLabel}
-          <span class="hidden @md:inline-flex"><Badge tone="framework">{activeFrameworkLabel}</Badge></span>
+          <span class="hidden @md:inline-flex">
+            <Badge tone="framework">
+              <FrameworkMark name={activeWorktree?.framework || site.framework} tint={false} />
+              {activeFrameworkLabel}
+            </Badge>
+          </span>
         {/if}
         {#if lanOn && lanURL}
           <span class="hidden @md:inline-flex items-center gap-1 text-[10px] text-teal-600 dark:text-teal-400">

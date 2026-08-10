@@ -29,14 +29,14 @@
   const storeIcon = $derived($serviceIcons[resolvedPreset]);
   const brand = $derived(brandTintStyle(color ?? meta?.color));
 
-  const tint = $derived(brand ? 'svc-tint' : tintFor(resolvedCategory));
+  const tint = $derived(brand ? 'mark-tint' : tintFor(resolvedCategory));
   const box = $derived(compact ? 'w-8 h-8' : 'w-9 h-9 transition-transform group-hover:scale-105');
   const glyph = $derived(compact ? 'w-4 h-4' : 'w-5 h-5');
 </script>
 
 <span class="shrink-0 inline-flex items-center justify-center rounded-lg {tint} {box}" style={brand}>
   {#if storeIcon}
-    <span class="svc-mark {glyph}">{@html storeIcon}</span>
+    <span class="mark-glyph {glyph}">{@html storeIcon}</span>
   {:else}
     <svg class={glyph} fill="none" stroke="currentColor" viewBox="0 0 24 24"
       >{@html dashboardIconSvg(name, resolvedIcon)}</svg

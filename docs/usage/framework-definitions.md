@@ -123,6 +123,7 @@ Do not pin a database version your framework passes to its ORM. Doctrine picks i
 # Required
 name: symfony                     # slug [a-z0-9-], must match filename stem
 label: Symfony                    # display name
+color: "#000000"                  # brand colour the dashboard tints the mark with
 public_dir: public                # document root relative to project
 
 # Version (required for store definitions)
@@ -301,6 +302,39 @@ worktree:
 ```
 
 An app that keeps deployment state in its database cannot share the parent's. Magento hashes its file config and stores the hash in the database, so seeding a worktree's own base URL into `env.php` makes the store refuse to serve until `app:config:import` re-syncs it, and running that import against a shared database would rewrite the hash out from under the parent site. `db_isolation: required` therefore skips the prompt and isolates, `db_source: main` clones the parent's data (an empty schema is useless to a store that cannot bootstrap itself), and `commands` run afterwards, in the worktree, through the framework's own `console` binary.
+
+## The framework's own mark
+
+A framework had a label and nothing else to identify it, so it showed up as a
+text badge on the site header, in the sites widget, in a site tile's subtitle, as
+the heading a sites dashboard groups under, and as the hint in the command
+palette. A definition in the store can now bring its own logo: a
+`frameworks/<name>.svg` beside the versioned files, fetched and cached with the
+definition, so a framework published tomorrow arrives with its mark and no lerd
+release.
+
+The mark is per family, not per version. Laravel 11 and Laravel 12 are the same
+logo, so one file sits next to `<name>/<version>.yaml` rather than inside each of
+them, and every version resolves to it. The colour is the opposite: it is
+declared in the YAML, which only exists per version, so each version file repeats
+the same `color:`.
+
+It is **monochrome**: a silhouette of filled paths with no colours of its own,
+rendered through `currentColor` and tinted by `color:`. Because that markup is
+remote and ends up inlined in the page, lerd cuts it down on the way in to the
+same drawing subset a service mark gets, dropping script, `foreignObject`, event
+handlers, external references and any `fill`, `stroke` or `style` of its own. See
+[service presets](service-presets.md) for the exact subset; the rule is shared.
+
+`color:` must be a plain hex literal. Anything else, a colour function or a CSS
+variable, is dropped rather than passed through, and a colour too dark or too
+light for the card it lands on is nudged toward it until it separates, so
+Symfony's black still reads on the dark card. A framework that declares a colour
+but ships no mark still gets the tint; one with neither renders as its label
+alone, which is what every framework did before.
+
+This is not the `icon:` a framework command declares. That names a glyph from the
+built-in set for a button in the dashboard and is a different thing entirely.
 
 ## Site placeholders
 
