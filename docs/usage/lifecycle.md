@@ -106,7 +106,9 @@ On macOS you no longer have to remember `lerd quit` before rebooting. When you l
 
 This matters most for databases. Killing the VM with a database mid-write leaves the data files dirty, and the container spends minutes replaying its write-ahead log on the next start; TimescaleDB and Postgres are the usual victims. Stopping the VM properly avoids that recovery pass entirely.
 
-The VM goes down at step 2 rather than last precisely because it is the step whose loss costs something. The host processes above it are ones launchd is terminating anyway, so if the exit grace ever runs out they are the right thing to lose. That grace is 60 seconds for the watcher; every other lerd job keeps launchd's default, which `launchctl print` reports as 5 seconds.
+The VM goes down at step 2 rather than last precisely because it is the step whose loss costs something. The host processes above it are ones launchd is terminating anyway, so if the exit grace ever runs out they are the right thing to lose. That grace is 180 seconds for the watcher; every other lerd job keeps launchd's default, which `launchctl print` reports as 5 seconds.
+
+The watcher needs that much because the containers stop before the VM does, and a database is entitled to the `stop_timeout` its service declares, 60 seconds for MySQL and Postgres, to finish writing. A grace sized for the containers alone would already be spent by the time the VM stop began, and launchd would kill the watcher partway through the one step this whole sequence exists to protect.
 
 The watcher never stops its own unit here. Asking launchd to bootout the job the watcher is running inside would block until that process exits, which it cannot do from inside the call, so the teardown would hang until the grace expired and never reach the VM at all.
 

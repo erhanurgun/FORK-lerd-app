@@ -3,6 +3,7 @@
 package services
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -144,6 +145,26 @@ func TestBuildPlistExitTimeoutOnlyForWatcher(t *testing.T) {
 	other := buildPlist(plistLabel("lerd-nginx"), []string{"/bin/true"}, true, keepAliveAlways, "", "")
 	if strings.Contains(other, "ExitTimeOut") {
 		t.Error("non-watcher plists must not set ExitTimeOut")
+	}
+}
+
+// TestWatcherExitTimeoutFitsTheTeardown pins the grace to something the work can
+// actually fit in. The containers stop first and a database asks for up to 60s
+// to finish writing, so a grace that only covers them is spent before the
+// machine stop begins, and launchd kills the watcher partway through the one
+// step the teardown exists for.
+func TestWatcherExitTimeoutFitsTheTeardown(t *testing.T) {
+	const longestContainerStop = 60 // databases declare this in the service store
+	const machineStopBudget = 90    // what lerd allows a machine stop elsewhere
+
+	if watcherExitTimeout < longestContainerStop+machineStopBudget {
+		t.Errorf("exit grace of %ds cannot fit a %ds container stop followed by a %ds machine stop",
+			watcherExitTimeout, longestContainerStop, machineStopBudget)
+	}
+
+	plist := buildPlist(plistLabel(podman.WatcherUnit), []string{"/bin/true"}, true, keepAliveAlways, "", "")
+	if !strings.Contains(plist, fmt.Sprintf("<integer>%d</integer>", watcherExitTimeout)) {
+		t.Errorf("watcher plist does not carry the %ds grace:\n%s", watcherExitTimeout, plist)
 	}
 }
 

@@ -182,6 +182,14 @@ const (
 	keepAliveOnFailure
 )
 
+// watcherExitTimeout is how long launchd lets the logout teardown run before it
+// SIGKILLs the watcher. The containers stop first, and a database declares up to
+// 60s so it can finish writing, so a grace sized for them alone is already gone
+// when the Podman Machine stop starts, which is the step whose loss is the whole
+// point of the teardown. This covers that stop plus the 90s a machine stop gets
+// elsewhere, with room to spare.
+const watcherExitTimeout = 180
+
 func buildPlist(lbl string, args []string, runAtLoad bool, keepAlive keepAlivePolicy, stdoutPath, stderrPath string) string {
 	var sb strings.Builder
 	sb.WriteString(`<?xml version="1.0" encoding="UTF-8"?>
@@ -222,7 +230,7 @@ func buildPlist(lbl string, args []string, runAtLoad bool, keepAlive keepAlivePo
 	// launchd gives these jobs before SIGKILL. Every other job stops fast, and
 	// a longer timeout there would only slow down a hung unit.
 	if lbl == plistLabel(podman.WatcherUnit) {
-		sb.WriteString("\t<key>ExitTimeOut</key>\n\t<integer>60</integer>\n")
+		sb.WriteString(fmt.Sprintf("\t<key>ExitTimeOut</key>\n\t<integer>%d</integer>\n", watcherExitTimeout))
 	}
 	if ownsPodmanMachine(lbl) {
 		sb.WriteString("\t<key>AbandonProcessGroup</key>\n\t<true/>\n")
