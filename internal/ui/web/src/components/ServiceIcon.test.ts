@@ -115,6 +115,43 @@ describe('ServiceIcon', () => {
     expect(box(container).getAttribute('style')).toContain('--mark-tint-dark: #e02419');
   });
 
+  // An admin tool is the front end of the engine it administers, so when it
+  // ships no mark of its own it draws that engine's, in that engine's colour
+  // rather than its own category tone.
+  it('draws the mark of what it administers when it ships none itself', () => {
+    serviceIcons.set({ postgres: MARK });
+    presets.set([
+      { name: 'postgres', category: 'databases', icon: 'elephant', color: '#336791' },
+      { name: 'pgadmin', category: 'admin', icon: 'elephant', admin_for: ['postgres'] }
+    ]);
+    const { container } = render(ServiceIcon, { props: { name: 'pgadmin' } });
+    expect(container.querySelector('.mark-glyph path')?.getAttribute('d')).toBe('M3 3h18v18H3z');
+    expect(box(container).getAttribute('style')).toContain('--mark-tint: #336791');
+    expect(box(container).className).not.toContain('emerald');
+  });
+
+  // An admin tool with a mark of its own keeps it: phpMyAdmin is not MySQL.
+  it('keeps an admin tool the mark it ships itself', () => {
+    const OWN = '<svg viewBox="0 0 24 24"><path d="M1 1h2v2H1z"/></svg>';
+    serviceIcons.set({ phpmyadmin: OWN, mysql: MARK });
+    presets.set([
+      { name: 'mysql', category: 'databases', icon: 'database', color: '#00758f' },
+      { name: 'phpmyadmin', category: 'admin', icon: 'database', color: '#6c78af', admin_for: ['mysql'] }
+    ]);
+    const { container } = render(ServiceIcon, { props: { name: 'phpmyadmin' } });
+    expect(container.querySelector('.mark-glyph path')?.getAttribute('d')).toBe('M1 1h2v2H1z');
+    expect(box(container).getAttribute('style')).toContain('--mark-tint: #6c78af');
+  });
+
+  // Nothing administered has a mark either: the declared glyph still draws.
+  it('falls back to its own glyph when nothing it administers has a mark', () => {
+    serviceIcons.set({});
+    presets.set([{ name: 'pgadmin', category: 'admin', icon: 'elephant', admin_for: ['postgres'] }]);
+    const { container } = render(ServiceIcon, { props: { name: 'pgadmin' } });
+    expect(container.querySelector('.mark-glyph')).toBeNull();
+    expect(box(container).className).toContain('emerald');
+  });
+
   // A versioned member carries no mark of its own; it draws its family's.
   it('resolves the mark through the preset a service was installed from', () => {
     serviceIcons.set({ mariadb: MARK });

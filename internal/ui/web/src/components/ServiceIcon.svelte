@@ -41,8 +41,19 @@
   // silhouette with no colours of its own, and the declared colour is what
   // gives it its tone.
   const resolvedPreset = $derived(preset ?? meta?.preset ?? name);
-  const storeIcon = $derived($serviceIcons[resolvedPreset]);
-  const brand = $derived(tint ? brandTintStyle(color ?? meta?.color) : '');
+  const ownIcon = $derived($serviceIcons[resolvedPreset]);
+
+  // An admin UI is the front end of the engine it administers, so one shipping
+  // no mark of its own borrows that engine's, colour included: an elephant
+  // inked in the tool's own tone would read as a different product.
+  const borrowed = $derived(
+    ownIcon ? undefined : (meta?.admin_for ?? []).find((n) => $serviceIcons[n])
+  );
+  const storeIcon = $derived(ownIcon ?? (borrowed ? $serviceIcons[borrowed] : undefined));
+  const brandColor = $derived(
+    borrowed ? $serviceMeta.get(borrowed)?.color : (color ?? meta?.color)
+  );
+  const brand = $derived(tint ? brandTintStyle(brandColor) : '');
 
   const tone = $derived(
     !tint
