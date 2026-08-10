@@ -5,7 +5,7 @@
   interface Props {
     // The framework's store name (laravel, symfony), not its display label.
     name: string | undefined;
-    size?: 'sm' | 'md';
+    size?: 'sm' | 'md' | 'lg';
     // A mark inside a coloured pill takes the pill's colour rather than the
     // brand tone, so the badge reads as one object instead of two.
     tint?: boolean;
@@ -17,7 +17,7 @@
   // would only add noise to a header that is mostly text.
   const mark = $derived(name ? $frameworkMarks[name] : undefined);
   const style = $derived(tint ? brandTintStyle(mark?.color) : '');
-  const box = $derived(size === 'md' ? 'w-4 h-4' : 'w-3.5 h-3.5');
+  const box = $derived(size === 'lg' ? 'w-5 h-5' : size === 'md' ? 'w-4 h-4' : 'w-3.5 h-3.5');
   const wrapper = $derived(tint ? 'mark-ink' : 'mark-inherit');
 </script>
 
