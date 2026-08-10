@@ -18,6 +18,7 @@ import profilerStatus from './fixtures/profiler_status.json';
 import stats from './fixtures/stats.json';
 import workersHealth from './fixtures/workers_health.json';
 import databasesFixture from './fixtures/databases.json';
+import docsFixture from './fixtures/docs.json';
 
 // Demo follows the system theme (auto). Reset any stale value a previous demo
 // session may have pinned, so it isn't stuck on a forced light/dark.
@@ -545,6 +546,26 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
   if (path.length > 1 && path.endsWith('/')) path = path.slice(0, -1);
   const method = (init?.method ?? 'GET').toUpperCase();
   const qs = new URLSearchParams(search);
+
+  // The documentation the real daemon serves out of the binary. The demo ships a
+  // handful of pages so the viewer is browsable without a backend.
+  if (path === '/docs/index.json') {
+    return jsonResponse({ pages: docsFixture.pages.map(({ html: _html, ...meta }) => meta) });
+  }
+  if (path === '/docs/search') {
+    const q = (qs.get('q') || '').toLowerCase();
+    const hits = q
+      ? docsFixture.pages
+          .filter((p) => (p.title + p.html).toLowerCase().includes(q))
+          .map(({ html: _html, ...meta }) => ({ ...meta, snippet: '' }))
+      : [];
+    return jsonResponse({ results: hits });
+  }
+  if (path.startsWith('/docs/page/')) {
+    const route = path.slice('/docs/page/'.length);
+    const page = docsFixture.pages.find((p) => p.route === route);
+    return page ? jsonResponse(page) : new Response('not found', { status: 404 });
+  }
 
   // Live (mutable) collections
   if (path === '/api/sites') return jsonResponse(sites);

@@ -1304,5 +1304,10 @@
   "shareToken_configure": "Konfigurasikan token ngrok",
   "share_tunnelViaCli": "Tunnel via {tool}, dari CLI",
   "sites_sharedPublicly": "Dibagikan publik di {url}",
-  "sites_sharedOnLan": "Dibagikan di jaringan Anda di {url}"
+  "sites_sharedOnLan": "Dibagikan di jaringan Anda di {url}",
+  "docs_index_failed": "Dokumentasi tidak dapat dimuat.",
+  "docs_load_failed": "Halaman ini tidak dapat dimuat.",
+  "docs_no_results": "Tidak ada halaman yang cocok.",
+  "docs_pick_page": "Pilih halaman untuk dibaca.",
+  "docs_search_placeholder": "Cari di dokumentasi"
 }

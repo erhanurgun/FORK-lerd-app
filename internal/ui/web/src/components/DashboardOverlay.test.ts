@@ -1,7 +1,7 @@
-import { render, screen } from '@testing-library/svelte';
+import { render, screen, waitFor } from '@testing-library/svelte';
 import { describe, it, expect, beforeEach } from 'vitest';
 import DashboardOverlay from './DashboardOverlay.svelte';
-import { dashboardOpen } from '../stores/dashboard';
+import { dashboardOpen, openDocs } from '../stores/dashboard';
 import { profilerEnabled } from '../stores/profiler';
 
 function openProfiler() {
@@ -47,6 +47,22 @@ describe('DashboardOverlay', () => {
     expect(btn.getAttribute('aria-pressed')).toBe('true');
     expect(btn.className).toMatch(/emerald/);
     expect(container.querySelector('.animate-pulse')).not.toBeNull();
+  });
+
+  it('renders the documentation in place of an iframe', async () => {
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ pages: [] }), { status: 200 })) as unknown as typeof fetch;
+    openDocs();
+    const { container } = render(DashboardOverlay);
+
+    expect(container.querySelector('iframe')).toBeNull();
+    expect(screen.getByRole('searchbox')).toBeInTheDocument();
+    // The header keeps a way out to the same page on the website.
+    await waitFor(() =>
+      expect(screen.getByTitle('Open in new tab').getAttribute('href')).toBe(
+        'https://lerd.sh/getting-started/requirements'
+      )
+    );
   });
 
   it('collapses the SPX Configuration form by default on the control panel page', () => {

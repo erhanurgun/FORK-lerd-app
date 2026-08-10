@@ -1304,5 +1304,10 @@
   "shareToken_configure": "Configurer le jeton ngrok",
   "share_tunnelViaCli": "Tunnel via {tool}, depuis la CLI",
   "sites_sharedPublicly": "Partagé publiquement sur {url}",
-  "sites_sharedOnLan": "Partagé sur votre réseau à {url}"
+  "sites_sharedOnLan": "Partagé sur votre réseau à {url}",
+  "docs_index_failed": "La documentation n'a pas pu être chargée.",
+  "docs_load_failed": "Cette page n'a pas pu être chargée.",
+  "docs_no_results": "Aucune page ne correspond.",
+  "docs_pick_page": "Choisissez une page à lire.",
+  "docs_search_placeholder": "Rechercher dans la documentation"
 }

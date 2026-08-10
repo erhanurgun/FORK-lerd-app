@@ -1,4 +1,4 @@
-package man
+package docs
 
 import (
 	"bufio"
@@ -20,6 +20,15 @@ type Page struct {
 // Content returns the raw markdown content of the page.
 func (p Page) Content() string {
 	return p.content
+}
+
+// Route returns the page's address inside a surface: "usage/sites" for a
+// sectioned page, "changelog" for a top-level one.
+func (p Page) Route() string {
+	if p.Section == "" {
+		return p.Slug
+	}
+	return p.Section + "/" + p.Slug
 }
 
 var sectionOrder = []string{"", "getting-started", "usage", "features", "reference", "contributing"}
@@ -73,6 +82,11 @@ func BuildRegistry() []Page {
 			return nil
 		}
 		content := stripFrontmatter(string(data))
+		// The site's landing page is frontmatter driving a Vue layout, so it
+		// carries no prose to show on either surface.
+		if strings.TrimSpace(content) == "" {
+			return nil
+		}
 
 		bySection[section] = append(bySection[section], Page{
 			Title:   extractTitle(content, slug),

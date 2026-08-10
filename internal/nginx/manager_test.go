@@ -1214,6 +1214,12 @@ func TestEnsureLerdVhost_linuxProxiesUnixSocket(t *testing.T) {
 	if !strings.Contains(content, "location ^~ /_svc/") {
 		t.Errorf("expected /_svc/ location in vhost so proxied dashboards load over lerd.localhost:\n%s", content)
 	}
+
+	// The embedded documentation is served from the same origin as the page, so
+	// its pages and screenshots have to reach the daemon through the vhost.
+	if !strings.Contains(content, "location ^~ /docs/") {
+		t.Errorf("expected /docs/ location in vhost so the documentation loads over lerd.localhost:\n%s", content)
+	}
 }
 
 // ── Forwarded headers & custom.d include hook ────────────────────────────────
