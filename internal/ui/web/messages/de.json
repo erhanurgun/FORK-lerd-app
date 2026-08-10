@@ -162,6 +162,7 @@
   "databases_deletingSnapshot": "{name} wird gelöscht…",
   "databases_drop": "Löschen",
   "databases_dropBody": "Dies löscht die Datenbank und alle ihre Daten dauerhaft und kann nicht rückgängig gemacht werden.",
+  "databases_dropTesting": "{name} ebenfalls löschen",
   "databases_dropTitle": "{name} löschen?",
   "databases_export": "Exportieren",
   "databases_import": "Importieren",
