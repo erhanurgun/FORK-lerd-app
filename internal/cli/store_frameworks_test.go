@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/geodro/lerd/internal/config"
@@ -99,8 +100,9 @@ func TestRefreshStoreFrameworks_KeepsRefreshingAnUnpublishedDefinition(t *testin
 
 	refreshStoreFrameworks(nil)
 
+	definitions := yamlAsks(*asked)
 	found := false
-	for _, path := range *asked {
+	for _, path := range definitions {
 		if path == "/statamic/6.yaml" {
 			found = true
 		}
@@ -108,8 +110,8 @@ func TestRefreshStoreFrameworks_KeepsRefreshingAnUnpublishedDefinition(t *testin
 	if !found {
 		t.Errorf("unpublished definition was not refreshed, asked for %v", *asked)
 	}
-	if len(*asked) != 5 {
-		t.Errorf("asked for %d definitions, want the catalogue's 4 plus statamic: %v", len(*asked), *asked)
+	if len(definitions) != 5 {
+		t.Errorf("asked for %d definitions, want the catalogue's 4 plus statamic: %v", len(definitions), definitions)
 	}
 }
 
@@ -128,7 +130,20 @@ func TestRefreshStoreFrameworks_UsesTheCallersIndex(t *testing.T) {
 		{Name: "tempest", Label: "Tempest", Versions: []string{"3"}, Latest: "3"},
 	}})
 
-	if len(*asked) != 1 || (*asked)[0] != "/tempest/3.yaml" {
-		t.Errorf("asked for %v, want just /tempest/3.yaml", *asked)
+	if definitions := yamlAsks(*asked); len(definitions) != 1 || definitions[0] != "/tempest/3.yaml" {
+		t.Errorf("asked for %v, want just /tempest/3.yaml", definitions)
 	}
+}
+
+// yamlAsks keeps only the definition requests. A refresh also asks for each
+// framework's mark, which these tests are not about: what they pin is how many
+// definitions get pulled and off which index.
+func yamlAsks(asked []string) []string {
+	var out []string
+	for _, path := range asked {
+		if strings.HasSuffix(path, ".yaml") {
+			out = append(out, path)
+		}
+	}
+	return out
 }

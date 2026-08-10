@@ -30,6 +30,7 @@
     launchCommand,
     type Command
   } from '$stores/commands';
+  import FrameworkMark from '$components/FrameworkMark.svelte';
   import { m } from '../paraglide/messages.js';
 
   type Group = 'pages' | 'sites' | 'services' | 'presets' | 'toggles' | 'commands' | 'actions';
@@ -37,6 +38,8 @@
     id: string;
     label: string;
     hint?: string;
+    // Framework name for a site entry, so its hint can carry the mark.
+    framework?: string;
     group: Group;
     action: () => void | Promise<void>;
   }
@@ -59,6 +62,7 @@
         id: 'site:' + s.domain,
         label: s.domain,
         hint: s.framework_label || s.framework,
+        framework: s.framework,
         group: 'sites',
         action: () => goToTab('sites', s.domain)
       });
@@ -383,7 +387,10 @@
               >
                 <span class="flex-1 truncate">{e.label}</span>
                 {#if e.hint}
-                  <span class="text-[11px] font-mono text-gray-400 dark:text-gray-500 truncate">{e.hint}</span>
+                  <span class="flex items-center gap-1 text-[11px] font-mono text-gray-400 dark:text-gray-500 truncate">
+                    <FrameworkMark name={e.framework} />
+                    {e.hint}
+                  </span>
                 {/if}
               </button>
             </li>

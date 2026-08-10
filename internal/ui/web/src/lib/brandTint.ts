@@ -40,7 +40,7 @@ export function brandTint(color: string | undefined | null): BrandTint | null {
 // is no usable colour so the caller falls back to its category tint.
 export function brandTintStyle(color: string | undefined | null): string {
   const t = brandTint(color);
-  return t ? `--svc-tint:${t.light};--svc-tint-dark:${t.dark}` : '';
+  return t ? `--mark-tint:${t.light};--mark-tint-dark:${t.dark}` : '';
 }
 
 function parseHex(color: string | undefined | null): [number, number, number] | null {

@@ -45,6 +45,11 @@ type Framework struct {
 	// Laravel 10 definition); callers must not clamp PHP to its range.
 	VersionGuessed bool `yaml:"-"`
 	// PHP defines the supported PHP version range for this framework version.
+	// Color is the brand tint the dashboard paints the framework mark and label
+	// with, a plain hex literal; anything else is dropped rather than reaching
+	// the page as CSS. Declared per version file since that is the only YAML a
+	// framework has, but it describes the family, so every version repeats it.
+	Color     string          `yaml:"color,omitempty"`
 	PHP       FrameworkPHP    `yaml:"php,omitempty"`
 	Detect    []FrameworkRule `yaml:"detect,omitempty"`
 	PublicDir string          `yaml:"public_dir"`

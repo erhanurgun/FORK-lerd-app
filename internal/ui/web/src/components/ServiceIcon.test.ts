@@ -59,11 +59,11 @@ describe('ServiceIcon', () => {
     serviceIcons.set({ mysql: MARK });
     presets.set([{ name: 'mysql', category: 'databases', icon: 'database', color: '#e02419' }]);
     const { container } = render(ServiceIcon, { props: { name: 'mysql' } });
-    expect(container.querySelector('.svc-mark path')?.getAttribute('d')).toBe('M3 3h18v18H3z');
-    expect(box(container).className).toContain('svc-tint');
+    expect(container.querySelector('.mark-glyph path')?.getAttribute('d')).toBe('M3 3h18v18H3z');
+    expect(box(container).className).toContain('mark-tint');
     expect(box(container).className).not.toContain('indigo');
-    expect(box(container).getAttribute('style')).toContain('--svc-tint: #e02419');
-    expect(box(container).getAttribute('style')).toContain('--svc-tint-dark: #e02419');
+    expect(box(container).getAttribute('style')).toContain('--mark-tint: #e02419');
+    expect(box(container).getAttribute('style')).toContain('--mark-tint-dark: #e02419');
   });
 
   // A versioned member carries no mark of its own; it draws its family's.
@@ -73,14 +73,14 @@ describe('ServiceIcon', () => {
       { name: 'mariadb-11-8', status: 'active', site_count: 0, preset: 'mariadb', category: 'databases' }
     ]);
     const { container } = render(ServiceIcon, { props: { name: 'mariadb-11-8' } });
-    expect(container.querySelector('.svc-mark path')).not.toBeNull();
+    expect(container.querySelector('.mark-glyph path')).not.toBeNull();
   });
 
   // A bundled preset, or a cache written before icons existed, keeps rendering.
   it('falls back to the declared glyph and category tint with no store mark', () => {
     presets.set([{ name: 'mysql', category: 'databases', icon: 'database' }]);
     const { container } = render(ServiceIcon, { props: { name: 'mysql' } });
-    expect(container.querySelector('.svc-mark')).toBeNull();
+    expect(container.querySelector('.mark-glyph')).toBeNull();
     expect(box(container).className).toContain('indigo');
   });
 
