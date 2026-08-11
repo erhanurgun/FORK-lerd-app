@@ -71,6 +71,7 @@ Setup steps include common tasks (composer install, npm install, lerd env) plus 
 | `lerd unlink [name]` | Stop serving the site; defaults to the site in the current directory, and naming one is the way to unlink a site whose directory has moved or been deleted |
 | `lerd sites` | Table view of all registered sites |
 | `lerd open [name]` | Open the site in the default browser |
+| `lerd code [name]` | Open the site's directory in your editor: the `editor` command from `~/.config/lerd/config.yaml` if set, otherwise the first known GUI editor found on PATH. Run from inside a git worktree it opens the worktree itself |
 | `lerd share [name]` | Expose the site publicly via ngrok, cloudflared, or Expose (auto-detected); `--serveo`, `--localhost-run` and `--pinggy` pick the SSH tunnels that need no signup |
 | `lerd share --domain <hostname>` | Expose the site on your own Cloudflare-managed hostname via a named tunnel (implies Cloudflare Tunnel) |
 | `lerd share:tool [tool]` | Show or set the default tunnel tool for `lerd share` (`auto` restores auto-detection) |
@@ -229,8 +230,8 @@ Switch the PHP runtime for the current site between shared PHP-FPM and per-site 
 | `lerd service add [file.yaml]` | Register a new custom service (from a YAML file or flags) |
 | `lerd service preset [name]` | List presets, or install one (use `--version` for multi-version presets); a store-only preset is fetched on demand |
 | `lerd service search [query]` | Browse the external service-preset store; filter by name, description, or family |
-| `lerd service remove <name> [--purge]` | Stop and remove a service (custom or default). With `--purge`, also rename the data dir aside (recoverable as `<name>.pre-remove-<ts>`) |
-| `lerd service reinstall <name> [--reset-data]` | Stop, remove, and reinstall at the current version. With `--reset-data`, rename the data dir aside and recreate linked sites' databases or buckets on the fresh service |
+| `lerd service remove <name> [--purge] [--no-snapshot]` | Stop and remove a service (custom or default). With `--purge`, snapshot every database on it, then rename the data dir aside (recoverable as `<name>.pre-remove-<ts>`). `--no-snapshot` skips the snapshot |
+| `lerd service reinstall <name> [--reset-data] [--no-snapshot]` | Stop, remove, and reinstall at the current version. With `--reset-data`, snapshot every database on it, rename the data dir aside, and recreate linked sites' databases or buckets on the fresh service. `--no-snapshot` skips the snapshot |
 | `lerd minio:migrate` | Migrate existing MinIO data to RustFS |
 
 ## Database

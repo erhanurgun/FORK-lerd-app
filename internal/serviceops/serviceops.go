@@ -903,6 +903,16 @@ func ensureCustomServiceQuadletDiff(svc *config.CustomService) (bool, error) {
 	// record. Once a port is recorded it sticks (the published_port>0 apply below
 	// short-circuits the probe), never auto-reverting — `lerd service port` changes it.
 	pp := config.ServicePublishedPort(svc.Name)
+	// The one exception: another installed service already publishes the recorded
+	// port. A removed service keeps its config entry, so its port can be handed on
+	// while it is gone and then reclaimed by a reinstall — sticking to it here would
+	// put two units on one port at boot. Drop the stale record and guard again.
+	if pp > 0 && portClaimedByOtherInstalled(svc.Name, pp) {
+		if err := persistPublishedPort(svc.Name, 0); err != nil {
+			return false, fmt.Errorf("clearing lerd-%s off already-published port %d: %w", svc.Name, pp, err)
+		}
+		pp = 0
+	}
 	if pp == 0 {
 		primary := podman.PrimaryHostPort(svc.Ports)
 		if free := maybeShiftPublishedPort(svc.Name, primary, unitActive(svc.Name)); free > 0 {

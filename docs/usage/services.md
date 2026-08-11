@@ -99,6 +99,8 @@ The dashboard link for a service always follows the port its dashboard is served
 
 The chosen ports are persisted in `~/.config/lerd/config.yaml` and reapplied on every start: the primary under `services.<name>.published_port`, any other mapping under `services.<name>.published_ports` keyed by container port. Once a port is set, automatically or with `lerd service port`, it sticks: lerd never moves it again on its own, not even back to the default when that frees up later. Change it only with `lerd service port`.
 
+Removing a service leaves its recorded ports in `config.yaml`, so reinstalling it later lands back on the same ports rather than picking new ones. While it is gone those ports are free again: another service can be moved onto one, and the automatic shift can hand one out. If that happens, the reinstall passes through the ownership guard like a fresh install and takes a free port instead of publishing on top of whoever holds it now.
+
 Every published port can also be moved from the dashboard: a service's **Ports** tab lists one editable host-port field per published port (primary and secondary alike), each with a reset-to-default. The TUI shows the current published and extra ports read-only; editing stays in the CLI, dashboard and MCP.
 
 ::: warning Known limitation

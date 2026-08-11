@@ -58,7 +58,7 @@ func MigrateService(name, targetImage string, emit func(PhaseEvent)) error {
 	if err := os.MkdirAll(config.BackupsDir(), 0700); err != nil {
 		return fmt.Errorf("creating backups dir: %w", err)
 	}
-	if err := startEngineForMigrate(name, fam, emit); err != nil {
+	if err := startEngineForDump(name, fam, emit); err != nil {
 		return err
 	}
 	return fn(name, targetImage, emit)
@@ -76,10 +76,11 @@ func migrateProbe(family string) string {
 	return ""
 }
 
-// startEngineForMigrate brings the engine up before the dump. A service that no
-// site uses is auto-stopped, and the dump execs into its container, so migrating
-// one in that state failed on "no such container" before anything had run.
-func startEngineForMigrate(name, family string, emit func(PhaseEvent)) error {
+// startEngineForDump brings the engine up before a dump. A service that no site
+// uses is auto-stopped, and the dump execs into its container, so dumping one in
+// that state failed on "no such container" before anything had run. Families
+// with no dump-time probe of their own wait on the generic readiness check.
+func startEngineForDump(name, family string, emit func(PhaseEvent)) error {
 	unit := "lerd-" + name
 	if status, _ := podman.UnitStatus(unit); status == "active" {
 		return nil
@@ -88,7 +89,11 @@ func startEngineForMigrate(name, family string, emit func(PhaseEvent)) error {
 	if err := podman.StartUnit(unit); err != nil {
 		return fmt.Errorf("starting %s to dump from: %w", unit, err)
 	}
-	return waitContainerReady(unit, migrateProbe(family), snapshotEnv(family), 90*time.Second)
+	probe := migrateProbe(family)
+	if probe == "" {
+		return podman.WaitReady(name, 90*time.Second)
+	}
+	return waitContainerReady(unit, probe, snapshotEnv(family), 90*time.Second)
 }
 
 // familyOf returns the service family for a default preset or installed

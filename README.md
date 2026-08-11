@@ -306,6 +306,7 @@ Lerd stands on a set of excellent open-source projects it bundles or fetches to 
 - [fnm](https://github.com/Schniz/fnm) - the per-project Node version manager
 - [Composer](https://getcomposer.org) - fetched on the host for dependency operations
 - [Starship](https://starship.rs) - the prompt in the container shell drop-in
+- [Simple Icons](https://simpleicons.org) - the service marks in the dashboard, CC0
 
 ## License
 

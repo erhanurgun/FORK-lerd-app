@@ -520,6 +520,17 @@ func mappingContainerPort(mapping string) int {
 	return n
 }
 
+// ServiceEntryOrphaned reports whether the global-config entry for name has no
+// service behind it any more. `service remove` deletes a custom service's
+// definition YAML and quadlet but keeps its entry, so a reinstall lands back on
+// the same published port; until then the entry describes nothing, and the ports
+// it records must stay out of the reservation math. Default presets are never
+// orphaned: defaultConfig seeds an entry for every one of them, installed or not,
+// and a phantom preset deliberately holds its default port.
+func ServiceEntryOrphaned(name string) bool {
+	return !IsDefaultPreset(name) && !CustomServiceExists(name)
+}
+
 // ReservedHostPorts returns every host port a lerd service may bind: each
 // configured service entry's effective ports (HostPorts), every bundled preset's
 // default ports (including optional presets not in the default set), and every
@@ -538,7 +549,10 @@ func ReservedHostPorts() map[int]bool {
 		}
 	}
 	if cfg != nil {
-		for _, svc := range cfg.Services {
+		for name, svc := range cfg.Services {
+			if ServiceEntryOrphaned(name) {
+				continue
+			}
 			for _, p := range svc.HostPorts() {
 				add(p)
 			}
@@ -573,11 +587,13 @@ func ReservedHostPorts() map[int]bool {
 // override (if any) so a moved primary or secondary port resolves to its NEW
 // port rather than the vacated default. Shared by ReservedHostPorts (which
 // wants every port a service might ever hold) and HostPortsFor (which wants
-// one installed service's current ports).
+// one installed service's current ports). An orphaned entry's override is
+// ignored: a preset a removed service was materialised from resolves back to its
+// catalog default rather than to the port that removed service was moved to.
 func resolveMappingPorts(cfg *GlobalConfig, name string, mappings []string) []int {
 	var svc ServiceConfig
 	configured := false
-	if cfg != nil {
+	if cfg != nil && !ServiceEntryOrphaned(name) {
 		svc, configured = cfg.Services[name]
 	}
 	var ports []int

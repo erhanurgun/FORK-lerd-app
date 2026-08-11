@@ -211,7 +211,7 @@ LAN share has a separate toggle that's worktree-aware: when a worktree is active
 
 Public tunnels are worktree-scoped too. `lerd share` run from inside a checkout tunnels `<branch>.<site>.test`, and the dashboard's share menu acts on whichever branch tab is active. A worktree's tunnel is a process of its own: it can run alongside the parent site's, each with its own public URL, and stopping one does not touch the other. Under `--domain`, the Cloudflare named tunnel is keyed to the branch as well, so routing a hostname to a worktree never takes over the one the parent site is using.
 
-Commands that act on a directory resolve a worktree to its parent site automatically. `lerd share`, `lerd open`, `lerd domain`, `lerd env`, `lerd worker`, `lerd runtime` and the rest run from inside a checkout without linking it as a site of its own.
+Commands that act on a directory resolve a worktree to its parent site automatically. `lerd share`, `lerd open`, `lerd domain`, `lerd env`, `lerd worker`, `lerd runtime` and the rest run from inside a checkout without linking it as a site of its own. `lerd code` opens the checkout you are standing in rather than the parent, since that is the copy of the files you are working on.
 
 ---
 

@@ -50,7 +50,7 @@ Each database engine's detail page in the web UI (Services → pick MySQL, Maria
 - **Copy connection string** builds a ready-to-paste DSN for that specific database, which works whether or not an admin UI is installed.
 - **Open in the admin UI** appears on the card when an admin tool is installed for the engine, and opens it straight to this database when the tool supports a per-database URL (phpMyAdmin and Adminer for MySQL/MariaDB, Mongo Express for MongoDB). pgAdmin has no such URL, so it opens at its root.
 - **The linked site**, when a site owns the database, is shown as a link on the card that jumps to that site. Which database a site owns is read through that site's framework definition: the env file it declares, in the format it declares, at the keys it declares, so a WordPress site is matched on `DB_NAME` in `wp-config.php` and a Magento site on `db.connection.default.dbname` in `app/etc/env.php`, the same as a Laravel site is on `DB_DATABASE` in `.env`. A `<name>_testing` database links to the same site as `<name>`. A worktree's isolated database is shown under the branch's own domain (`staging.astrolov.test` for the `staging` branch of `astrolov.test`), so it reads as that branch's data rather than as a stray database of the parent site, and the link still opens the parent site's page.
-- **A `<name>_testing` database shares the card of the `<name>` database it tests**, rather than taking a second card of its own for what is usually an empty database. The card header carries an App/Testing segment, and the name, size, linked site and every action below it act on whichever half is selected, so an export, an import, a snapshot or a drop always applies to the database currently shown. Dropping one half leaves the other in place. A `_testing` database whose matching database does not exist keeps an ordinary card of its own.
+- **A `<name>_testing` database shares the card of the `<name>` database it tests**, rather than taking a second card of its own for what is usually an empty database. The card header carries an App/Testing segment, and the name, size, linked site and every action below it act on whichever half is selected, so an export, an import, a snapshot or a drop always applies to the database currently shown. Dropping the app half offers to take its testing database along, in a checkbox that names that database outright and starts ticked, since the two were created together and the half left behind belongs to nothing and points at nothing. Both go in a single request that either drops the pair or reports which half it could not, rather than two drops fired from the browser. The testing half is offered nothing of its own, being nobody's pair. A `_testing` database whose matching database does not exist keeps an ordinary card of its own.
 
 The same "open in the admin tool" affordance is on the database service card in a site's own overview (a database-icon button), so from a site you can jump straight into that site's database in phpMyAdmin, Adminer or Mongo Express.
 
@@ -140,6 +140,19 @@ lerd db:restore --service mysql --all-databases nightly
 ```
 
 An all-databases restore drops and recreates every database contained in the snapshot, but leaves databases that aren't in the snapshot untouched.
+
+### Snapshots before a data wipe
+
+`lerd service remove <name> --purge` and `lerd service reinstall <name> --reset-data` rename the data dir aside, and a renamed directory only reads back under the image that wrote it, which after a reinstall on another version is an image you no longer have. So before either wipes anything, lerd snapshots every database on the service, the same all-databases snapshot `db:snapshot -A` takes:
+
+```bash
+lerd db:snapshots --service mysql --all      # pre-remove-<ts> / pre-reset-data-<ts> are listed here
+lerd db:restore --service mysql -A pre-reset-data-20260809-141500
+```
+
+The name says where it came from, so it is still recognisable weeks later. Services that declare no export action, and services with no data dir yet, have nothing to snapshot and are skipped.
+
+The snapshot has to come off a running engine, so lerd starts the service if it is stopped. If the snapshot cannot be taken the operation stops before touching anything, rather than wiping without one. Pass `--no-snapshot` to go ahead anyway, for an engine that will not come up or data you know is disposable.
 
 ### Reserved names
 
@@ -347,6 +360,8 @@ Whether a tool reads as installed is answered by the shim dir itself rather than
 
 `lerd service reinstall <name> --reset-data` wipes the database server's data dir (rename-aside, recoverable) and then walks every active site that depends on the service to recreate the database it expects via `CREATE DATABASE IF NOT EXISTS`. Database name resolution is the same as `lerd env`: `.lerd.yaml` `db.database` first, then `.env` `DB_DATABASE`, then a name derived from the site name.
 
-The DBs come back empty. The previous data lives next door as `~/.local/share/lerd/data/<name>.pre-remove-<timestamp>`. If you need the old contents, stop the service, rename the aside dir back over the new data dir, and start the service again.
+The DBs come back empty. To get the contents back, restore the snapshot the reinstall took before wiping: `lerd db:restore --service <name> -A pre-reset-data-<timestamp>` (see [snapshots before a data wipe](#snapshots-before-a-data-wipe)).
+
+The previous data also lives next door as `~/.local/share/lerd/data/<name>.pre-remove-<timestamp>`, but that directory is only readable by the image that wrote it. It is the fallback when the reinstall stayed on the same version, or when you passed `--no-snapshot`: stop the service, rename the aside dir back over the new data dir, and start the service again.
 
 If you only want to recreate a single missing database without wiping the whole server, use `lerd db:create` against the live service instead.

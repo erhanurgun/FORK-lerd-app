@@ -6,6 +6,9 @@ description: MySQL database
 family: mysql
 default_version: "8.4"
 init: true
+# InnoDB flushes the buffer pool on a clean shutdown; killed part-way through,
+# the next start recovers from the redo log instead.
+stop_timeout: 60
 versions:
   - tag: "9.7"
     label: "9.7 LTS"
@@ -51,6 +54,7 @@ files:
       loose-restrict-fk-on-non-standard-key=OFF
 category: databases
 icon: database
+color: "#4479a1"
 introspect:
   entities:
     - kind: databases

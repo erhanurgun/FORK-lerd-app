@@ -207,8 +207,11 @@ type CustomService struct {
 	DependsOn     []string          `yaml:"depends_on,omitempty"`
 	// Category groups the service under a discovery heading and Icon names an
 	// entry in the UI's icon set, so a new preset needs no UI edit to appear.
+	// Color is the brand tint the dashboard paints the mark with, a plain hex
+	// literal; anything else is dropped rather than reaching the page as CSS.
 	Category string `yaml:"category,omitempty" json:"category,omitempty"`
 	Icon     string `yaml:"icon,omitempty" json:"icon,omitempty"`
+	Color    string `yaml:"color,omitempty" json:"color,omitempty"`
 	// AdminFor lists the services this preset's UI administers. It is not
 	// DependsOn: phpMyAdmin starts after a mysql satisfier but administers
 	// mariadb too, and RedisInsight administers valkey while depending on redis
@@ -288,6 +291,13 @@ type CustomService struct {
 	// handler when it runs as PID 1, which makes podman stop time out and
 	// systemctl restart wedge for ~90s.
 	Init bool `yaml:"init,omitempty" json:"init,omitempty"`
+	// StopTimeout is how many seconds podman waits after SIGTERM before it
+	// SIGKILLs the container. Zero means DefaultStopTimeout, which suits images
+	// that exit promptly and keeps a hung one from stalling a stop. Engines that
+	// need to finish writing before they die (a database checkpointing a large
+	// buffer pool) declare a longer one; past this window the process is killed
+	// mid-write and the next start pays for it in crash recovery.
+	StopTimeout int `yaml:"stop_timeout,omitempty" json:"stop_timeout,omitempty"`
 	// ClientShims lists the client tools this service exposes as host shims
 	// (mysqldump, pg_dump, psql…) so host tools and IDEs can run them against
 	// external databases. Empty for services with nothing to expose.
@@ -619,10 +629,14 @@ func continuesHostName(v string, i int) bool {
 	return c == '-' || (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z')
 }
 
-// uniqueFamilyHosts returns sorted, de-duplicated container hostnames across a
-// comma-separated list of family names. When ServiceRunning is set (production),
-// only members whose unit is active are included so admin UIs do not list
-// offline hosts.
+// uniqueFamilyHosts returns de-duplicated container hostnames across a
+// comma-separated list of family names, in the order the families are named.
+// The first host is the server an admin UI opens on, so a spec that names
+// mysql before mariadb keeps mysql leading however the member names sort;
+// ServicesInFamily already orders within a family, which is all the stability
+// the generated env var needs. When ServiceRunning is set (production), only
+// members whose unit is active are included so admin UIs do not list offline
+// hosts.
 func uniqueFamilyHosts(families string) []string {
 	seen := map[string]bool{}
 	var all []string
@@ -644,7 +658,6 @@ func uniqueFamilyHosts(families string) []string {
 		}
 		all = running
 	}
-	sort.Strings(all)
 	return all
 }
 
@@ -921,4 +934,29 @@ func ListCustomServices() ([]*CustomService, error) {
 		services = append(services, svc)
 	}
 	return services, nil
+}
+
+// DefaultStopTimeout is the graceful-stop window a service gets when its
+// definition declares none. It is deliberately short: an image with a slow
+// shutdown sequence (selenium/supervisord, chromium) would otherwise hold up
+// every stop, and most images exit as soon as they are asked to.
+const DefaultStopTimeout = 5
+
+// StopTimeoutSecs is the graceful-stop window podman must give this service.
+func (s *CustomService) StopTimeoutSecs() int {
+	if s.StopTimeout > 0 {
+		return s.StopTimeout
+	}
+	return DefaultStopTimeout
+}
+
+// UnitStopTimeoutSecs is the window the service manager must give the whole
+// stop, which has to outlast the container's own. podman only starts counting
+// StopTimeoutSecs once the stop reaches it, and still has to reap and remove
+// the container afterwards, so a manager timeout equal to it kills the unit
+// mid-shutdown and undoes the grace the service asked for. Distributions vary
+// here: Arch-family systems ship DefaultTimeoutStopSec=10s, which is already
+// tight for the default window and far too short for a database's.
+func (s *CustomService) UnitStopTimeoutSecs() int {
+	return s.StopTimeoutSecs() + 15
 }

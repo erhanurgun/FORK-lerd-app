@@ -46,6 +46,10 @@ type dbEntryResponse struct {
 	Snapshots []serviceops.Snapshot `json:"snapshots"`
 }
 
+// testingDBSuffix names the paired testing database lerd creates alongside every
+// project database.
+const testingDBSuffix = "_testing"
+
 // dbOwner is the site a database belongs to: the parent site's domain, plus the
 // worktree branch when the database is that branch's isolated one. The branch is
 // what turns "astrolov_staging" into staging.astrolov.test in the UI.
@@ -95,7 +99,7 @@ func databaseSiteIndex(service string) map[string]dbOwner {
 		owns := !(s.IsGroupSecondary() && s.GroupSharedDB)
 		owner := dbOwner{domain: s.PrimaryDomain()}
 		claim(db, owner, owns)
-		claim(db+"_testing", owner, owns)
+		claim(db+testingDBSuffix, owner, owns)
 	}
 	entries, err := config.LoadWorktreeDBRegistry()
 	if err != nil {
@@ -108,7 +112,7 @@ func databaseSiteIndex(service string) map[string]dbOwner {
 		}
 		owner := dbOwner{domain: domain, branch: e.Branch}
 		claim(e.DBName, owner, true)
-		claim(e.DBName+"_testing", owner, true)
+		claim(e.DBName+testingDBSuffix, owner, true)
 	}
 	return idx
 }
@@ -308,6 +312,29 @@ func decodeDBBody(r *http.Request) (database, name string, ok bool) {
 	return strings.TrimSpace(body.Database), strings.TrimSpace(body.Name), true
 }
 
+// decodeDropBody reads the drop body, which carries the choice to take the
+// paired testing database along with the database named.
+func decodeDropBody(r *http.Request) (name string, withTesting, ok bool) {
+	var body struct {
+		Name    string `json:"name"`
+		Testing bool   `json:"testing"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		return "", false, false
+	}
+	return strings.TrimSpace(body.Name), body.Testing, true
+}
+
+// dropTargets is what one drop request removes: the database named, plus the
+// testing database it is paired with when the request asks for it. A database
+// that is itself the testing half has no pair of its own.
+func dropTargets(name string, withTesting bool) []string {
+	if !withTesting || strings.HasSuffix(name, testingDBSuffix) {
+		return []string{name}
+	}
+	return []string{name, name + testingDBSuffix}
+}
+
 // requireDatabaseName rejects a database name that could escape its snapshot
 // path or its SQL quoting, so nothing unvalidated reaches serviceops.
 func requireDatabaseName(w http.ResponseWriter, database string) bool {
@@ -342,17 +369,27 @@ func handleDatabaseCreate(w http.ResponseWriter, r *http.Request, service string
 }
 
 func handleDatabaseDrop(w http.ResponseWriter, r *http.Request, service string) {
-	_, name, ok := decodeDBBody(r)
-	if !ok || !requireDatabaseName(w, name) {
+	name, withTesting, ok := decodeDropBody(r)
+	if !ok {
 		return
+	}
+	// Both halves are validated before either is touched, so a sibling the
+	// suffix pushes past the length limit never costs the database it tests.
+	targets := dropTargets(name, withTesting)
+	for _, target := range targets {
+		if !requireDatabaseName(w, target) {
+			return
+		}
 	}
 	if !serviceops.DatabaseActionDeclared(service, "drop") {
 		writeDBError(w, fmt.Sprintf("%s does not support dropping databases", service))
 		return
 	}
-	if _, err := serviceops.DropDatabase(service, name); err != nil {
-		writeDBError(w, err.Error())
-		return
+	for _, target := range targets {
+		if _, err := serviceops.DropDatabase(service, target); err != nil {
+			writeDBError(w, fmt.Sprintf("dropping %s: %v", target, err))
+			return
+		}
 	}
 	writeDBOK(w)
 }

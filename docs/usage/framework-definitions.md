@@ -123,6 +123,7 @@ Do not pin a database version your framework passes to its ORM. Doctrine picks i
 # Required
 name: symfony                     # slug [a-z0-9-], must match filename stem
 label: Symfony                    # display name
+color: "#000000"                  # brand colour the dashboard tints the mark with
 public_dir: public                # document root relative to project
 
 # Version (required for store definitions)
@@ -249,6 +250,9 @@ setup:
       composer: doctrine/doctrine-migrations-bundle  # skipped if package not installed
   - label: "Install the app"                         # placeholders work here too
     command: "bin/install --url={{scheme}}://{{domain}}/ --db={{site}}"
+    default: false
+    check:
+      missing_file: config/installed.php             # only while the app is not installed yet
 
 # Application log files shown in the UI "App Logs" tab
 logs:
@@ -299,11 +303,44 @@ worktree:
 
 An app that keeps deployment state in its database cannot share the parent's. Magento hashes its file config and stores the hash in the database, so seeding a worktree's own base URL into `env.php` makes the store refuse to serve until `app:config:import` re-syncs it, and running that import against a shared database would rewrite the hash out from under the parent site. `db_isolation: required` therefore skips the prompt and isolates, `db_source: main` clones the parent's data (an empty schema is useless to a store that cannot bootstrap itself), and `commands` run afterwards, in the worktree, through the framework's own `console` binary.
 
+## The framework's own mark
+
+A framework had a label and nothing else to identify it, so it showed up as a
+text badge on the site header, in the sites widget, in a site tile's subtitle, as
+the heading a sites dashboard groups under, and as the hint in the command
+palette. A definition in the store can now bring its own logo: a
+`frameworks/<name>.svg` beside the versioned files, fetched and cached with the
+definition, so a framework published tomorrow arrives with its mark and no lerd
+release.
+
+The mark is per family, not per version. Laravel 11 and Laravel 12 are the same
+logo, so one file sits next to `<name>/<version>.yaml` rather than inside each of
+them, and every version resolves to it. The colour is the opposite: it is
+declared in the YAML, which only exists per version, so each version file repeats
+the same `color:`.
+
+It is **monochrome**: a silhouette of filled paths with no colours of its own,
+rendered through `currentColor` and tinted by `color:`. Because that markup is
+remote and ends up inlined in the page, lerd cuts it down on the way in to the
+same drawing subset a service mark gets, dropping script, `foreignObject`, event
+handlers, external references and any `fill`, `stroke` or `style` of its own. See
+[service presets](service-presets.md) for the exact subset; the rule is shared.
+
+`color:` must be a plain hex literal. Anything else, a colour function or a CSS
+variable, is dropped rather than passed through, and a colour too dark or too
+light for the card it lands on is nudged toward it until it separates, so
+Symfony's black still reads on the dark card. A framework that declares a colour
+but ships no mark still gets the tint; one with neither renders as its label
+alone, which is what every framework did before.
+
+This is not the `icon:` a framework command declares. That names a glyph from the
+built-in set for a button in the dashboard and is a different thing entirely.
+
 ## Site placeholders
 
 The <code v-pre>{{site}}</code>, <code v-pre>{{site_testing}}</code>, <code v-pre>{{bucket}}</code>, <code v-pre>{{domain}}</code>, <code v-pre>{{scheme}}</code>, and <code v-pre>{{&lt;service&gt;_version}}</code> placeholders listed above are expanded in three places: the `env.services` vars, every `setup:` command, and every `commands:` entry. They resolve against the registered site the command runs for. A git worktree is not a registered site, so a command run against one resolves <code v-pre>{{site}}</code> but leaves <code v-pre>{{domain}}</code> and <code v-pre>{{scheme}}</code> alone.
 
-This is what lets a framework whose bootstrap needs to know where the site lives declare that step as data. Magento 2.4 removed its web installer, so a fresh store is installed with `bin/magento setup:install --base-url=… --db-name=…`; the definition can now express exactly that. A step that creates schema should carry `default: false` so it is opt-in rather than running on every `lerd setup`.
+This is what lets a framework whose bootstrap needs to know where the site lives declare that step as data. Magento 2.4 removed its web installer, so a fresh store is installed with `bin/magento setup:install --base-url=… --db-name=…`; the definition can now express exactly that. A step that creates schema should carry `default: false` so it is opt-in rather than running on every `lerd setup`, and it should gate itself on `check: missing_file:` naming the file the install writes, so it is offered on a project that has never been bootstrapped and nowhere else. `default: false` alone is not enough for that: `lerd setup --all` runs every step it is offered regardless of the default, and rerunning an installer over a working app is how its data goes away.
 
 A placeholder whose value is empty, or one lerd does not recognise, is left in the command verbatim rather than being replaced with an empty string, so a half-resolved context can never quietly produce `--base-url=://`.
 
@@ -324,7 +361,7 @@ The `commands:` list is the framework's own verbs: the things you would otherwis
 
 `confirm: true` puts the command behind a confirmation showing the exact command line before anything runs, and the dashboard, `lerd run` (unless you pass `--yes`) and MCP (unless the caller forces it) all honour it. This is what lets a genuinely destructive command ship as a command rather than as a setup step: Laravel's `migrate:fresh` drops every table, and Magento ships `setup:install` this way.
 
-`check` takes the same rule shape as a worker's or a setup step's, so `composer: <package>` or `file: <path>`, and a command whose check fails is dropped from the resolved set rather than merely hidden, which means it also disappears from `lerd run` and from any doctor `fix:` pointing at it. Use it for commands that only make sense when an optional package is installed.
+`check` takes the same rule shape as a worker's or a setup step's, so `composer: <package>`, `file: <path>`, or `missing_file: <path>` for the opposite reading, and a command whose check fails is dropped from the resolved set rather than merely hidden, which means it also disappears from `lerd run` and from any doctor `fix:` pointing at it. Use it for commands that only make sense when an optional package is installed.
 
 `icon` is drawn from a fixed vocabulary, and a name outside it renders a generic fallback rather than failing. The set is:
 

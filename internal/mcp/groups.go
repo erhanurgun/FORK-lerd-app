@@ -335,7 +335,7 @@ func siteTool() mcpTool {
 func serviceTool() mcpTool {
 	return mcpTool{
 		Name:        "service",
-		Description: "Manage services (built-in + custom). action: start, stop, restart, pin, unpin, update, rollback, migrate, remove, reinstall, add, expose, port, env, config_read, config_write, config_restore, config_reset, config_list_backups, preset_list, preset_search, preset_install, check_updates, entities, entity_action. entities lists what a service holds beyond databases (buckets, etc.) with the actions each kind supports; databases have their own tool. preset_search browses the store (name=filter). update=pull; migrate=dump+restore; reinstall reset_data wipes data; remove remove_data renames data aside.",
+		Description: "Manage services (built-in + custom). action: start, stop, restart, pin, unpin, update, rollback, migrate, remove, reinstall, add, expose, port, env, config_read, config_write, config_restore, config_reset, config_list_backups, preset_list, preset_search, preset_install, check_updates, entities, entity_action. entities lists what a service holds beyond databases (buckets, etc.) with the actions each kind supports; databases have their own tool. preset_search browses the store (name=filter). update=pull; migrate=dump+restore; reinstall reset_data wipes data; remove remove_data renames data aside. Both snapshot the DBs first, restorable with db restore all_databases.",
 		InputSchema: mcpSchema{
 			Type: "object",
 			Properties: map[string]mcpProp{
@@ -344,6 +344,7 @@ func serviceTool() mcpTool {
 				"tag":            {Type: "string", Description: "update/migrate: image tag."},
 				"remove_data":    {Type: "boolean", Description: "remove: rename data dir aside."},
 				"reset_data":     {Type: "boolean", Description: "reinstall: wipe data, reprovision."},
+				"no_snapshot":    {Type: "boolean", Description: "remove/reinstall: skip that snapshot."},
 				"image":          {Type: "string", Description: "add: OCI image reference."},
 				"ports":          {Type: "array", Items: stringItems, Description: `add: host:container mappings, e.g. ["27017:27017"].`},
 				"environment":    {Type: "array", Items: stringItems, Description: `add: container env ["KEY=VALUE", ...].`},

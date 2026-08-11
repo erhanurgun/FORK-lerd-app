@@ -1465,6 +1465,10 @@ func EnsureLerdVhost() error {
         proxy_pass http://host.containers.internal:7073;
     }
 
+    location ^~ /docs/ {
+        proxy_pass http://host.containers.internal:7073;
+    }
+
     location = /manifest.webmanifest {
         proxy_pass http://host.containers.internal:7073;
     }
@@ -1511,6 +1515,10 @@ func EnsureLerdVhost() error {
     }
 
     location ^~ /_svc/ {
+        proxy_pass http://unix:%[1]s:$request_uri;
+    }
+
+    location ^~ /docs/ {
         proxy_pass http://unix:%[1]s:$request_uri;
     }
 

@@ -167,6 +167,7 @@ func main() {
 	root.AddCommand(cli.NewBugReportCmd())
 	root.AddCommand(cli.NewLogsCmd())
 	root.AddCommand(cli.NewOpenCmd())
+	root.AddCommand(cli.NewCodeCmd())
 	root.AddCommand(cli.NewDashboardCmd())
 	root.AddCommand(cli.NewQueueCmd())
 	root.AddCommand(cli.NewQueueStartCmd())
@@ -540,6 +541,10 @@ func newWatchCmd() *cobra.Command {
 			// Keep the cached framework store index fresh so offline detection and
 			// listing resolve the full catalogue without a network round trip.
 			go store.WatchIndex(6 * time.Hour)
+
+			// Cache the mark of every preset the service store publishes, so the
+			// discovery grid draws a service's own logo before it is installed.
+			go store.WatchServiceIcons(6 * time.Hour)
 
 			// Idle-suspend: suspends/resumes workers by activity. The whole session,
 			// including the source-file watcher passed here, only runs while the
