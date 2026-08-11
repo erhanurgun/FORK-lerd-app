@@ -526,6 +526,37 @@ func TunnelStop(siteName, branch string) error {
 	return nil
 }
 
+// StopSiteTunnels kills the site's own tunnel and every tunnel its worktrees
+// hold, whether started by the daemon or recorded by a `lerd share` in a
+// terminal. Worktrees tunnel their own domain under a key of their own, so
+// stopping the site's key alone leaves them pointed at a site that is gone.
+func StopSiteTunnels(siteName string) {
+	keys := map[string]bool{siteName: true}
+	tunnelsMu.Lock()
+	for k := range tunnels {
+		if tunnelKeyBelongsToSite(k, siteName) {
+			keys[k] = true
+		}
+	}
+	tunnelsMu.Unlock()
+	for k := range readTunnelStates() {
+		if tunnelKeyBelongsToSite(k, siteName) {
+			keys[k] = true
+		}
+	}
+	for k := range keys {
+		if !stopTunnelByKey(k) {
+			stopCLITunnel(k)
+		}
+	}
+}
+
+// tunnelKeyBelongsToSite reports whether a tunnel key is the site's own or one
+// of its worktrees'. The separator matters: acme-shop is not a worktree of acme.
+func tunnelKeyBelongsToSite(key, siteName string) bool {
+	return key == siteName || strings.HasPrefix(key, siteName+"@")
+}
+
 // stopTunnelByKey kills the tunnel registered under key and reports whether
 // there was one.
 func stopTunnelByKey(key string) bool {

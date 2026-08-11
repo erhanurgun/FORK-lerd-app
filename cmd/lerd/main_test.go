@@ -15,6 +15,8 @@ import (
 
 	"github.com/geodro/lerd/internal/config"
 	"github.com/geodro/lerd/internal/dns"
+	"github.com/geodro/lerd/internal/podman"
+	"github.com/geodro/lerd/internal/reqstats"
 	"github.com/geodro/lerd/internal/siteops"
 )
 
@@ -37,7 +39,7 @@ func isolateConfig(t *testing.T) {
 
 // A deleted host-proxy site must have its dev-server worker torn down, not just
 // its registry entry removed, or the always-restart unit leaks. removeStale
-// routes through siteops.UnlinkSiteCore, which calls the StopSiteWorkers hook.
+// routes through siteops.TeardownSite, which calls the StopSiteWorkers hook.
 func TestRemoveStale_tearsDownStaleHostProxyWorkers(t *testing.T) {
 	isolateConfig(t)
 
@@ -62,6 +64,72 @@ func TestRemoveStale_tearsDownStaleHostProxyWorkers(t *testing.T) {
 	}
 	if after, _ := config.LoadSites(); len(after.Sites) != 0 {
 		t.Errorf("stale site should be removed from the registry; got %d sites", len(after.Sites))
+	}
+}
+
+// A site whose directory is gone gets the same teardown an explicit unlink
+// gives it. The sweep used to reimplement a subset of it, so a secured site
+// left its cert pair behind, a custom-FPM site kept its quadlet, an open share
+// stayed up and the recorded request timings outlived the site.
+func TestRemoveStale_appliesTheFullUnlinkTeardown(t *testing.T) {
+	isolateConfig(t)
+
+	prevWorkers, prevShares := siteops.StopSiteWorkers, siteops.StopSiteShares
+	var sharesStopped []string
+	siteops.StopSiteWorkers = func(*config.Site) {}
+	siteops.StopSiteShares = func(name string) { sharesStopped = append(sharesStopped, name) }
+	t.Cleanup(func() {
+		siteops.StopSiteWorkers = prevWorkers
+		siteops.StopSiteShares = prevShares
+	})
+
+	siteCerts := filepath.Join(config.CertsDir(), "sites")
+	for _, d := range []string{siteCerts, config.QuadletDir()} {
+		if err := os.MkdirAll(d, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	leftovers := []string{
+		filepath.Join(siteCerts, "ghost.test.crt"),
+		filepath.Join(siteCerts, "ghost.test.key"),
+		filepath.Join(config.QuadletDir(), podman.CustomFPMContainerName("ghost")+".container"),
+	}
+	for _, f := range leftovers {
+		if err := os.WriteFile(f, []byte("x"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := reqstats.SaveSnapshot([]reqstats.SiteStats{{Site: "ghost"}, {Site: "live"}}, config.RequestStatsFile()); err != nil {
+		t.Fatal(err)
+	}
+
+	liveDir := t.TempDir()
+	reg := &config.SiteRegistry{Sites: []config.Site{
+		{Name: "ghost", Domains: []string{"ghost.test"}, Path: filepath.Join(t.TempDir(), "ghost"), Secured: true, Runtime: "fpm-custom"},
+		{Name: "live", Domains: []string{"live.test"}, Path: liveDir},
+	}}
+	if err := config.SaveSites(reg); err != nil {
+		t.Fatal(err)
+	}
+
+	if !removeStale(&config.GlobalConfig{}) {
+		t.Fatal("expected removeStale to report a removal")
+	}
+
+	for _, f := range leftovers {
+		if _, err := os.Stat(f); !os.IsNotExist(err) {
+			t.Errorf("%s survived the sweep", filepath.Base(f))
+		}
+	}
+	if len(sharesStopped) != 1 || sharesStopped[0] != "ghost" {
+		t.Errorf("the sweep must close the deleted site's shares; stopped=%v", sharesStopped)
+	}
+	if _, ok := reqstats.LoadSite(config.RequestStatsFile(), "ghost"); ok {
+		t.Error("the stats file still carries the deleted site")
+	}
+	if _, ok := reqstats.LoadSite(config.RequestStatsFile(), "live"); !ok {
+		t.Error("the sweep dropped an unrelated site's stats")
 	}
 }
 

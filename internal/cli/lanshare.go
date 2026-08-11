@@ -140,6 +140,21 @@ func LANShareStopServer(siteName string) {
 	closeLANShareServer(siteName)
 }
 
+// LANShareStopWorktrees closes the LAN proxy every worktree of the site holds
+// and drops its registry entry. Unlike DropOrphanedWorktreeLANShares this keeps
+// nothing: it runs when the site itself is going away, so no branch of it is
+// still live.
+func LANShareStopWorktrees(siteName string) {
+	entries, err := config.WorktreeLANsForSite(siteName)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		closeLANShareServer(worktreeLANServerKey(e.Site, e.Branch))
+		_, _, _ = config.RemoveWorktreeLAN(e.Site, e.Branch)
+	}
+}
+
 func closeLANShareServer(siteName string) {
 	lanShareMu.Lock()
 	srv, running := lanShareServers[siteName]

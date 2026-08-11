@@ -52,6 +52,8 @@ The `lerd-ui`, `lerd-watcher` and `lerd-tray` services and the shims on your `PA
 - **Instant**: fsnotify on every parked directory (configured via `lerd park`). When a direct subdirectory gets deleted, the corresponding site is unlinked within milliseconds.
 - **Periodic**: every 30 seconds the watcher sweeps the full site registry (parked and non-parked) and removes any site whose path no longer exists. The UI refreshes via the sites eventbus so the dashboard reflects the removal without a manual page reload.
 
+Either way the site gets the same teardown `lerd unlink` performs: its workers are stopped, its shares closed, its vhost and certificates dropped, any per-site container removed, and its recorded request timings forgotten. Its worktrees go with it, so the branch subdomains stop being served and their workers, LAN shares and tunnels are released too. Isolated worktree databases are kept, as they are when you remove a worktree by hand, so nothing you have not backed up is deleted behind your back.
+
 Both paths skip `Ignored: true` sites, those are explicitly parked by the user (e.g. via `lerd unpark` leaving a tombstone) and must not be reaped.
 :::
 
