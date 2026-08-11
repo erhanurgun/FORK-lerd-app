@@ -138,6 +138,7 @@ func TestRabbitMQPresetMountsPathPrefix(t *testing.T) {
 }
 
 func TestRedisInsightProxyEnvInjectedByPreset(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	// RI_PROXY_PATH is injected at quadlet generation from the preset, not
 	// stored in the service YAML, so existing installs serve under the proxy
 	// mount after a restart without a reinstall.
@@ -149,6 +150,78 @@ func TestRedisInsightProxyEnvInjectedByPreset(t *testing.T) {
 	// A user custom service (no bundled preset) gets no proxy env.
 	if _, _, ok := PresetProxyEnv(&CustomService{Name: "x"}); ok {
 		t.Error("non-bundled service must not receive proxy env")
+	}
+}
+
+func TestMongoExpressProxyEnvInjectedByPreset(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	// mongo-express mounts its whole router at site.baseUrl, so the value keeps
+	// the trailing slash its config expects. It stays out of the service YAML
+	// because it moves the app off "/", and a binary that predates the proxy
+	// still opens the dashboard there.
+	svc := &CustomService{Name: "mongo-express", Preset: "mongo-express", Dashboard: "http://localhost:8082", DashboardExternal: true}
+	k, v, ok := PresetProxyEnv(svc)
+	if !ok || k != "ME_CONFIG_SITE_BASEURL" || v != "/_svc/mongo-express/" {
+		t.Errorf("PresetProxyEnv = (%q,%q,%v), want (ME_CONFIG_SITE_BASEURL, /_svc/mongo-express/, true)", k, v, ok)
+	}
+}
+
+// A binary that knows the proxy must not inject the prefix when the store
+// preset backing an installed service does not ask to be proxied: the env moves
+// the app off "/", while the dashboard link still points there, and the overlay
+// gets the upstream's own 404.
+func TestPresetProxyPrefix_NotInjectedWhenPresetIsNotProxied(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	writeStorePreset(t, "mongo-express", "name: mongo-express\nimage: docker.io/library/mongo-express:latest\ndashboard: http://localhost:8082\n")
+	svc := &CustomService{Name: "mongo-express", Preset: "mongo-express", Dashboard: "http://localhost:8082"}
+	if k, v, ok := PresetProxyEnv(svc); ok {
+		t.Errorf("PresetProxyEnv = (%q,%q,true), want no env while the preset keeps the dashboard off the proxy", k, v)
+	}
+	writeStorePreset(t, "pgadmin", "name: pgadmin\nimage: docker.io/dpage/pgadmin4:latest\ndashboard: http://localhost:8081\n")
+	pga := &CustomService{Name: "pgadmin", Preset: "pgadmin", Dashboard: "http://localhost:8081"}
+	if k, v, ok := PresetProxyHeader(pga); ok {
+		t.Errorf("PresetProxyHeader = (%q,%q,true), want no header while the preset keeps the dashboard off the proxy", k, v)
+	}
+}
+
+func TestPgAdminProxyHeaderInjectedByPreset(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	// pgAdmin reads the mount path per request from X-Script-Name, so the proxy
+	// sends it as a header instead of an env var: an install picks the prefix up
+	// without a restart, and the app keeps answering at "/" for anything else.
+	svc := &CustomService{Name: "pgadmin", Preset: "pgadmin", Dashboard: "http://localhost:8081", DashboardExternal: true}
+	k, v, ok := PresetProxyHeader(svc)
+	if !ok || k != "X-Script-Name" || v != "/_svc/pgadmin" {
+		t.Errorf("PresetProxyHeader = (%q,%q,%v), want (X-Script-Name, /_svc/pgadmin, true)", k, v, ok)
+	}
+	if _, _, ok := PresetProxyHeader(&CustomService{Name: "x"}); ok {
+		t.Error("non-bundled service must not receive a proxy header")
+	}
+}
+
+func TestPhpMyAdminPresetMountsPathPrefix(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	files := PresetFiles("phpmyadmin")
+	var alias, userConfig string
+	for _, f := range files {
+		switch f.Target {
+		case "/etc/apache2/conf-enabled/lerd-path-prefix.conf":
+			alias = f.Content
+		case "/etc/phpmyadmin/config.user.inc.php":
+			userConfig = f.Content
+		}
+	}
+	// An Alias rather than a DocumentRoot move: the app answers under the proxy
+	// mount and at "/", so a binary that predates the proxy still reaches it.
+	if !strings.Contains(alias, "Alias /_svc/phpmyadmin /var/www/html") {
+		t.Errorf("phpmyadmin must alias /_svc/phpmyadmin to its docroot\n%s", alias)
+	}
+	// Served same-origin, the session cookie needs neither SameSite=None nor the
+	// forced HTTPS that phpmyadmin demands before it will set Secure.
+	for _, banned := range []string{"CookieSameSite", "$_SERVER['HTTPS']"} {
+		if strings.Contains(userConfig, banned) {
+			t.Errorf("phpmyadmin config must not still carry %s\n%s", banned, userConfig)
+		}
 	}
 }
 

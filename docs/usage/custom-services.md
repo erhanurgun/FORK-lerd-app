@@ -228,7 +228,7 @@ site_init:
 ```
 
 ::: tip Bundled admin dashboards embed in place
-The bundled RabbitMQ and RedisInsight presets carry `dashboard_external`, but lerd does not send you to a new tab for them. lerd-ui proxies their UI same-origin under `/_svc/<service>/`, so their session and consent cookies stay first-party and the dashboard embeds in the in-app overlay with a sidebar shortcut like every other service. The new-tab behavior above applies only to your own custom services.
+The bundled admin dashboards (phpMyAdmin, pgAdmin, Mongo Express, RabbitMQ, RedisInsight) carry `dashboard_external`, but lerd does not send you to a new tab for them. lerd-ui proxies their UI same-origin under `/_svc/<service>/`, so their session and consent cookies stay first-party and the dashboard embeds in the in-app overlay with a sidebar shortcut like every other service. Without it a browser treats the embedded UI as third-party and withholds the cookie, which leaves the dashboard rendering but failing every form it posts. The new-tab behavior above applies only to your own custom services.
 :::
 
 ## Site handle placeholders
