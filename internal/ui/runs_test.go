@@ -240,6 +240,49 @@ func TestHandleRunStreamReplaysAndCloses(t *testing.T) {
 	}
 }
 
+// The stream is read by a client that does not unescape anything, so a line
+// reaches the log exactly as it is written here. A PHP namespace is the case
+// that matters: it is what a failed scaffold prints.
+func TestHandleRunStreamWritesLinesVerbatim(t *testing.T) {
+	stubRunExec(t, func(r *run) error {
+		r.append(`Illuminate\Foundation\Bootstrap\HandleExceptions`)
+		return nil
+	})
+	r := runs.Start(runKindSetup, t.TempDir(), "", []string{"lerd", "setup"})
+	waitForStatus(t, r, runDone)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/runs/"+r.ID+"/stream", nil)
+	rr := httptest.NewRecorder()
+	handleRunStream(rr, req)
+
+	if out := rr.Body.String(); !strings.Contains(out, `data: Illuminate\Foundation\Bootstrap\HandleExceptions`) {
+		t.Errorf("backslashes did not survive the stream unchanged: %q", out)
+	}
+}
+
+// A carriage return inside a line would end the SSE data field early and split
+// one line of output into a frame the client reads as another event.
+func TestHandleRunStreamDropsEmbeddedCarriageReturns(t *testing.T) {
+	stubRunExec(t, func(r *run) error {
+		r.append("Downloading: 40%\rDownloading: 100%")
+		return nil
+	})
+	r := runs.Start(runKindSetup, t.TempDir(), "", []string{"lerd", "setup"})
+	waitForStatus(t, r, runDone)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/runs/"+r.ID+"/stream", nil)
+	rr := httptest.NewRecorder()
+	handleRunStream(rr, req)
+
+	out := rr.Body.String()
+	if strings.Contains(out, "\r") {
+		t.Errorf("a carriage return reached the stream and split the frame: %q", out)
+	}
+	if !strings.Contains(out, "data: Downloading: 40%Downloading: 100%") {
+		t.Errorf("the line did not survive: %q", out)
+	}
+}
+
 func TestHandleRunStreamUnknownRunIs404(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/runs/nope/stream", nil)
 	rr := httptest.NewRecorder()
@@ -275,5 +318,33 @@ func TestHandleRunsListsEveryRunWithoutADirectory(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("the run is missing from the unfiltered listing: %+v", out.Runs)
+	}
+}
+
+// Nothing else reads the pipe the command writes to, so a reader that gives up
+// on an over-long line leaves the command blocked writing to it and the run
+// running for ever. Composer and npm both write progress as one long line.
+func TestExecRunSurvivesAnOverlongLine(t *testing.T) {
+	r := &run{ID: "x", status: runRunning}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- execRun(ctx, r, []string{"sh", "-c", `head -c 2000000 /dev/zero | tr '\0' A; echo; echo tail`}, t.TempDir())
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("execRun: %v", err)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("execRun never returned: the reader stopped draining the pipe")
+	}
+
+	lines, _, _ := r.read(0)
+	if len(lines) == 0 || lines[len(lines)-1] != "tail" {
+		t.Errorf("output after the long line was lost: %d lines", len(lines))
 	}
 }
