@@ -477,6 +477,16 @@ type FrameworkEnvConf struct {
 	// Keys match the built-in service names: mysql, postgres, redis, meilisearch, rustfs, mailpit.
 	Services map[string]FrameworkServiceDef `yaml:"services,omitempty"`
 
+	// SQLite declares how a framework is wired to a file database: its detect
+	// rules say a project is already on one, its vars point it at one.
+	//
+	// It sits beside Services rather than among them because it is not a
+	// service. Nothing installs it, starts it or draws a card for it, and an
+	// older binary reading it as a service entry would announce it and then try
+	// to start a container that does not exist. An unknown field is ignored
+	// instead, for the same reason AppFile above is a new field.
+	SQLite *FrameworkServiceDef `yaml:"sqlite,omitempty"`
+
 	// KeyGeneration describes how to generate an application key if missing.
 	KeyGeneration *EnvKeyGeneration `yaml:"key_generation,omitempty"`
 }
@@ -489,7 +499,8 @@ func (f *Framework) HasEnvConfig() bool {
 		return false
 	}
 	e := f.Env
-	return e.File != "" || e.FallbackFile != "" || e.ExampleFile != "" || e.KeyGeneration != nil || len(e.Services) > 0
+	return e.File != "" || e.FallbackFile != "" || e.ExampleFile != "" || e.KeyGeneration != nil ||
+		len(e.Services) > 0 || e.SQLite != nil
 }
 
 // FrameworkNotifications lets a definition decline a warning that says nothing

@@ -461,8 +461,10 @@ func projectUsesSQLite(lerdYAMLServices map[string]bool, envMap map[string]strin
 	if fw == nil || externalDB || userPickedDBFromYAML(lerdYAMLServices) {
 		return false
 	}
-	def, ok := fw.Env.Services["sqlite"]
-	return ok && frameworkServiceDetected(def, envMap)
+	if fw.Env.SQLite == nil {
+		return false
+	}
+	return frameworkServiceDetected(*fw.Env.SQLite, envMap)
 }
 
 func userPickedDBFromYAML(lerdYAMLServices map[string]bool) bool {
@@ -913,9 +915,9 @@ func runEnv(_ *cobra.Command, _ []string) error {
 	// service to start, no SQL DB to create.
 	if projectUsesSQLite(lerdYAMLServices, envMap, fw, externalDBPicked(extServices)) {
 		envApplyLine("sqlite", !lerdYAMLServices["sqlite"])
-		for _, kv := range serviceEnvVars("sqlite") {
+		for _, kv := range sqliteVarsFor(fw) {
 			k, v, _ := strings.Cut(kv, "=")
-			updates[k] = v
+			updates[k] = applySiteHandle(v, tplCtx)
 		}
 		sqlitePath := filepath.Join(cwd, "database", "database.sqlite")
 		if _, statErr := os.Stat(sqlitePath); os.IsNotExist(statErr) {

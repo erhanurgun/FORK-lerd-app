@@ -101,9 +101,26 @@ A service a project picks in its `.lerd.yaml` is expected to appear in the env f
 
 ### Offering SQLite
 
-A framework that can run on a file database declares a `sqlite` service alongside its others, and that declaration is what puts SQLite in the database choice at `lerd init`. A framework declaring none is never offered it, since picking it would configure a project for a database its application cannot open. A project lerd recognises no framework for keeps the option: nothing has declared otherwise.
+A framework that can run on a file database declares an `env.sqlite` block, and that declaration is what puts SQLite in the database choice at `lerd init`. It takes the same `detect` and `vars` a service mapping takes: the detect rules say a project is already on a file database, the vars are what lerd writes to point it at one. A framework declaring none is never offered it, since picking it would configure a project for a database its application cannot open. A project lerd recognises no framework for keeps the option: nothing has declared otherwise.
 
-Choosing it records nothing in `.lerd.yaml`. SQLite has no preset, no container and nothing to install, so a `services:` entry for it is one every surface then has to explain away, and the project's own configuration already says it is on SQLite, which is what lerd reads to answer that question. An entry left by an older lerd is ignored where it is found.
+```yaml
+env:
+  file: .env
+  sqlite:
+    detect:
+      - key: DB_CONNECTION
+        value_prefix: sqlite
+    vars:
+      - DB_CONNECTION=sqlite
+      - DB_DATABASE=database/database.sqlite
+  services:
+    mysql:
+      # …
+```
+
+It sits beside `services:` rather than among them because SQLite is not a service. Nothing installs it, starts it or draws a card for it, and a binary that read it as a service entry would announce it and then try to start a container that does not exist. That is also why it is a separate field rather than a `services:` key: a published definition reaches every install within a day, whatever version it runs, and an unknown field is ignored while an unknown service is not.
+
+Choosing it records nothing in `.lerd.yaml`, for the same reason: the project's own configuration already says it is on SQLite, which is what lerd reads to answer that question. An entry left by an older lerd is ignored where it is found.
 
 ### Drop-in services
 
@@ -162,6 +179,14 @@ env:
     env_key: APP_KEY
     command: key:generate
     fallback_prefix: "base64:"
+
+  sqlite:                         # wiring for a file database (optional). Not a
+    detect:                       # service: nothing installs, starts or draws it.
+      - key: DB_CONNECTION        # Declaring it is what offers SQLite at `lerd init`.
+        value_prefix: sqlite
+    vars:
+      - "DB_CONNECTION=sqlite"
+      - "DB_DATABASE=database/database.sqlite"
 
   # Per-service env detection and variable injection for `lerd env`
   #

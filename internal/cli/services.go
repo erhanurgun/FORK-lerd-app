@@ -27,13 +27,22 @@ import (
 // Backed by the preset YAMLs so adding a default preset surfaces here automatically.
 func knownServices() []string { return config.DefaultPresetNames() }
 
-// sqliteEnvVars are the Laravel-standard env values for the sqlite "service"
-// (which isn't a podman container — just a per-project file). Kept hardcoded
-// because there's no preset YAML to host it: sqlite has no image, no port,
-// and no install flow.
+// sqliteEnvVars are the keys a framework that declares no sqlite wiring of its
+// own gets. They are the dotenv names Laravel and the frameworks built on it
+// use, which is what every project reaching this fallback has.
 var sqliteEnvVars = []string{
 	"DB_CONNECTION=sqlite",
 	"DB_DATABASE=database/database.sqlite",
+}
+
+// sqliteVarsFor returns the env values that point a project at its file
+// database. Which keys those are is the definition's to say, like every other
+// wiring: a Datasources driver reaches CakePHP and DB_CONNECTION does not.
+func sqliteVarsFor(fw *config.Framework) []string {
+	if fw != nil && fw.Env.SQLite != nil && len(fw.Env.SQLite.Vars) > 0 {
+		return fw.Env.SQLite.Vars
+	}
+	return sqliteEnvVars
 }
 
 // serviceEnvVars returns the recommended Laravel .env KEY=VALUE pairs for a
