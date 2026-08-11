@@ -157,13 +157,13 @@ func snapshotDumpCommand(t SnapshotTarget) (string, error) {
 func snapshotRestoreCommand(t SnapshotTarget) (string, error) {
 	spec := EntityFor(t.Service, "databases")
 	if t.AllDatabases {
-		act, ok := entityAction(spec, "import_all")
+		act, ok := entityAction(spec, importActionName(true))
 		if !ok {
 			return "", fmt.Errorf("service-wide snapshots are not supported for %q", t.Service)
 		}
 		return entitySnapshotRestoreCommand(act.Exec), nil
 	}
-	act, ok := entityAction(spec, "import")
+	act, ok := entityAction(spec, importActionName(false))
 	if !ok {
 		return "", fmt.Errorf("snapshots are not supported for %q", t.Service)
 	}
@@ -440,7 +440,8 @@ func RestoreSnapshot(t SnapshotTarget, name string, emit func(PhaseEvent)) (Impo
 	}
 
 	emit(PhaseEvent{Phase: "restoring_data", Message: "restoring " + clean})
-	rep, err := restoreFromHost("lerd-"+t.Service, restoreCmd, introspectEnv(), dumpPath, dumpRestoreTimeout)
+	expected := ExpectedImportErrors(t.Service, t.AllDatabases)
+	rep, err := restoreFromHost("lerd-"+t.Service, restoreCmd, introspectEnv(), dumpPath, dumpRestoreTimeout, expected)
 	if err != nil {
 		return rep, fmt.Errorf("restoring snapshot %q: %w", name, err)
 	}

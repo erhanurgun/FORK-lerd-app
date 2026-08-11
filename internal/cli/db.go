@@ -305,6 +305,7 @@ func runDbImport(file, service, database string, fresh bool) error {
 	// psql exits 0 even when every statement failed, so the output is tallied on
 	// its way to the terminal and the result reported at the end.
 	var tally serviceops.ImportTally
+	tally.Expect(serviceops.ExpectedImportErrors(env.service, false))
 	cmd.Stdin = src
 	cmd.Stdout = io.MultiWriter(os.Stdout, tally.Stream())
 	cmd.Stderr = io.MultiWriter(os.Stderr, tally.Stream())
