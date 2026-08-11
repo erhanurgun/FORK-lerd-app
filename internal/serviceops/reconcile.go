@@ -12,7 +12,7 @@ import (
 
 // Seams so tests can drive reconcile without real podman/quadlet work.
 var (
-	ensureQuadletFn          = EnsureCustomServiceQuadlet
+	ensureQuadletFn          = ensureCustomServiceQuadletDiff
 	listManagedServiceNames  = podman.ListManagedServiceNames
 	orphanContainerRunningFn = podman.ContainerRunningQuiet
 	materializeFilesFn       = config.MaterializeServiceFiles
@@ -71,20 +71,34 @@ func ReconcileServices(emit func(PhaseEvent)) (ReconcileResult, error) {
 		// mount changes the unit too, and restarting the old one brings the
 		// container back without the mount, leaving it a pass behind until
 		// something restarts it again.
+		unitChanged := false
 		if !unitInstalled || slices.Contains(res.DefinitionsRefreshed, svc.Name) {
-			if err := ensureQuadletFn(svc); err != nil {
+			changed, err := ensureQuadletFn(svc)
+			if err != nil {
 				errs = append(errs, fmt.Errorf("regenerating quadlet for %s: %w", svc.Name, err))
 				continue
 			}
+			unitChanged = changed
 			if !unitInstalled {
 				res.QuadletsRegenerated = append(res.QuadletsRegenerated, svc.Name)
 			}
 		}
 		if unitInstalled {
-			if applied, err := RestartIfConfigDrifted(svc.Name, svc.Preset); err != nil {
+			applied, err := RestartIfConfigDrifted(svc.Name, svc.Preset)
+			if err != nil {
 				errs = append(errs, err)
 			} else if applied {
 				res.ConfigsApplied = append(res.ConfigsApplied, svc.Name)
+			} else if unitChanged {
+				// The drift check reads the materialised config files and is blind to
+				// the unit itself, so a definition that moved a port, changed the image
+				// or added an environment variable would sit rewritten on disk while the
+				// container kept running on what it started with.
+				if restarted, err := restartRunningUnit(svc.Name); err != nil {
+					errs = append(errs, err)
+				} else if restarted {
+					res.ConfigsApplied = append(res.ConfigsApplied, svc.Name)
+				}
 			}
 		}
 	}
@@ -234,4 +248,16 @@ func orphanCandidates() []string {
 		}
 	}
 	return names
+}
+
+// restartRunningUnit restarts a service only if its container is up, so a
+// rewritten unit reaches a running service without starting a stopped one.
+func restartRunningUnit(name string) (bool, error) {
+	if _, running := containerStartedAtFn("lerd-" + name); !running {
+		return false, nil
+	}
+	if err := restartUnitFn("lerd-" + name); err != nil {
+		return false, fmt.Errorf("restarting %s after a unit change: %w", name, err)
+	}
+	return true, nil
 }

@@ -329,9 +329,9 @@ func TestReconcileServices_continuesPastForwardError(t *testing.T) {
 
 	prev := ensureQuadletFn
 	t.Cleanup(func() { ensureQuadletFn = prev })
-	ensureQuadletFn = func(svc *config.CustomService) error {
+	ensureQuadletFn = func(svc *config.CustomService) (bool, error) {
 		if svc.Name == "bad" {
-			return errors.New("boom")
+			return false, errors.New("boom")
 		}
 		return prev(svc)
 	}
@@ -456,9 +456,9 @@ func TestReconcileServices_regeneratesBeforeRestartingOnDrift(t *testing.T) {
 	var order []string
 	prevEnsure := ensureQuadletFn
 	t.Cleanup(func() { ensureQuadletFn = prevEnsure })
-	ensureQuadletFn = func(*config.CustomService) error {
+	ensureQuadletFn = func(*config.CustomService) (bool, error) {
 		order = append(order, "regenerate")
-		return nil
+		return false, nil
 	}
 
 	boot := time.Unix(1_000_000, 0)
@@ -476,5 +476,79 @@ func TestReconcileServices_regeneratesBeforeRestartingOnDrift(t *testing.T) {
 	}
 	if len(order) != 2 || order[0] != "regenerate" || order[1] != "restart" {
 		t.Fatalf("want the unit regenerated before the drift restart, got %v", order)
+	}
+}
+
+// A store change that touches only the unit — a moved port, a new image, an
+// added environment variable — leaves every materialised config file untouched,
+// so the drift check sees nothing and the running container keeps whatever it
+// started with until someone restarts it by hand.
+func TestReconcileServices_restartsOnAUnitOnlyChange(t *testing.T) {
+	reconcileEnv(t)
+	if err := config.SaveStorePreset("probe-svc", []byte("name: probe-svc\nimage: example/probe:1\ndashboard: http://localhost:9999\n")); err != nil {
+		t.Fatalf("store preset: %v", err)
+	}
+	if err := config.SaveCustomService(&config.CustomService{Name: "probe-svc", Image: "example/probe:1", Preset: "probe-svc"}); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	writeQuadlet(t, "probe-svc", true)
+
+	var order []string
+	prevEnsure := ensureQuadletFn
+	t.Cleanup(func() { ensureQuadletFn = prevEnsure })
+	ensureQuadletFn = func(*config.CustomService) (bool, error) {
+		order = append(order, "regenerate")
+		return true, nil
+	}
+
+	boot := time.Unix(1_000_000, 0)
+	restore := swapDriftSeams(t,
+		func(*config.CustomService) error { return nil },
+		// No config file is newer than the container: nothing drifted on disk.
+		func(*config.CustomService) (time.Time, bool) { return time.Time{}, false },
+		func(string) (time.Time, bool) { return boot, true },
+		func(string) error { order = append(order, "restart"); return nil },
+		func(string) bool { return true },
+	)
+	defer restore()
+
+	if _, err := ReconcileServices(nil); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	if len(order) != 2 || order[0] != "regenerate" || order[1] != "restart" {
+		t.Fatalf("a rewritten unit never reached the running container, got %v", order)
+	}
+}
+
+// A rewritten unit for a service that is not running must not start it.
+func TestReconcileServices_leavesAStoppedServiceStopped(t *testing.T) {
+	reconcileEnv(t)
+	if err := config.SaveStorePreset("probe-svc", []byte("name: probe-svc\nimage: example/probe:1\ndashboard: http://localhost:9999\n")); err != nil {
+		t.Fatalf("store preset: %v", err)
+	}
+	if err := config.SaveCustomService(&config.CustomService{Name: "probe-svc", Image: "example/probe:1", Preset: "probe-svc"}); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	writeQuadlet(t, "probe-svc", true)
+
+	prevEnsure := ensureQuadletFn
+	t.Cleanup(func() { ensureQuadletFn = prevEnsure })
+	ensureQuadletFn = func(*config.CustomService) (bool, error) { return true, nil }
+
+	restarted := false
+	restore := swapDriftSeams(t,
+		func(*config.CustomService) error { return nil },
+		func(*config.CustomService) (time.Time, bool) { return time.Time{}, false },
+		func(string) (time.Time, bool) { return time.Time{}, false },
+		func(string) error { restarted = true; return nil },
+		func(string) bool { return true },
+	)
+	defer restore()
+
+	if _, err := ReconcileServices(nil); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	if restarted {
+		t.Error("a stopped service was started by a unit rewrite")
 	}
 }
