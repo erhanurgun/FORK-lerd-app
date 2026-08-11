@@ -18,6 +18,9 @@
     // A mark in a strip of icons (the rail) answers to their hover and active
     // colours instead, so it carries no tone of its own.
     tint?: boolean;
+    // A bare mark set beside a line of text takes the text's size, the way a
+    // framework's own mark does in the same position.
+    inline?: boolean;
   }
   let {
     name,
@@ -27,7 +30,8 @@
     preset,
     compact = false,
     bare = false,
-    tint = true
+    tint = true,
+    inline = false
   }: Props = $props();
 
   // A caller holding the preset or service passes its declared values; one
@@ -70,7 +74,15 @@
     bare ? '' : compact ? 'w-8 h-8' : 'w-9 h-9 transition-transform group-hover:scale-105'
   );
   const glyph = $derived(
-    bare ? (compact ? 'w-5 h-5' : 'w-7 h-7') : compact ? 'w-4 h-4' : 'w-5 h-5'
+    bare
+      ? inline
+        ? 'w-3.5 h-3.5'
+        : compact
+          ? 'w-5 h-5'
+          : 'w-7 h-7'
+      : compact
+        ? 'w-4 h-4'
+        : 'w-5 h-5'
   );
 </script>
 

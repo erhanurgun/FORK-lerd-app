@@ -78,6 +78,16 @@ describe('ServiceIcon', () => {
     expect(svg.getAttribute('fill')).toBe('none');
   });
 
+  // Beside a line of text the mark answers to the text, not to the icons in a
+  // card, so it draws at the size a framework's own inline mark does.
+  it('draws a bare mark at text size when inline', () => {
+    serviceIcons.set({ mysql: MARK });
+    const { container } = render(ServiceIcon, {
+      props: { name: 'mysql', bare: true, inline: true }
+    });
+    expect(container.querySelector('.mark-glyph')?.getAttribute('class')).toContain('w-3.5');
+  });
+
   it('draws a bare mark at icon size when compact', () => {
     serviceIcons.set({ mysql: MARK });
     const { container } = render(ServiceIcon, { props: { name: 'mysql', bare: true, compact: true } });

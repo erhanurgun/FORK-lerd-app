@@ -68,8 +68,8 @@ Every widget is driven by the same Svelte stores that power the rest of the dash
 Press **`Cmd+K`** (macOS) / **`Ctrl+K`** (Linux/Windows), or **`/`** anywhere outside an input, to open a global command palette overlay. It searches across:
 
 - **Pages**: Dashboard, Sites, Services, System
-- **Sites**: every linked domain, with framework hint
-- **Services**: every core service, with version hint
+- **Sites**: every linked domain, with framework hint, led by the framework's own mark
+- **Services**: every core service, with version hint, led by the mark its preset ships in the same way
 - **Install service**: every installable bundled preset, so searching "install redis" installs it inline without opening the picker modal
 - **Actions**: Link a site, Add a service, Heal failing workers (when any), Check for updates, Open documentation, Open current site in browser, Toggle theme
 
@@ -132,7 +132,7 @@ Selecting a site opens the detail panel with:
 
 The middle panel lists core infrastructure services (MySQL, Redis, PostgreSQL, Meilisearch, RustFS, Mailpit), any installed preset alternates (e.g. MySQL 5.7, MariaDB 11, MongoDB) and admin UIs (phpMyAdmin, pgAdmin, Mongo Express), grouped by service type under labelled sections (Databases, Cache, Messaging, Search, Mail & PDF, Admin UIs, Storage, Testing) in the same order the discovery grid uses, plus grouped per-site workers (Queues, Horizon, Schedules, Workers, Stripe, Reverb) below them.
 
-The header has a **+** button that opens the **preset picker modal**: a one-click installer for the bundled service presets. A search box at the top filters the list by name, description, or image as you type. Multi-version presets like `mysql` and `mariadb` show a version dropdown next to the **Add** button. Already-installed entries are filtered out.
+The header has a **+** button that opens the **preset picker modal**: a one-click installer for the bundled service presets. Every row leads with the mark its preset ships, in the brand colour the preset declares, falling back to the category-tinted glyph the preset names when the store carries no mark for it. A search box at the top filters the list by name, description, or image as you type. Multi-version presets like `mysql` and `mariadb` show a version dropdown next to the **Add** button. Already-installed entries are filtered out.
 
 ![Service preset picker modal](/assets/screenshots/preset-picker-modal.png)
 
