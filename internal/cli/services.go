@@ -902,6 +902,18 @@ func ensureCustomServiceQuadlet(svc *config.CustomService) error {
 	return serviceops.EnsureCustomServiceQuadlet(svc)
 }
 
+// installedServiceDefinition returns the definition a service quadlet should be
+// written from. A site's .lerd.yaml keeps the copy it was linked with, while the
+// installed YAML is the one reconcile keeps in sync with the store, so an
+// install that preferred the site copy would put the service back on an image
+// and a host port the store has since moved away from.
+func installedServiceDefinition(name string, inline *config.CustomService) *config.CustomService {
+	if installed, err := config.LoadCustomService(name); err == nil && installed != nil {
+		return installed
+	}
+	return inline
+}
+
 // newServiceExposeCmd returns the `service expose` command.
 func newServiceExposeCmd() *cobra.Command {
 	var remove bool

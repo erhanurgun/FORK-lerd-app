@@ -289,6 +289,8 @@ If a service with that name already exists locally and the definitions differ, a
 Replace service/mongodb with the version from .lerd.yaml? (y/N)
 ```
 
+Once a service is registered, the registered definition is the one lerd runs. The inline block stays a record of what the project asked for at link time, so an old copy committed months ago cannot put an already-installed service back on the image or the host port it shipped with: `lerd install` regenerates every unit from `~/.config/lerd/services/<name>.yaml`. Use the replace prompt above to move a registered service to a newer inline definition.
+
 ### Custom frameworks
 
 When `lerd init` runs in a project that uses a custom framework (one added with `lerd framework add`), the full framework definition is embedded under `framework_def`. On a fresh machine the definition is restored automatically before linking, no manual `lerd framework add` step needed.
