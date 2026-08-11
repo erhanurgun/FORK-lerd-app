@@ -25,6 +25,7 @@ var (
 // NewNewCmd returns the new command — scaffold a new PHP project.
 func NewNewCmd() *cobra.Command {
 	var frameworkName string
+	var frameworkVersion string
 
 	cmd := &cobra.Command{
 		Use:   "new [name-or-path]",
@@ -39,6 +40,7 @@ run without a terminal and the questions are too, so scripts keep working.
   lerd new                                # ask for the name, framework and version
   lerd new myapp                          # ask which framework to use
   lerd new myapp --framework=symfony      # scaffold Symfony, no questions
+  lerd new myapp --framework=laravel --framework-version=11   # scaffold an older major
   lerd new /path/to/myapp                 # create at an absolute path
   lerd new myapp -- --no-interaction      # pass extra args to the scaffold command
 
@@ -52,14 +54,23 @@ Every framework's scaffold command comes from its YAML definition:
 		SilenceUsage:          true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			target, extraArgs := newArgs(args, cmd.ArgsLenAtDash())
-			return runNew(target, frameworkName, extraArgs)
+			return runNew(target, frameworkName, frameworkVersion, extraArgs)
 		},
 	}
 
 	cmd.Flags().StringVar(&frameworkName, "framework", "",
 		"Framework to scaffold; asked on a terminal when omitted, "+defaultScaffoldFramework+" otherwise")
+	cmd.Flags().StringVar(&frameworkVersion, "framework-version", "",
+		"Major to scaffold; requires --framework, defaults to the latest the store publishes")
 
 	return cmd
+}
+
+// newVersionNeedsFramework reports a version with no framework to apply it to.
+// The wizard would ask which framework and the typed version would be dropped
+// against whatever came back, so the flag pair is refused instead.
+func newVersionNeedsFramework(frameworkName, frameworkVersion string) bool {
+	return frameworkVersion != "" && frameworkName == ""
 }
 
 // newArgs splits the command line into the target and the arguments to hand the
@@ -184,9 +195,12 @@ func runScaffold(plan scaffold, workDir, version string) error {
 	return cmd.Run()
 }
 
-func runNew(target, frameworkName string, extraArgs []string) error {
+func runNew(target, frameworkName, frameworkVersion string, extraArgs []string) error {
 	interactive := isInteractive()
-	frameworkVersion := ""
+
+	if newVersionNeedsFramework(frameworkName, frameworkVersion) {
+		return fmt.Errorf("--framework-version needs a --framework to apply it to")
+	}
 
 	// Ask for what the command was not told. A terminal gets the catalogue and
 	// the majors published for whatever it picks; anything else keeps the

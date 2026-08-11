@@ -171,3 +171,11 @@ If a step fails, you are prompted to continue or abort:
 |---|---|
 | `--all` / `-a` | Select all steps without showing the prompt (CI/automation) |
 | `--skip-open` | Skip opening the browser at the end |
+| `--list-steps` | Print the steps this directory would run as JSON and exit, configuring nothing |
+| `--step "<label>"` | Run only the named step, repeatable, skipping the configure phase |
+
+`--list-steps` and `--step` are how a caller with no terminal works through the
+same list the selector shows: the dashboard's site wizard enumerates the steps
+for a project, shows them as checkboxes, and runs the ticked ones one at a time.
+Naming a step this directory does not offer fails with the list it does offer,
+so a stale plan is reported rather than half-run.

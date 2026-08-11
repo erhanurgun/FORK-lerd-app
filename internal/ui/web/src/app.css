@@ -312,3 +312,44 @@ button {
 .dark .mark-brand {
   color: var(--mark-tint-dark);
 }
+
+/* Panels that appear where nothing was, most of all modals, arrive rather than
+   cut in. Entry-only CSS animations: nothing waits on them to leave, so a
+   closing panel is gone the moment its state says so. */
+@keyframes lerd-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes lerd-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.lerd-fade-in {
+  animation: lerd-fade-in 0.15s ease-out;
+}
+.lerd-panel-in {
+  animation: lerd-panel-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Someone who asked their system for less motion gets none of it, including the
+   transitions Svelte compiles to CSS animations. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
