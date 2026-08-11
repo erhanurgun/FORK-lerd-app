@@ -108,6 +108,12 @@ type EntityAction struct {
 	// entity (bucket archives need tar, which the mc image does not carry).
 	Image string   `yaml:"image,omitempty" json:"image,omitempty"`
 	Env   []string `yaml:"env,omitempty" json:"env,omitempty"`
+	// ExpectedErrors lists the complaints this action always makes, matched as
+	// substrings of the engine's own line, so a load that only produced those
+	// reads as the success it is. For the imports whose dump necessarily talks
+	// to objects the target already has; never for anything a user's data can
+	// cause.
+	ExpectedErrors []string `yaml:"expected_errors,omitempty" json:"expected_errors,omitempty"`
 }
 
 // UnmarshalYAML accepts either a bare command string or a full mapping.

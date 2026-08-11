@@ -38,7 +38,8 @@ func migrateExecWorkerPlists() {
 			name := strings.TrimSuffix(filepath.Base(p), ".plist")
 			domain := fmt.Sprintf("gui/%d", os.Getuid())
 			exec.Command("launchctl", "bootout", domain+"/com.lerd."+name).Run() //nolint:errcheck
-			os.Remove(p)                                                         //nolint:errcheck
+			config.GuardRealWrite(p)
+			os.Remove(p) //nolint:errcheck
 		}
 	}
 }
