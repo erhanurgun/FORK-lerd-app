@@ -105,8 +105,8 @@ func TestLoadPreset_PgAdmin(t *testing.T) {
 	if !foundFramingCfg {
 		t.Errorf("pgadmin preset must ship config_local.py clearing X_FRAME_OPTIONS for iframe embedding")
 	}
-	if !p.DashboardExternal {
-		t.Errorf("pgadmin must set dashboard_external so lerd-ui proxies it same-origin and its session cookie survives the iframe")
+	if !p.DashboardProxy {
+		t.Errorf("pgadmin must set dashboard_proxy so lerd-ui proxies it same-origin and its session cookie survives the iframe")
 	}
 }
 
@@ -119,8 +119,8 @@ func TestLoadPreset_MongoExpress(t *testing.T) {
 	if len(p.DependsOn) != 1 || p.DependsOn[0] != "mongo" {
 		t.Errorf("mongo-express should depend on mongo, got %v", p.DependsOn)
 	}
-	if !p.DashboardExternal {
-		t.Errorf("mongo-express must set dashboard_external so lerd-ui proxies it same-origin and its session cookie survives the iframe")
+	if !p.DashboardProxy {
+		t.Errorf("mongo-express must set dashboard_proxy so lerd-ui proxies it same-origin and its session cookie survives the iframe")
 	}
 	if _, ok := p.Environment["ME_CONFIG_SITE_BASEURL"]; ok {
 		t.Errorf("the proxy base URL must be injected at generation, not stored in the preset, or a binary that predates the proxy moves the app off / and 404s its own dashboard link")

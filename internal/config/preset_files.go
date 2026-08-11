@@ -34,6 +34,9 @@ func DashboardProxyPath(name string) string {
 // (Preset set and still resolvable) that asked for it qualifies; a user-defined
 // custom service with dashboard_external keeps the new-tab behavior.
 //
+// Either flag asks for the proxy. They differ in what an older binary does with
+// them, which is why a preset picks one deliberately: see Preset.DashboardProxy.
+//
 // The flag is read from the preset rather than the copy saved when the service
 // was installed, so a store definition that moves a dashboard behind the proxy
 // reaches services installed before it, the way file mounts do.
@@ -47,7 +50,7 @@ func DashboardProxied(svc *CustomService) bool {
 		return false
 	}
 	p, err := LoadPreset(svc.Preset)
-	return err == nil && p.DashboardExternal
+	return err == nil && (p.DashboardProxy || p.DashboardExternal)
 }
 
 // PresetProxyEnv returns the container env that makes a bundled upstream serve

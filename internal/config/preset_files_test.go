@@ -166,6 +166,36 @@ func TestMongoExpressProxyEnvInjectedByPreset(t *testing.T) {
 	}
 }
 
+// A preset whose mount path the binary supplies has to ask for the proxy with
+// the flag an older binary ignores. dashboard_external is understood by every
+// released binary that proxies, so it would start routing the overlay to
+// /_svc/<name>/ without ever telling the upstream it moved, and the dashboard
+// would 404 on installs that did nothing but pick up a store refresh.
+func TestGoMountedPresetsAskForTheProxyWithTheInertFlag(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	for _, name := range []string{"pgadmin", "mongo-express"} {
+		p, err := LoadPreset(name)
+		if err != nil {
+			t.Fatalf("LoadPreset(%s): %v", name, err)
+		}
+		if p.DashboardExternal {
+			t.Errorf("%s takes its mount path from the binary, so it must not use dashboard_external", name)
+		}
+		if !p.DashboardProxy {
+			t.Errorf("%s must set dashboard_proxy to be served same-origin", name)
+		}
+	}
+	// phpmyadmin carries its own mount path in the YAML, so every binary that
+	// proxies it reaches it and the older flag stays correct.
+	p, err := LoadPreset("phpmyadmin")
+	if err != nil {
+		t.Fatalf("LoadPreset(phpmyadmin): %v", err)
+	}
+	if !p.DashboardExternal {
+		t.Error("phpmyadmin ships its own alias, so it should keep dashboard_external and reach older binaries too")
+	}
+}
+
 // A binary that knows the proxy must not inject the prefix when the store
 // preset backing an installed service does not ask to be proxied: the env moves
 // the app off "/", while the dashboard link still points there, and the overlay

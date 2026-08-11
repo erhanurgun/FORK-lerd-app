@@ -60,7 +60,20 @@ type PresetPlatformImage struct {
 // the user picks a tag, Resolve() materialises a concrete CustomService whose
 // Name and Image are version-specific while every other field stays shared.
 type Preset struct {
-	CustomService     `yaml:",inline"`
+	CustomService `yaml:",inline"`
+	// DashboardProxy asks lerd-ui to serve this dashboard same-origin under
+	// /_svc/<name>/, for a preset whose mount path the binary supplies rather
+	// than the YAML (pgadmin's X-Script-Name header, mongo-express's base-URL
+	// env; see PresetProxyHeader / PresetProxyEnv).
+	//
+	// It exists alongside dashboard_external because that flag is not safe here:
+	// a released binary understands it and starts proxying, without the half
+	// that tells the upstream it moved, so the overlay gets the upstream's own
+	// 404. A binary that predates this field ignores it and keeps behaving
+	// exactly as it does today. A preset carrying its own mount path in the YAML
+	// (rabbitmq's path prefix, phpmyadmin's apache alias) needs no such care and
+	// keeps using dashboard_external, which works on every binary.
+	DashboardProxy    bool                  `yaml:"dashboard_proxy,omitempty" json:"dashboard_proxy,omitempty"`
 	Versions          []PresetVersion       `yaml:"versions,omitempty"`
 	DefaultVersion    string                `yaml:"default_version,omitempty"`
 	Default           bool                  `yaml:"default,omitempty"`
