@@ -63,25 +63,29 @@ func ReconcileServices(emit func(PhaseEvent)) (ReconcileResult, error) {
 			}
 		}
 		unitInstalled := UnitInstalledFn("lerd-" + svc.Name)
+		// Regenerate the quadlet when the unit is missing, or when the definition
+		// changed. WriteQuadletDiff is a no-op when the content is identical, so a
+		// client_shims-only change (which never appears in the quadlet) is free.
+		//
+		// Before the drift restart below, not after: a definition that adds a file
+		// mount changes the unit too, and restarting the old one brings the
+		// container back without the mount, leaving it a pass behind until
+		// something restarts it again.
+		if !unitInstalled || slices.Contains(res.DefinitionsRefreshed, svc.Name) {
+			if err := ensureQuadletFn(svc); err != nil {
+				errs = append(errs, fmt.Errorf("regenerating quadlet for %s: %w", svc.Name, err))
+				continue
+			}
+			if !unitInstalled {
+				res.QuadletsRegenerated = append(res.QuadletsRegenerated, svc.Name)
+			}
+		}
 		if unitInstalled {
 			if applied, err := RestartIfConfigDrifted(svc.Name, svc.Preset); err != nil {
 				errs = append(errs, err)
 			} else if applied {
 				res.ConfigsApplied = append(res.ConfigsApplied, svc.Name)
 			}
-			if !slices.Contains(res.DefinitionsRefreshed, svc.Name) {
-				continue
-			}
-		}
-		// Regenerate the quadlet when the unit is missing, or when the definition
-		// changed. WriteQuadletDiff is a no-op when the content is identical, so a
-		// client_shims-only change (which never appears in the quadlet) is free.
-		if err := ensureQuadletFn(svc); err != nil {
-			errs = append(errs, fmt.Errorf("regenerating quadlet for %s: %w", svc.Name, err))
-			continue
-		}
-		if !unitInstalled {
-			res.QuadletsRegenerated = append(res.QuadletsRegenerated, svc.Name)
 		}
 	}
 

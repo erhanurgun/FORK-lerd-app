@@ -241,13 +241,20 @@
     {#if isDocs}
       <DocsViewer />
     {:else}
-      <iframe
-        bind:this={iframeEl}
-        onload={onIframeLoad}
-        src={iframeSrc}
-        class="flex-1 w-full bg-white border-0"
-        title={d.label || d.name}
-      ></iframe>
+      <!-- Keyed on the source so switching dashboards tears the frame down and
+           builds a new one. Re-pointing the old frame is a navigation, which
+           runs the embedded app's beforeunload handler; an admin UI that
+           registers one (pgAdmin) then blocks the swap behind a native confirm
+           the overlay has no way to answer. -->
+      {#key iframeSrc}
+        <iframe
+          bind:this={iframeEl}
+          onload={onIframeLoad}
+          src={iframeSrc}
+          class="flex-1 w-full bg-white border-0"
+          title={d.label || d.name}
+        ></iframe>
+      {/key}
     {/if}
   </div>
 {/if}

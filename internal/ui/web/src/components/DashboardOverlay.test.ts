@@ -99,6 +99,23 @@ describe('DashboardOverlay', () => {
     expect(container.querySelector('.mark-brand')?.getAttribute('style')).toContain('--mark-tint: #0f6cbd');
   });
 
+  // Switching dashboards must replace the frame, not point the old one somewhere
+  // new. Navigating it runs the embedded app's beforeunload handler, and an admin
+  // UI that registers one (pgAdmin) puts up a native confirm the overlay can't
+  // dismiss: the header moves on while the frame stays stuck behind the dialog.
+  it('builds a fresh frame for each dashboard instead of navigating the old one', async () => {
+    dashboardOpen.set({ name: 'pgadmin', label: 'pgAdmin', dashboard: '/_svc/pgadmin/' });
+    const { container } = render(DashboardOverlay);
+    const first = container.querySelector('iframe');
+    expect(first?.getAttribute('src')).toBe('/_svc/pgadmin/');
+
+    dashboardOpen.set({ name: 'phpmyadmin', label: 'phpMyAdmin', dashboard: '/_svc/phpmyadmin/' });
+    await waitFor(() => {
+      expect(container.querySelector('iframe')?.getAttribute('src')).toBe('/_svc/phpmyadmin/');
+    });
+    expect(container.querySelector('iframe')).not.toBe(first);
+  });
+
   // docs and profiler are not services and ship no mark; their built-in glyph
   // has to survive the switch to the shared icon.
   it('keeps the built-in glyph for a dashboard no service backs', () => {
