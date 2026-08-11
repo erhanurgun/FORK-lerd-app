@@ -66,6 +66,22 @@ func autoFetchFramework(name, version string) (*config.Framework, error) {
 	return fw, nil
 }
 
+// fetchFrameworkIcon caches a framework's mark, <name>.svg beside the versioned
+// definitions it belongs to. The mark is per family rather than per version, so
+// it is fetched by name and shared by every version. Best effort throughout: a
+// framework that ships no mark, an unreachable store, or markup the sanitizer
+// refuses all leave the framework rendering as its label alone.
+func (c *Client) fetchFrameworkIcon(name string) {
+	if _, ok := config.FrameworkIcon(name); ok {
+		return
+	}
+	data, err := c.fetch(name + ".svg")
+	if err != nil {
+		return
+	}
+	_ = config.SaveStoreFrameworkIcon(name, data)
+}
+
 // NewClient returns a store client with default settings.
 func NewClient() *Client {
 	urls := origin.StoreBaseURLs()
@@ -192,6 +208,9 @@ func (c *Client) FetchFramework(name, version string) (*config.Framework, error)
 	if fw.Name == "" {
 		return nil, fmt.Errorf("invalid framework definition for %s@%s: missing name", name, version)
 	}
+	// Every path that caches a remote definition comes through here, so the mark
+	// is pulled alongside it in one place rather than at each of the callers.
+	c.fetchFrameworkIcon(name)
 
 	return &fw, nil
 }

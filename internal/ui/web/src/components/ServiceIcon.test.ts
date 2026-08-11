@@ -49,6 +49,35 @@ describe('ServiceIcon', () => {
     expect(container.querySelector('svg')?.getAttribute('class')).toContain('w-4');
   });
 
+  it('drops the plate and draws a bigger mark when bare', () => {
+    const { container } = render(ServiceIcon, { props: { name: 'mysql', bare: true } });
+    expect(box(container).className).not.toContain('rounded-lg');
+    expect(box(container).className).not.toContain('bg-indigo');
+    expect(box(container).className).toContain('text-indigo');
+    expect(container.querySelector('svg')?.getAttribute('class')).toContain('w-7');
+  });
+
+  it('takes the brand tone as ink when bare, with no tinted background', () => {
+    serviceIcons.set({ mysql: MARK });
+    presets.set([{ name: 'mysql', category: 'databases', icon: 'database', color: '#e02419' }]);
+    const { container } = render(ServiceIcon, { props: { name: 'mysql', bare: true } });
+    expect(box(container).className).toContain('mark-brand');
+    expect(box(container).className).not.toContain('mark-tint');
+    expect(box(container).getAttribute('style')).toContain('--mark-tint: #e02419');
+  });
+
+  // mark-ink sizes and fills whatever svg sits directly inside it, which is the
+  // store mark's contract, not the built-in glyph's: a branded preset shipping
+  // no mark once drew its outline glyph filled and unbounded.
+  it('leaves the built-in glyph its own box and stroke when bare and branded', () => {
+    presets.set([{ name: 'rustfs', category: 'storage', icon: 'storage', color: '#0196d0' }]);
+    const { container } = render(ServiceIcon, { props: { name: 'rustfs', bare: true } });
+    expect(box(container).className).not.toContain('mark-ink');
+    const svg = container.querySelector('svg')!;
+    expect(svg.getAttribute('class')).toContain('w-7');
+    expect(svg.getAttribute('fill')).toBe('none');
+  });
+
   it('renders the service glyph', () => {
     const { container } = render(ServiceIcon, { props: { name: 'mysql' } });
     expect(container.querySelector('svg')?.innerHTML.length).toBeGreaterThan(0);
@@ -59,11 +88,11 @@ describe('ServiceIcon', () => {
     serviceIcons.set({ mysql: MARK });
     presets.set([{ name: 'mysql', category: 'databases', icon: 'database', color: '#e02419' }]);
     const { container } = render(ServiceIcon, { props: { name: 'mysql' } });
-    expect(container.querySelector('.svc-mark path')?.getAttribute('d')).toBe('M3 3h18v18H3z');
-    expect(box(container).className).toContain('svc-tint');
+    expect(container.querySelector('.mark-glyph path')?.getAttribute('d')).toBe('M3 3h18v18H3z');
+    expect(box(container).className).toContain('mark-tint');
     expect(box(container).className).not.toContain('indigo');
-    expect(box(container).getAttribute('style')).toContain('--svc-tint: #e02419');
-    expect(box(container).getAttribute('style')).toContain('--svc-tint-dark: #e02419');
+    expect(box(container).getAttribute('style')).toContain('--mark-tint: #e02419');
+    expect(box(container).getAttribute('style')).toContain('--mark-tint-dark: #e02419');
   });
 
   // A versioned member carries no mark of its own; it draws its family's.
@@ -73,14 +102,14 @@ describe('ServiceIcon', () => {
       { name: 'mariadb-11-8', status: 'active', site_count: 0, preset: 'mariadb', category: 'databases' }
     ]);
     const { container } = render(ServiceIcon, { props: { name: 'mariadb-11-8' } });
-    expect(container.querySelector('.svc-mark path')).not.toBeNull();
+    expect(container.querySelector('.mark-glyph path')).not.toBeNull();
   });
 
   // A bundled preset, or a cache written before icons existed, keeps rendering.
   it('falls back to the declared glyph and category tint with no store mark', () => {
     presets.set([{ name: 'mysql', category: 'databases', icon: 'database' }]);
     const { container } = render(ServiceIcon, { props: { name: 'mysql' } });
-    expect(container.querySelector('.svc-mark')).toBeNull();
+    expect(container.querySelector('.mark-glyph')).toBeNull();
     expect(box(container).className).toContain('indigo');
   });
 

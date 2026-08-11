@@ -43,7 +43,7 @@ describe('brandTint', () => {
 
 describe('brandTintStyle', () => {
   it('declares both tones as custom properties', () => {
-    expect(brandTintStyle('#e02419')).toBe('--svc-tint:#e02419;--svc-tint-dark:#e02419');
+    expect(brandTintStyle('#e02419')).toBe('--mark-tint:#e02419;--mark-tint-dark:#e02419');
   });
 
   it('is empty when there is no usable colour, so the category tint stands', () => {

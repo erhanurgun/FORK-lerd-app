@@ -262,25 +262,53 @@ button {
   border-color: var(--color-lerd-border);
 }
 
-/* A store preset brings its own mark and brand colour, so neither can be a
-   Tailwind class: the colour arrives as a custom property and the badge derives
-   its background from it at low alpha, the glyph taking the solid tone. Each
-   theme gets its own tone (see brandTint) so a dark brand still reads on the
-   dark card. The mark itself is injected markup, hence the global rule. */
-.svc-tint {
-  background-color: color-mix(in srgb, var(--svc-tint) 12%, transparent);
-  color: var(--svc-tint);
+/* A definition in either store brings its own mark and brand colour, so neither
+   can be a Tailwind class: the colour arrives as a custom property and the badge
+   derives its background from it at low alpha, the glyph taking the solid tone.
+   Each theme gets its own tone (see brandTint) so a dark brand still reads on
+   the dark card. The mark itself is injected markup, hence the global rules. */
+.mark-tint {
+  background-color: color-mix(in srgb, var(--mark-tint) 12%, transparent);
+  color: var(--mark-tint);
 }
-.dark .svc-tint {
-  background-color: color-mix(in srgb, var(--svc-tint-dark) 16%, transparent);
-  color: var(--svc-tint-dark);
+.dark .mark-tint {
+  background-color: color-mix(in srgb, var(--mark-tint-dark) 16%, transparent);
+  color: var(--mark-tint-dark);
 }
-.svc-mark {
+.mark-glyph {
   display: block;
 }
-.svc-mark > svg {
+.mark-glyph > svg,
+.mark-ink > svg,
+.mark-inherit > svg {
   width: 100%;
   height: 100%;
   fill: currentColor;
   stroke: none;
+}
+
+/* A framework mark sits inline beside its label. Inside a badge it takes the
+   badge's own colour, so the pill stays one object; standing on its own it takes
+   the brand tone, with no background either way. */
+.mark-inherit {
+  display: inline-flex;
+  flex: none;
+}
+.mark-ink {
+  display: inline-flex;
+  flex: none;
+  color: var(--mark-tint);
+}
+.dark .mark-ink {
+  color: var(--mark-tint-dark);
+}
+
+/* The brand tone on its own, for a plateless mark that holds a sized glyph
+   rather than the raw svg. It says nothing about what it contains, so a
+   built-in outline glyph keeps its own box and its stroke. */
+.mark-brand {
+  color: var(--mark-tint);
+}
+.dark .mark-brand {
+  color: var(--mark-tint-dark);
 }

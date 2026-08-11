@@ -5,7 +5,6 @@ import { describe, it, expect, beforeEach } from 'vitest';
 // stay focused on tab visibility.
 import { vi } from 'vitest';
 vi.mock('./ServiceHeader.svelte', () => import('./ServiceDetail.stub.svelte'));
-vi.mock('./ServiceSiteBadges.svelte', () => import('./ServiceDetail.stub.svelte'));
 vi.mock('./PresetSuggestionBanner.svelte', () => import('./ServiceDetail.stub.svelte'));
 vi.mock('./ServiceDatabasesTab.svelte', () => import('./ServiceDetail.stub.svelte'));
 vi.mock('./ServiceEntitiesTab.svelte', () => import('./ServiceDetail.stub.svelte'));
