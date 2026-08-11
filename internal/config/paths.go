@@ -160,6 +160,20 @@ func SystemdUserDir() string {
 	return filepath.Join(xdgConfigHome(), "systemd", "user")
 }
 
+// LaunchAgentsDir returns the directory macOS keeps lerd's launchd units in,
+// empty on Linux, whose unit dirs follow the XDG vars instead. This one follows
+// HOME, which is why isolating only the XDG vars leaves it exposed.
+func LaunchAgentsDir() string {
+	if runtime.GOOS != "darwin" {
+		return ""
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return ""
+	}
+	return filepath.Join(home, "Library", "LaunchAgents")
+}
+
 // PHPImageHashFile returns the path to the stored PHP-FPM Containerfile hash.
 // InstalledVersionFile records the lerd version whose `lerd install` last ran,
 // so a binary replaced by a package manager can be told from one this install
