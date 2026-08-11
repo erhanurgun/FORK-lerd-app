@@ -454,12 +454,19 @@ func SaveProjectAnswers(cwd string, answers ProjectAnswers) error {
 // carrying over the parts of an existing config the questions never ask about
 // (the public dir, the app URL, extra domains, custom workers).
 func projectConfigFromAnswers(cwd string, defaults *config.ProjectConfig, a ProjectAnswers, httpsAvailable bool) (*config.ProjectConfig, error) {
+	// An empty answer is the dashboard not asking, not the user clearing the
+	// pin: the question is only filled in where lerd manages Node.
+	nodeVersion := a.NodeVersion
+	if nodeVersion == "" {
+		nodeVersion = defaults.NodeVersion
+	}
+
 	cfg := &config.ProjectConfig{
 		PublicDir:     defaults.PublicDir,
 		Secured:       persistedSecured(a.Secured, httpsAvailable, defaults.Secured),
 		AppURL:        defaults.AppURL,
 		Domains:       defaults.Domains,
-		NodeVersion:   a.NodeVersion,
+		NodeVersion:   nodeVersion,
 		CustomWorkers: defaults.CustomWorkers,
 	}
 
@@ -475,9 +482,6 @@ func projectConfigFromAnswers(cwd string, defaults *config.ProjectConfig, a Proj
 			cfg.Proxy.PortEnvKey = defaults.Proxy.PortEnvKey
 			cfg.Proxy.HostEnvKey = defaults.Proxy.HostEnvKey
 			cfg.Proxy.InjectHost = defaults.Proxy.InjectHost
-		}
-		if cfg.NodeVersion == "" {
-			cfg.NodeVersion = defaults.NodeVersion
 		}
 		return cfg, nil
 
@@ -495,9 +499,6 @@ func projectConfigFromAnswers(cwd string, defaults *config.ProjectConfig, a Proj
 			cfg.Container.BuildContext = defaults.Container.BuildContext
 			cfg.Container.Target = defaults.Container.Target
 			cfg.Container.SSL = defaults.Container.SSL
-		}
-		if cfg.NodeVersion == "" {
-			cfg.NodeVersion = defaults.NodeVersion
 		}
 		return cfg, nil
 	}

@@ -211,3 +211,24 @@ func TestSaveProjectAnswersRejectsProxyWithoutPort(t *testing.T) {
 		t.Fatal("a proxy answer with no port should be refused")
 	}
 }
+
+// A pinned Node version is the project's, not the wizard's to drop. The
+// dashboard leaves the field empty on a machine where lerd does not manage
+// Node, and saving that back must not erase what .lerd.yaml already pins.
+func TestProjectConfigFromAnswersKeepsAPinnedNodeVersion(t *testing.T) {
+	defaults := &config.ProjectConfig{NodeVersion: "20"}
+
+	for _, a := range []ProjectAnswers{
+		{Kind: ProjectKindPHP, PHPVersion: "8.3"},
+		{Kind: ProjectKindProxy, ProxyCommand: "npm run dev", ProxyPort: 5173},
+		{Kind: ProjectKindContainer, ContainerPort: 8080},
+	} {
+		cfg, err := projectConfigFromAnswers(t.TempDir(), defaults, a, true)
+		if err != nil {
+			t.Fatalf("%s: %v", a.Kind, err)
+		}
+		if cfg.NodeVersion != "20" {
+			t.Errorf("%s: node_version = %q, want the pin kept", a.Kind, cfg.NodeVersion)
+		}
+	}
+}
