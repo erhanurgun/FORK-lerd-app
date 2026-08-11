@@ -1309,5 +1309,6 @@
   "docs_load_failed": "Halaman ini tidak dapat dimuat.",
   "docs_no_results": "Tidak ada halaman yang cocok.",
   "docs_pick_page": "Pilih halaman untuk dibaca.",
-  "docs_search_placeholder": "Cari di dokumentasi"
+  "docs_search_placeholder": "Cari di dokumentasi",
+  "queries_copyPath": "Salin Path "
 }

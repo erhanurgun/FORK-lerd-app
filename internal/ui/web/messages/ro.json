@@ -1309,5 +1309,6 @@
   "docs_load_failed": "Această pagină nu a putut fi încărcată.",
   "docs_no_results": "Nicio pagină nu se potrivește.",
   "docs_pick_page": "Alege o pagină de citit.",
-  "docs_search_placeholder": "Caută în documentație"
+  "docs_search_placeholder": "Caută în documentație",
+  "queries_copyPath": "Copiază calea"
 }

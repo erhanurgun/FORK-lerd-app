@@ -1309,5 +1309,6 @@
   "worktreeMgr_removeTitle": "¿Eliminar el worktree {branch}?",
   "worktreeMgr_removing": "Eliminando…",
   "worktreeMgr_runMigrations": "Ejecutar migraciones tras crearlo",
-  "worktreeMgr_title": "Gestionar worktrees"
+  "worktreeMgr_title": "Gestionar worktrees",
+  "queries_copyPath": "Copiar ruta"
 }

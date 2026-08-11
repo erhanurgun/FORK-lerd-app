@@ -1309,5 +1309,6 @@
   "docs_load_failed": "Nie udało się wczytać tej strony.",
   "docs_no_results": "Żadna strona nie pasuje.",
   "docs_pick_page": "Wybierz stronę do przeczytania.",
-  "docs_search_placeholder": "Szukaj w dokumentacji"
+  "docs_search_placeholder": "Szukaj w dokumentacji",
+  "queries_copyPath": "Kopiuj ścieżkę"
 }

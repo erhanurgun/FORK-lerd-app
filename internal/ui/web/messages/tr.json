@@ -1309,5 +1309,6 @@
   "docs_load_failed": "Bu sayfa yüklenemedi.",
   "docs_no_results": "Eşleşen sayfa yok.",
   "docs_pick_page": "Okumak için bir sayfa seç.",
-  "docs_search_placeholder": "Belgelerde ara"
+  "docs_search_placeholder": "Belgelerde ara",
+  "queries_copyPath": "Yolu kopyala"
 }

@@ -1309,5 +1309,6 @@
   "docs_load_failed": "このページを読み込めませんでした。",
   "docs_no_results": "一致するページはありません。",
   "docs_pick_page": "読むページを選択してください。",
-  "docs_search_placeholder": "ドキュメントを検索"
+  "docs_search_placeholder": "ドキュメントを検索",
+  "queries_copyPath": "パスをコピー"
 }

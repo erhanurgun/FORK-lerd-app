@@ -1309,5 +1309,6 @@
   "docs_load_failed": "Impossibile caricare questa pagina.",
   "docs_no_results": "Nessuna pagina corrisponde.",
   "docs_pick_page": "Scegli una pagina da leggere.",
-  "docs_search_placeholder": "Cerca nella documentazione"
+  "docs_search_placeholder": "Cerca nella documentazione",
+  "queries_copyPath": "Copia il percorso"
 }

@@ -1309,5 +1309,6 @@
   "docs_load_failed": "Không thể tải trang này.",
   "docs_no_results": "Không có trang nào khớp.",
   "docs_pick_page": "Chọn một trang để đọc.",
-  "docs_search_placeholder": "Tìm trong tài liệu"
+  "docs_search_placeholder": "Tìm trong tài liệu",
+  "queries_copyPath": "Sao chép đường dẫn"
 }

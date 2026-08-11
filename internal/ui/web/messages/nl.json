@@ -1309,5 +1309,6 @@
   "docs_load_failed": "Deze pagina kon niet worden geladen.",
   "docs_no_results": "Geen pagina komt overeen.",
   "docs_pick_page": "Kies een pagina om te lezen.",
-  "docs_search_placeholder": "Zoek in de documentatie"
+  "docs_search_placeholder": "Zoek in de documentatie",
+  "queries_copyPath": "Pad kopiëren"
 }
