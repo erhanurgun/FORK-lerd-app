@@ -46,6 +46,7 @@
 | `lerd new` | Ask for the project name, framework and version, then scaffold, link and set it up |
 | `lerd new <name-or-path>` | Ask which framework to scaffold, then take the project through link and setup |
 | `lerd new <name> --framework=<name>` | Scaffold a specific framework, skipping the question |
+| `lerd new <name> --framework=<name> --framework-version=<major>` | Scaffold an older major instead of the latest |
 | `lerd new <name> -- <extra args>` | Pass extra args to the scaffold command |
 
 ## Project setup
@@ -57,6 +58,8 @@
 | `lerd setup` | Bootstrap a project: runs the lerd init wizard first, then a checkbox list of steps |
 | `lerd setup --all` | Run init (or apply saved `.lerd.yaml`) and all steps without prompting (useful in CI) |
 | `lerd setup --skip-open` | Same as above but don't open the browser at the end |
+| `lerd setup --list-steps` | Print the steps this directory would run as JSON, without configuring or running anything |
+| `lerd setup --step "<label>"` | Run only the named step; repeatable, and it skips the configure phase |
 
 Setup steps include common tasks (composer install, npm install, lerd env) plus framework-specific commands defined in the framework's `setup` field (e.g. migrations, storage links). See [Framework definitions](/usage/framework-definitions) for how to define custom setup commands.
 

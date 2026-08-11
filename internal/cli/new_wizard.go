@@ -107,6 +107,27 @@ func scaffoldCatalogue() []scaffoldChoice {
 	return out
 }
 
+// FrameworkChoice is one framework a new project can be scaffolded from, as the
+// dashboard's create step sees it.
+type FrameworkChoice struct {
+	Name     string   `json:"name"`
+	Label    string   `json:"label"`
+	Versions []string `json:"versions,omitempty"`
+	Latest   string   `json:"latest,omitempty"`
+}
+
+// FrameworkCatalogue lists what a new project can be scaffolded from: the same
+// catalogue the terminal wizard offers, so both ask from the store rather than
+// from a list of their own.
+func FrameworkCatalogue() []FrameworkChoice {
+	catalogue := scaffoldCatalogue()
+	out := make([]FrameworkChoice, 0, len(catalogue))
+	for _, c := range catalogue {
+		out = append(out, FrameworkChoice{Name: c.Name, Label: c.Label, Versions: c.Versions, Latest: c.Latest})
+	}
+	return out
+}
+
 // appendVersion adds a major to a version list, skipping blanks (a legacy
 // unversioned definition) and repeats.
 func appendVersion(versions []string, v string) []string {

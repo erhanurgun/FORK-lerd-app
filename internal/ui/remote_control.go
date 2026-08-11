@@ -29,7 +29,6 @@ var loopbackOnlyRoutes = []string{
 	"/api/lerd/quit",            // exits the dashboard process
 	"/api/lerd/update-terminal", // spawns a terminal emulator on the host
 	"/api/logs/terminal",        // spawns a terminal emulator on the host
-	"/api/sites/link",           // links arbitrary host filesystem paths
 	"/api/browse",               // browses host filesystem
 	"/api/push/test",            // fires notifications onto subscribed devices
 }
@@ -43,6 +42,10 @@ var loopbackOnlyRoutePrefixes = []string{
 	// Replaces executables on the host's PATH, so it stays with the terminal
 	// and link routes rather than behind Basic auth alone.
 	"/api/tools",
+	// Scaffolds, links and sets up projects at arbitrary host paths, and reads
+	// what a directory would be configured with to do it.
+	"/api/runs",
+	"/api/project",
 }
 
 // loopbackOnlySiteSubactions are the per-site actions (under

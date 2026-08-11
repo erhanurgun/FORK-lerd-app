@@ -197,23 +197,7 @@ func runWizard(cwd string, defaults *config.ProjectConfig) (*config.ProjectConfi
 		}
 	}
 
-	phpDefault := defaults.PHPVersion
-	if phpDefault == "" {
-		if v, detErr := phpPkg.DetectVersion(cwd); detErr == nil {
-			phpDefault = v
-		} else {
-			phpDefault = gcfg.PHP.DefaultVersion
-		}
-	}
-	phpMin, phpMax := "", ""
-	if framework != "" {
-		// Skip a guessed definition's range so a legacy project keeps its real
-		// detected default (Laravel 6 on 7.4, not the borrowed Laravel 10 8.1).
-		if fw, fwOk := config.GetFrameworkForDir(framework, cwd); fwOk && !fw.VersionGuessed {
-			phpMin, phpMax = fw.PHP.Min, fw.PHP.Max
-		}
-	}
-	phpDefault = phpPkg.ClampToRange(phpDefault, phpMin, phpMax)
+	phpDefault := wizardPHPDefault(cwd, defaults, gcfg, framework)
 
 	// Database is picked as a single choice (sqlite | mysql family member |
 	// postgres family member), while other services are a multi-select. This
@@ -223,58 +207,8 @@ func runWizard(cwd string, defaults *config.ProjectConfig) (*config.ProjectConfi
 	// extra Database options instead of polluting the Services list.
 	dbFramework, _ := config.GetFrameworkForDir(framework, cwd)
 	dbOptions, dbNameSet := buildDatabaseOptions(dbFramework)
-	defaultPresets := knownServices()
-	nonDBServiceOptions := make([]string, 0, len(defaultPresets))
-	for _, svc := range defaultPresets {
-		if !dbNameSet[svc] {
-			nonDBServiceOptions = append(nonDBServiceOptions, svc)
-		}
-	}
-	if customs, err := config.ListCustomServices(); err == nil {
-		for _, svc := range customs {
-			if dbNameSet[svc.Name] {
-				continue
-			}
-			// Skip developer tools that the project's code never consumes
-			// (phpMyAdmin, pgAdmin, mongo-express). They have no env_vars
-			// and no env_detect because they don't integrate with .env.
-			if len(svc.EnvVars) == 0 && svc.EnvDetect == nil {
-				continue
-			}
-			nonDBServiceOptions = append(nonDBServiceOptions, svc.Name)
-		}
-	}
-
-	// Use saved named services as defaults if re-running (--fresh), otherwise auto-detect.
-	serviceDefaults := defaults.ServiceNames()
-	if len(serviceDefaults) == 0 {
-		serviceDefaults = detectServicesFromDir(cwd)
-	}
-
-	// Split detected/saved services into the DB choice and the rest.
-	dbChoice := "sqlite"
-	for _, name := range serviceDefaults {
-		if dbNameSet[name] {
-			dbChoice = name
-			break
-		}
-	}
-	// If nothing was saved/detected for DB, fall back to whatever .env says
-	// (or sqlite, which is also Laravel's default).
-	if dbChoice == "sqlite" {
-		switch detectDBConnection(cwd) {
-		case "mysql", "mariadb":
-			dbChoice = "mysql"
-		case "pgsql", "postgres":
-			dbChoice = "postgres"
-		}
-	}
-	nonDBSelected := make([]string, 0, len(serviceDefaults))
-	for _, name := range serviceDefaults {
-		if !dbNameSet[name] {
-			nonDBSelected = append(nonDBSelected, name)
-		}
-	}
+	nonDBServiceOptions := nonDatabaseServiceNames(dbNameSet)
+	dbChoice, nonDBSelected := wizardServiceDefaults(cwd, defaults, dbNameSet)
 
 	phpVersion := phpDefault
 	nodeVersion := defaults.NodeVersion
@@ -368,65 +302,18 @@ func runWizard(cwd string, defaults *config.ProjectConfig) (*config.ProjectConfi
 		keptSet[name] = true
 	}
 
-	// Detect available workers from the framework definition.
-	// Workers with ConflictsWith suppress conflicted workers (e.g. horizon suppresses queue).
-	// Custom workers that were removed are excluded, and their conflict rules
-	// no longer apply — so previously suppressed workers become available again.
-	var workerOptions []string
-	if fw, ok := config.GetFrameworkForDir(framework, cwd); ok && fw.Workers != nil {
-		// First pass: identify which workers are removed custom workers.
-		removedCustom := map[string]bool{}
+	// Removed custom workers are excluded, and their conflict rules no longer
+	// apply, so a worker one of them suppressed becomes available again.
+	removedCustom := map[string]bool{}
+	if fw, ok := config.GetFrameworkForDir(framework, cwd); ok {
 		for name := range fw.Workers {
 			if defaults.CustomWorkers[name].Command != "" && !keptSet[name] {
 				removedCustom[name] = true
 			}
 		}
-		// Build suppression set only from workers that are NOT removed.
-		suppressed := map[string]bool{}
-		for name, wDef := range fw.Workers {
-			if removedCustom[name] {
-				continue
-			}
-			if wDef.Check != nil && !config.MatchesRule(cwd, *wDef.Check) {
-				continue
-			}
-			for _, c := range wDef.ConflictsWith {
-				suppressed[c] = true
-			}
-		}
-		for name, wDef := range fw.Workers {
-			if removedCustom[name] {
-				continue
-			}
-			if wDef.Check != nil && !config.MatchesRule(cwd, *wDef.Check) {
-				continue
-			}
-			if suppressed[name] {
-				continue
-			}
-			workerOptions = append(workerOptions, name)
-		}
-		sort.Strings(workerOptions)
 	}
-
-	// Stripe is not a framework worker but can be auto-started when
-	// STRIPE_SECRET is present in the project's .env.
-	if StripeSecretSet(cwd) {
-		workerOptions = append(workerOptions, "stripe")
-	}
-
-	// Remove any selected workers that are no longer available.
-	filtered := selectedWorkers[:0]
-	availableSet := make(map[string]bool, len(workerOptions))
-	for _, w := range workerOptions {
-		availableSet[w] = true
-	}
-	for _, w := range selectedWorkers {
-		if availableSet[w] {
-			filtered = append(filtered, w)
-		}
-	}
-	selectedWorkers = filtered
+	workerOptions := frameworkWorkerOptions(cwd, framework, removedCustom)
+	selectedWorkers = keepAvailable(selectedWorkers, workerOptions)
 
 	if len(workerOptions) > 0 {
 		workerGroups := []*huh.Group{
@@ -454,54 +341,7 @@ func runWizard(cwd string, defaults *config.ProjectConfig) (*config.ProjectConfi
 		}
 	}
 
-	// Build an index of custom service definitions to embed in .lerd.yaml.
-	// Priority: existing inline definition in defaults > definition file on disk.
-	// Default-preset services are never embedded — they don't need to be.
-	// sqlite is treated as built-in here even though it's not a quadlet service.
-	defaultNames := knownServices()
-	builtIn := make(map[string]bool, len(defaultNames)+1)
-	for _, s := range defaultNames {
-		builtIn[s] = true
-	}
-	builtIn["sqlite"] = true
-	inlineByName := map[string]*config.CustomService{}
-	for _, svc := range defaults.Services {
-		if svc.Custom != nil {
-			inlineByName[svc.Name] = svc.Custom
-		}
-	}
-
-	services := make([]config.ProjectService, len(selectedServices))
-	for i, name := range selectedServices {
-		if builtIn[name] {
-			services[i] = config.ProjectService{Name: name}
-			continue
-		}
-		// Prefer the on-disk service definition (it's freshest) and fall back
-		// to the inlined one in defaults for portability.
-		var loaded *config.CustomService
-		if svc, err := config.LoadCustomService(name); err == nil {
-			loaded = svc
-		} else if existing := inlineByName[name]; existing != nil {
-			loaded = existing
-		}
-		if loaded != nil && loaded.Preset != "" {
-			services[i] = config.ProjectService{
-				Name:          name,
-				Preset:        loaded.Preset,
-				PresetVersion: loaded.PresetVersion,
-			}
-			continue
-		}
-		// A bundled tool preset (e.g. phpmyadmin, pgadmin) selected but not yet
-		// installed has no on-disk custom service; record it as a preset so link
-		// installs it, rather than a bare name that resolves to nothing and warns.
-		if loaded == nil && config.PresetExists(name) && !config.IsDefaultPreset(name) {
-			services[i] = config.ProjectService{Name: name, Preset: name}
-			continue
-		}
-		services[i] = config.ProjectService{Name: name, Custom: loaded}
-	}
+	services := buildProjectServices(selectedServices, defaults)
 
 	// Resolve framework version from the definition that was used.
 	frameworkVersion := ""
