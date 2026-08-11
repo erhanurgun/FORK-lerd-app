@@ -166,14 +166,17 @@ func TestMongoExpressProxyEnvInjectedByPreset(t *testing.T) {
 	}
 }
 
-// A preset whose mount path the binary supplies has to ask for the proxy with
-// the flag an older binary ignores. dashboard_external is understood by every
-// released binary that proxies, so it would start routing the overlay to
-// /_svc/<name>/ without ever telling the upstream it moved, and the dashboard
-// would 404 on installs that did nothing but pick up a store refresh.
-func TestGoMountedPresetsAskForTheProxyWithTheInertFlag(t *testing.T) {
+// These three ask for the proxy with the flag an older binary ignores.
+// dashboard_external is understood by every released binary that proxies, so it
+// would route the overlay to /_svc/<name>/ on nothing more than a store
+// refresh, before that binary does the rest of what the mount needs, and the
+// dashboard would answer 404 in between. pgadmin and mongo-express because the
+// path is supplied by the binary, phpmyadmin because its alias only reaches the
+// container on a restart that regenerates the unit, which an older reconcile
+// does after it has already restarted. Verified on a 1.31.0 guest.
+func TestProxiedPresetsAskWithTheInertFlag(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
-	for _, name := range []string{"pgadmin", "mongo-express"} {
+	for _, name := range []string{"phpmyadmin", "pgadmin", "mongo-express"} {
 		p, err := LoadPreset(name)
 		if err != nil {
 			t.Fatalf("LoadPreset(%s): %v", name, err)
@@ -184,15 +187,6 @@ func TestGoMountedPresetsAskForTheProxyWithTheInertFlag(t *testing.T) {
 		if !p.DashboardProxy {
 			t.Errorf("%s must set dashboard_proxy to be served same-origin", name)
 		}
-	}
-	// phpmyadmin carries its own mount path in the YAML, so every binary that
-	// proxies it reaches it and the older flag stays correct.
-	p, err := LoadPreset("phpmyadmin")
-	if err != nil {
-		t.Fatalf("LoadPreset(phpmyadmin): %v", err)
-	}
-	if !p.DashboardExternal {
-		t.Error("phpmyadmin ships its own alias, so it should keep dashboard_external and reach older binaries too")
 	}
 }
 
@@ -246,11 +240,13 @@ func TestPhpMyAdminPresetMountsPathPrefix(t *testing.T) {
 	if !strings.Contains(alias, "Alias /_svc/phpmyadmin /var/www/html") {
 		t.Errorf("phpmyadmin must alias /_svc/phpmyadmin to its docroot\n%s", alias)
 	}
-	// Served same-origin, the session cookie needs neither SameSite=None nor the
-	// forced HTTPS that phpmyadmin demands before it will set Secure.
-	for _, banned := range []string{"CookieSameSite", "$_SERVER['HTTPS']"} {
-		if strings.Contains(userConfig, banned) {
-			t.Errorf("phpmyadmin config must not still carry %s\n%s", banned, userConfig)
+	// The cross-origin workaround stays. A lerd that does not know dashboard_proxy
+	// still frames this from its own origin, and without SameSite=None the cookie
+	// is not sent at all there. It is inert once the dashboard is same-origin, so
+	// dropping it only takes something away from older binaries.
+	for _, kept := range []string{"CookieSameSite", "$_SERVER['HTTPS']"} {
+		if !strings.Contains(userConfig, kept) {
+			t.Errorf("phpmyadmin config must keep %s for a lerd that still frames it cross-origin\n%s", kept, userConfig)
 		}
 	}
 }

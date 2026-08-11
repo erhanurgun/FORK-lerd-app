@@ -81,8 +81,8 @@ func TestLoadPreset_PhpMyAdmin(t *testing.T) {
 	if !foundFramingCfg {
 		t.Errorf("phpmyadmin preset must ship config.user.inc.php enabling AllowThirdPartyFraming for iframe embedding")
 	}
-	if !p.DashboardExternal {
-		t.Errorf("phpmyadmin must set dashboard_external so lerd-ui proxies it same-origin and its session cookie survives the iframe")
+	if !p.DashboardProxy {
+		t.Errorf("phpmyadmin must set dashboard_proxy so lerd-ui proxies it same-origin and its session cookie survives the iframe")
 	}
 }
 
