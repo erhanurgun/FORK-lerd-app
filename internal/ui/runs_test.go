@@ -348,3 +348,20 @@ func TestExecRunSurvivesAnOverlongLine(t *testing.T) {
 		t.Errorf("output after the long line was lost: %d lines", len(lines))
 	}
 }
+
+// Retention has to mean what the constant says on an idle daemon too, not only
+// on one that keeps being given new work.
+func TestRunRegistryReleasesFinishedRunsWithoutANewRun(t *testing.T) {
+	stubRunExec(t, func(r *run) error { return nil })
+	dir := t.TempDir()
+	r := runs.Start(runKindSetup, dir, "", []string{"lerd", "setup"})
+	waitForStatus(t, r, runDone)
+
+	r.mu.Lock()
+	r.finished = time.Now().Add(-2 * runRetention)
+	r.mu.Unlock()
+
+	if got := runs.ForDir(dir); len(got) != 0 {
+		t.Errorf("a run past its retention was still listed: %v", got)
+	}
+}

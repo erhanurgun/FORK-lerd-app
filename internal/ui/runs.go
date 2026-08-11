@@ -264,6 +264,11 @@ func (reg *runRegistry) Get(id string) (*run, bool) {
 // ForDir lists the runs started for a directory, newest first, so a reloaded
 // wizard finds the work it left behind rather than starting it again.
 func (reg *runRegistry) ForDir(dir string) []runSnapshot {
+	// Also swept here, not only when a run starts: a machine that scaffolded one
+	// project and was left alone would otherwise hold that run, its buffered
+	// output and its place in every listing for as long as lerd-ui is up.
+	reg.sweep()
+
 	reg.mu.Lock()
 	all := make([]*run, 0, len(reg.runs))
 	for _, r := range reg.runs {
