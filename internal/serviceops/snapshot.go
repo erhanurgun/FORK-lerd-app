@@ -440,7 +440,7 @@ func RestoreSnapshot(t SnapshotTarget, name string, emit func(PhaseEvent)) (Impo
 	}
 
 	emit(PhaseEvent{Phase: "restoring_data", Message: "restoring " + clean})
-	expected := expectedImportErrors(t.Service, importActionName(t.AllDatabases))
+	expected := ExpectedImportErrors(t.Service, t.AllDatabases)
 	rep, err := restoreFromHost("lerd-"+t.Service, restoreCmd, introspectEnv(), dumpPath, dumpRestoreTimeout, expected)
 	if err != nil {
 		return rep, fmt.Errorf("restoring snapshot %q: %w", name, err)

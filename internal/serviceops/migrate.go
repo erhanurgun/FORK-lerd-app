@@ -443,7 +443,7 @@ func migrateMysql(name, targetImage string, emit func(PhaseEvent)) error {
 	}
 
 	emit(PhaseEvent{Phase: "restoring_data", Message: dump})
-	rep, err := restoreFromHost(unit, mysqlMigrateRestoreCommand(), rootEnv, dump, dumpRestoreTimeout, expectedImportErrors(name, "import_all"))
+	rep, err := restoreFromHost(unit, mysqlMigrateRestoreCommand(), rootEnv, dump, dumpRestoreTimeout, ExpectedImportErrors(name, true))
 	if err != nil {
 		return fmt.Errorf("restore: %w. Dump preserved at %s; old data dir at %s", err, dump, backup)
 	}
@@ -508,7 +508,7 @@ func migratePostgres(name, targetImage string, emit func(PhaseEvent)) error {
 
 	emit(PhaseEvent{Phase: "restoring_data", Message: dump})
 	restoreCmd := "psql -h 127.0.0.1 -U postgres -d postgres 2>&1"
-	rep, err := restoreFromHost(unit, restoreCmd, pgEnv, dump, dumpRestoreTimeout, expectedImportErrors(name, "import_all"))
+	rep, err := restoreFromHost(unit, restoreCmd, pgEnv, dump, dumpRestoreTimeout, ExpectedImportErrors(name, true))
 	if err != nil {
 		return fmt.Errorf("restore: %w. Dump preserved at %s; old data dir at %s", err, dump, backup)
 	}

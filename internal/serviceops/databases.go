@@ -383,6 +383,13 @@ func expectedImportErrors(service, action string) []string {
 	return act.ExpectedErrors
 }
 
+// ExpectedImportErrors returns the complaints the declared import of the given
+// scope says it always makes, for callers that tally an import's output
+// themselves as it streams rather than parsing it once at the end.
+func ExpectedImportErrors(service string, allDatabases bool) []string {
+	return expectedImportErrors(service, importActionName(allDatabases))
+}
+
 // importActionName names the declared import a load of the given scope runs
 // through, so the command and its expected complaints are always read off the
 // same action.
