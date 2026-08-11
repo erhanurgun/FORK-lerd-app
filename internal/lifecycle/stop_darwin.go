@@ -9,6 +9,11 @@ import (
 	"github.com/geodro/lerd/internal/podman"
 )
 
+// TeardownOnLogout is true on macOS, the one platform with something to lose.
+// The Podman Machine VM outlives the session, and a database killed with it
+// mid-write replays its write-ahead log for minutes on the next start.
+const TeardownOnLogout = true
+
 // StopPodmanMachine stops the running Podman Machine VM, so it is shut down
 // cleanly rather than killed with containers still writing. A database killed
 // mid-write replays its write-ahead log for minutes on the next start.

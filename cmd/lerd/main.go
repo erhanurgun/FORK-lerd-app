@@ -406,6 +406,9 @@ func printDNSDiagnostic(w io.Writer, diag dns.Diagnostic) {
 // with SIGINT, so the only thing that sends one is a person who ran `lerd watch`
 // in a terminal and pressed Ctrl-C, who wants their shell back and not their
 // containers and Podman Machine stopped.
+//
+// A nil quit means this platform has nothing a logout can cost it, so the
+// watcher just exits. See lifecycle.TeardownOnLogout.
 func shutdownOnSignal(sigs <-chan os.Signal, quit func() error, cancel context.CancelFunc) {
 	sig, ok := <-sigs
 	if !ok {
@@ -413,6 +416,11 @@ func shutdownOnSignal(sigs <-chan os.Signal, quit func() error, cancel context.C
 	}
 	if sig == syscall.SIGINT {
 		fmt.Printf("lerd watcher: received %s from a terminal, exiting without teardown\n", sig)
+		cancel()
+		return
+	}
+	if quit == nil {
+		fmt.Printf("lerd watcher: received %s, exiting\n", sig)
 		cancel()
 		return
 	}
@@ -443,9 +451,13 @@ func newWatchCmd() *cobra.Command {
 			sigChan := make(chan os.Signal, 1)
 			signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 			defer signal.Stop(sigChan)
-			go shutdownOnSignal(sigChan, func() error {
-				return lifecycle.ShutdownForLogout(lifecycle.SimpleRunner)
-			}, cancel)
+			var quit func() error
+			if lifecycle.TeardownOnLogout {
+				quit = func() error {
+					return lifecycle.ShutdownForLogout(lifecycle.SimpleRunner)
+				}
+			}
+			go shutdownOnSignal(sigChan, quit, cancel)
 
 			if os.Getenv("LERD_DEBUG") != "" {
 				watcher.SetLogger(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{

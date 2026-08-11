@@ -614,6 +614,45 @@ func TestShutdownOnSignal_TearsDownThenUnblocksWatch(t *testing.T) {
 	}
 }
 
+// TestShutdownOnSignal_NoTeardownPlatformJustExits pins the platform gate. Where
+// nothing outlives the session there is nothing to protect, and running the
+// teardown would turn an ordinary `systemctl --user stop lerd-watcher` into a
+// stop of every container, lerd-ui and lerd-dns.
+func TestShutdownOnSignal_NoTeardownPlatformJustExits(t *testing.T) {
+	isolateConfig(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigs := make(chan os.Signal, 1)
+	sigs <- syscall.SIGTERM
+	shutdownOnSignal(sigs, nil, cancel)
+
+	select {
+	case <-ctx.Done():
+	default:
+		t.Error("the watcher must still exit when the platform runs no teardown")
+	}
+}
+
+// TestShutdownOnSignal_NoTeardownPlatformKeepsTheMarker pins that the early exit
+// does not eat a marker it never earned, exactly as the Ctrl-C exit does not.
+func TestShutdownOnSignal_NoTeardownPlatformKeepsTheMarker(t *testing.T) {
+	isolateConfig(t)
+	if err := config.MarkWatcherManagedStop(); err != nil {
+		t.Fatalf("MarkWatcherManagedStop: %v", err)
+	}
+
+	_, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sigs := make(chan os.Signal, 1)
+	sigs <- syscall.SIGTERM
+	shutdownOnSignal(sigs, nil, cancel)
+
+	if !config.ConsumeWatcherManagedStop() {
+		t.Error("an exit with no teardown must leave the marker for the real stop")
+	}
+}
+
 // TestShutdownOnSignal_QuitErrorStillExits pins that a failed teardown does not
 // leave the watcher blocked: launchd would SIGKILL it after the exit timeout.
 func TestShutdownOnSignal_QuitErrorStillExits(t *testing.T) {
