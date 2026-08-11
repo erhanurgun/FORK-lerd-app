@@ -3,6 +3,8 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import DashboardOverlay from './DashboardOverlay.svelte';
 import { dashboardOpen, openDocs } from '../stores/dashboard';
 import { profilerEnabled } from '../stores/profiler';
+import { services } from '../stores/services';
+import { serviceIcons } from '../stores/serviceIcons';
 
 function openProfiler() {
   dashboardOpen.set({
@@ -16,6 +18,8 @@ describe('DashboardOverlay', () => {
   beforeEach(() => {
     dashboardOpen.set(null);
     profilerEnabled.set(false);
+    services.set([]);
+    serviceIcons.set({});
   });
 
   it('disables Back until the embedded iframe has somewhere to go back to', () => {
@@ -71,5 +75,37 @@ describe('DashboardOverlay', () => {
 
     // The form starts hidden, so the header offers to show it.
     expect(screen.getByRole('button', { name: /show configuration/i })).toBeTruthy();
+  });
+
+  // The header names the service the frame belongs to, so it leads with the
+  // mark the preset ships rather than the generic glyph for its category.
+  it('heads the frame with the service mark, inked in the declared colour', () => {
+    services.set([
+      {
+        name: 'mailpit',
+        status: 'active',
+        site_count: 0,
+        category: 'mail',
+        color: '#0f6cbd',
+        dashboard: 'http://localhost:8025'
+      }
+    ]);
+    serviceIcons.set({ mailpit: '<svg viewBox="0 0 24 24"><path d="M3 3h18v18H3z"/></svg>' });
+    dashboardOpen.set({ name: 'mailpit', label: 'Mailpit', dashboard: 'http://localhost:8025' });
+    const { container } = render(DashboardOverlay);
+
+    const mark = container.querySelector('.mark-glyph path');
+    expect(mark?.getAttribute('d')).toBe('M3 3h18v18H3z');
+    expect(container.querySelector('.mark-brand')?.getAttribute('style')).toContain('--mark-tint: #0f6cbd');
+  });
+
+  // docs and profiler are not services and ship no mark; their built-in glyph
+  // has to survive the switch to the shared icon.
+  it('keeps the built-in glyph for a dashboard no service backs', () => {
+    openProfiler();
+    const { container } = render(DashboardOverlay);
+
+    expect(container.querySelector('.mark-glyph')).toBeNull();
+    expect(container.querySelector('header svg, .shrink-0 svg')).not.toBeNull();
   });
 });
