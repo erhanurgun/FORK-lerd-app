@@ -437,3 +437,44 @@ func TestReconcileServices_steadyStateNoop(t *testing.T) {
 		t.Fatalf("steady state must be a no-op, got %+v", res)
 	}
 }
+
+// A store change that adds a file mount has to land in one pass. The drift
+// restart must run against the regenerated unit, or the container comes back
+// without the new mount and whatever it carried (phpmyadmin's apache alias, so
+// its dashboard answers under the proxy) is missing until something restarts it
+// again.
+func TestReconcileServices_regeneratesBeforeRestartingOnDrift(t *testing.T) {
+	reconcileEnv(t)
+	if err := config.SaveStorePreset("probe-svc", []byte("name: probe-svc\nimage: example/probe:1\ndashboard: http://localhost:9999\n")); err != nil {
+		t.Fatalf("store preset: %v", err)
+	}
+	if err := config.SaveCustomService(&config.CustomService{Name: "probe-svc", Image: "example/probe:1", Preset: "probe-svc"}); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	writeQuadlet(t, "probe-svc", true)
+
+	var order []string
+	prevEnsure := ensureQuadletFn
+	t.Cleanup(func() { ensureQuadletFn = prevEnsure })
+	ensureQuadletFn = func(*config.CustomService) error {
+		order = append(order, "regenerate")
+		return nil
+	}
+
+	boot := time.Unix(1_000_000, 0)
+	restore := swapDriftSeams(t,
+		func(*config.CustomService) error { return nil },
+		func(*config.CustomService) (time.Time, bool) { return boot.Add(time.Hour), true },
+		func(string) (time.Time, bool) { return boot, true },
+		func(string) error { order = append(order, "restart"); return nil },
+		func(string) bool { return true },
+	)
+	defer restore()
+
+	if _, err := ReconcileServices(nil); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	if len(order) != 2 || order[0] != "regenerate" || order[1] != "restart" {
+		t.Fatalf("want the unit regenerated before the drift restart, got %v", order)
+	}
+}
