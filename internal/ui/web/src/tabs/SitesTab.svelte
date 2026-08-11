@@ -25,6 +25,7 @@
     type WorkspaceLayoutEntry
   } from '$stores/workspaces';
   import { openLinkModal, openWorkspaceDeleteModal } from '$stores/modals';
+  import { activeRun } from '$stores/wizard';
   import { get } from 'svelte/store';
   import { flushSync, untrack } from 'svelte';
   import { dndzone, SOURCES, TRIGGERS, type DndEvent } from 'svelte-dnd-action';
@@ -449,7 +450,12 @@
   {#if $accessMode.localControl}
     <DumpBridgeToggle />
     <ProfilerToggle />
-    <ActionButton title={m.sites_linkNew()} tone="accent" onclick={openLinkModal}>
+    <ActionButton
+      title={$activeRun ? m.siteWizard_backgroundRunning() : m.sites_linkNew()}
+      tone="accent"
+      loading={$activeRun !== null}
+      onclick={openLinkModal}
+    >
       <Icon name="plus" class="w-3.5 h-3.5" />
     </ActionButton>
   {/if}
