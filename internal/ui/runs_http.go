@@ -178,7 +178,11 @@ func handleRunStream(w http.ResponseWriter, r *http.Request) {
 		lines, next, done := current.read(from)
 		from = next
 		for _, line := range lines {
-			fmt.Fprintf(w, "data: %s\n\n", strings.ReplaceAll(line, "\\", "\\\\"))
+			// SSE ends a field at a carriage return as readily as at a newline, so
+			// the \r a progress bar writes mid-line would split one line of output
+			// into two frames. Nothing else needs escaping: the client reads the
+			// payload as it arrives.
+			fmt.Fprintf(w, "data: %s\n\n", strings.ReplaceAll(line, "\r", ""))
 		}
 		flusher.Flush()
 		if done {
