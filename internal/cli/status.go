@@ -12,6 +12,7 @@ import (
 	"github.com/geodro/lerd/internal/config"
 	"github.com/geodro/lerd/internal/dns"
 	"github.com/geodro/lerd/internal/feedback"
+	"github.com/geodro/lerd/internal/lifecycle"
 	phpPkg "github.com/geodro/lerd/internal/php"
 	"github.com/geodro/lerd/internal/podman"
 	"github.com/geodro/lerd/internal/services"
@@ -128,7 +129,7 @@ func runStatus(_ *cobra.Command, _ []string) error {
 	}
 
 	// Custom Containers
-	if customUnits := installedCustomContainerUnits(); len(customUnits) > 0 {
+	if customUnits := lifecycle.InstalledCustomContainerUnits(); len(customUnits) > 0 {
 		fmt.Println("\n[Custom Containers]")
 		for _, unit := range customUnits {
 			running, _ := podman.ContainerRunning(unit)

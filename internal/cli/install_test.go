@@ -12,6 +12,7 @@ import (
 
 	"github.com/geodro/lerd/internal/config"
 	"github.com/geodro/lerd/internal/podman"
+	"github.com/geodro/lerd/internal/services"
 )
 
 func TestIsShell_fish(t *testing.T) {
@@ -202,11 +203,52 @@ func TestRefreshUnreferencedCustomQuadlets_RoutesCustomFPM(t *testing.T) {
 	}
 }
 
+// autostartMgr records what installAutostart asks for without reaching the real
+// service manager. Enable bootstraps into the live launchd domain, so driving it
+// here would boot out the developer's own autostart job and replace it with one
+// pointing at the test binary.
+type autostartMgr struct {
+	services.ServiceManager
+	wroteName string
+	wroteBody string
+	enabled   string
+}
+
+func (m *autostartMgr) WriteServiceUnit(name, content string) error {
+	m.wroteName, m.wroteBody = name, content
+	return nil
+}
+
+func (m *autostartMgr) Enable(name string) error {
+	m.enabled = name
+	return nil
+}
+
 func TestInstallAutostart(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("autostart is only installed on macOS")
+	}
+	t.Setenv("HOME", t.TempDir())
+	mgr := &autostartMgr{}
+	orig := services.Mgr
+	services.Mgr = mgr
+	t.Cleanup(func() { services.Mgr = orig })
+
 	installAutostart()
+
+	if mgr.wroteName != "lerd-autostart" {
+		t.Errorf("wrote unit %q, want lerd-autostart", mgr.wroteName)
+	}
+	if !strings.Contains(mgr.wroteBody, "ExecStart=") {
+		t.Errorf("autostart unit carries no ExecStart:\n%s", mgr.wroteBody)
+	}
+	if mgr.enabled != "lerd-autostart" {
+		t.Errorf("enabled %q, want lerd-autostart", mgr.enabled)
+	}
 }
 
 func TestInstallCleanupScript(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	installCleanupScript()
 }
 

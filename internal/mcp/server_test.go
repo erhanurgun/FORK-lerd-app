@@ -377,6 +377,9 @@ func TestExecServiceAdd_InitFlagPersists(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmp)
 	t.Setenv("XDG_DATA_HOME", tmp)
+	// Adding a service writes its unit, and on macOS that path follows HOME
+	// rather than the XDG vars.
+	t.Setenv("HOME", tmp)
 
 	resp, rpcErr := execServiceAdd(map[string]any{
 		"name":  "memcrash",
@@ -403,6 +406,7 @@ func TestExecServiceAdd_InitDefaultsFalse(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmp)
 	t.Setenv("XDG_DATA_HOME", tmp)
+	t.Setenv("HOME", tmp)
 
 	if _, rpcErr := execServiceAdd(map[string]any{
 		"name":  "redisish",

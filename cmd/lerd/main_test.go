@@ -2,11 +2,14 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -573,5 +576,196 @@ func TestPrintDNSDiagnostic_OKStepHasNoHintLine(t *testing.T) {
 	out := buf.String()
 	if strings.Contains(out, "hint:") {
 		t.Errorf("OK step should not print a hint line, got:\n%s", out)
+	}
+}
+
+// TestShutdownOnSignal_TearsDownThenUnblocksWatch pins the logout path: the
+// signal runs the teardown, and only then cancels the watch loop so the
+// process exits on its own instead of being killed mid-shutdown.
+func TestShutdownOnSignal_TearsDownThenUnblocksWatch(t *testing.T) {
+	isolateConfig(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigs := make(chan os.Signal, 1)
+	quitDone := make(chan struct{})
+	quit := func() error {
+		select {
+		case <-ctx.Done():
+			t.Error("watch loop was cancelled before the teardown finished")
+		default:
+		}
+		close(quitDone)
+		return nil
+	}
+
+	sigs <- syscall.SIGTERM
+	shutdownOnSignal(sigs, quit, cancel)
+
+	select {
+	case <-quitDone:
+	default:
+		t.Fatal("teardown never ran")
+	}
+	select {
+	case <-ctx.Done():
+	default:
+		t.Error("watch loop was never cancelled, the watcher would hang until SIGKILL")
+	}
+}
+
+// TestShutdownOnSignal_NoTeardownPlatformJustExits pins the platform gate. Where
+// nothing outlives the session there is nothing to protect, and running the
+// teardown would turn an ordinary `systemctl --user stop lerd-watcher` into a
+// stop of every container, lerd-ui and lerd-dns.
+func TestShutdownOnSignal_NoTeardownPlatformJustExits(t *testing.T) {
+	isolateConfig(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigs := make(chan os.Signal, 1)
+	sigs <- syscall.SIGTERM
+	shutdownOnSignal(sigs, nil, cancel)
+
+	select {
+	case <-ctx.Done():
+	default:
+		t.Error("the watcher must still exit when the platform runs no teardown")
+	}
+}
+
+// TestShutdownOnSignal_NoTeardownPlatformKeepsTheMarker pins that the early exit
+// does not eat a marker it never earned, exactly as the Ctrl-C exit does not.
+func TestShutdownOnSignal_NoTeardownPlatformKeepsTheMarker(t *testing.T) {
+	isolateConfig(t)
+	if err := config.MarkWatcherManagedStop(); err != nil {
+		t.Fatalf("MarkWatcherManagedStop: %v", err)
+	}
+
+	_, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sigs := make(chan os.Signal, 1)
+	sigs <- syscall.SIGTERM
+	shutdownOnSignal(sigs, nil, cancel)
+
+	if !config.ConsumeWatcherManagedStop() {
+		t.Error("an exit with no teardown must leave the marker for the real stop")
+	}
+}
+
+// TestShutdownOnSignal_QuitErrorStillExits pins that a failed teardown does not
+// leave the watcher blocked: launchd would SIGKILL it after the exit timeout.
+func TestShutdownOnSignal_QuitErrorStillExits(t *testing.T) {
+	isolateConfig(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigs := make(chan os.Signal, 1)
+	sigs <- syscall.SIGTERM
+	shutdownOnSignal(sigs, func() error { return errors.New("boom") }, cancel)
+
+	select {
+	case <-ctx.Done():
+	default:
+		t.Error("watch loop must be cancelled even when the teardown fails")
+	}
+}
+
+// TestShutdownOnSignal_ManagedStopSkipsTeardown pins the guard that keeps
+// `lerd install`, `lerd update` and `lerd quit` from tearing the environment
+// down. They all stop the watcher, and launchd delivers that as the same
+// SIGTERM a logout does; without the marker an install would stop every
+// container and the Podman Machine VM halfway through.
+func TestShutdownOnSignal_ManagedStopSkipsTeardown(t *testing.T) {
+	isolateConfig(t)
+	if err := config.MarkWatcherManagedStop(); err != nil {
+		t.Fatalf("MarkWatcherManagedStop: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigs := make(chan os.Signal, 1)
+	sigs <- syscall.SIGTERM
+	tore := false
+	shutdownOnSignal(sigs, func() error { tore = true; return nil }, cancel)
+
+	if tore {
+		t.Error("a lerd-managed stop must not run the shutdown teardown")
+	}
+	select {
+	case <-ctx.Done():
+	default:
+		t.Error("the watcher must still exit on a managed stop")
+	}
+}
+
+// TestShutdownOnSignal_ManagedStopIsConsumedOnce pins that the marker does not
+// linger: a managed restart followed by a real logout must still tear down.
+func TestShutdownOnSignal_ManagedStopIsConsumedOnce(t *testing.T) {
+	isolateConfig(t)
+	if err := config.MarkWatcherManagedStop(); err != nil {
+		t.Fatalf("MarkWatcherManagedStop: %v", err)
+	}
+
+	_, cancel1 := context.WithCancel(context.Background())
+	defer cancel1()
+	first := make(chan os.Signal, 1)
+	first <- syscall.SIGTERM
+	shutdownOnSignal(first, func() error { return nil }, cancel1)
+
+	_, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+	second := make(chan os.Signal, 1)
+	second <- syscall.SIGTERM
+	tore := false
+	shutdownOnSignal(second, func() error { tore = true; return nil }, cancel2)
+
+	if !tore {
+		t.Error("a stale marker suppressed a real logout teardown")
+	}
+}
+
+// TestShutdownOnSignal_InterruptSkipsTeardown pins that Ctrl-C on a hand-run
+// `lerd watch` does not tear the environment down. launchd and systemd only
+// ever signal a shutdown with SIGTERM, so a SIGINT means a person at a
+// terminal who wants their shell back, not their containers stopped.
+func TestShutdownOnSignal_InterruptSkipsTeardown(t *testing.T) {
+	isolateConfig(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigs := make(chan os.Signal, 1)
+	sigs <- syscall.SIGINT
+	tore := false
+	shutdownOnSignal(sigs, func() error { tore = true; return nil }, cancel)
+
+	if tore {
+		t.Error("Ctrl-C must not stop every container and the Podman Machine VM")
+	}
+	select {
+	case <-ctx.Done():
+	default:
+		t.Error("the watcher must still exit on Ctrl-C")
+	}
+}
+
+// TestShutdownOnSignal_InterruptLeavesTheMarkerAlone pins that the SIGINT exit
+// does not consume a managed-stop marker it never earned. Eating one here would
+// leave the SIGTERM that follows reading as a logout mid-install.
+func TestShutdownOnSignal_InterruptLeavesTheMarkerAlone(t *testing.T) {
+	isolateConfig(t)
+	if err := config.MarkWatcherManagedStop(); err != nil {
+		t.Fatalf("MarkWatcherManagedStop: %v", err)
+	}
+
+	_, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sigs := make(chan os.Signal, 1)
+	sigs <- syscall.SIGINT
+	shutdownOnSignal(sigs, func() error { return nil }, cancel)
+
+	if !config.ConsumeWatcherManagedStop() {
+		t.Error("a SIGINT exit must leave the managed-stop marker for the real stop")
 	}
 }
