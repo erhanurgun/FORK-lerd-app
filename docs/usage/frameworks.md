@@ -137,6 +137,7 @@ The installer walks you through starter kit selection, database setup, and other
 lerd new                                # ask for the name, the framework and the version
 lerd new myapp                          # ask which framework to use
 lerd new myapp --framework=symfony      # scaffold Symfony, no questions
+lerd new myapp --framework=laravel --framework-version=11   # scaffold an older major
 lerd new /path/to/myapp                 # create at an absolute path
 lerd new myapp -- --no-interaction      # pass extra flags to the scaffold command
 ```
@@ -148,7 +149,9 @@ major published it asks which, defaulting to the current release and pulling tha
 major's definition before scaffolding. Called with no name at all it asks for
 that too. Naming a framework with `--framework` skips the question, and a run
 with no terminal skips all of them and scaffolds the default, so scripts and CI
-never start blocking on a prompt.
+never start blocking on a prompt. `--framework-version` answers the version
+question the same way, which is how the dashboard's site wizard scaffolds a
+chosen major; it needs a `--framework` to apply to.
 
 The command then carries the project the rest of the way: it links the new
 directory, which routes a project with no `.lerd.yaml` through the
