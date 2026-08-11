@@ -795,6 +795,7 @@
   "debug_tests_hidden": "({count} disembunyikan)",
   "queries_filter_allWorkers": "Semua worker",
   "queries_worker_badge": "worker",
+  "queries_copyPath": "Salin path",
   "queries_copySql": "Salin SQL yang dapat dijalankan",
   "tinker_mode_tinkerTitle": "Memuat Laravel via artisan tinker",
   "tinker_mode_phpTitle": "Runtime PHP biasa",
@@ -1309,6 +1310,5 @@
   "docs_load_failed": "Halaman ini tidak dapat dimuat.",
   "docs_no_results": "Tidak ada halaman yang cocok.",
   "docs_pick_page": "Pilih halaman untuk dibaca.",
-  "docs_search_placeholder": "Cari di dokumentasi",
-  "queries_copyPath": "Salin Path "
+  "docs_search_placeholder": "Cari di dokumentasi"
 }

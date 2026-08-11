@@ -542,6 +542,7 @@
   "queries_capturing": "Capturing",
   "queries_clearCaptured": "Clear captured queries",
   "queries_clearFilter": "Clear filter",
+  "queries_copyPath": "Copy path",
   "queries_copySql": "Copy runnable SQL",
   "queries_description": "Captures every database query with its SQL, bindings, duration, and the line that ran it.",
   "queries_details": "Details",
@@ -1309,6 +1310,5 @@
   "worktreeMgr_removeTitle": "Remove worktree {branch}?",
   "worktreeMgr_removing": "Removing…",
   "worktreeMgr_runMigrations": "Run migrations after creating",
-  "worktreeMgr_title": "Manage worktrees",
-  "queries_copyPath": "Copy path"
+  "worktreeMgr_title": "Manage worktrees"
 }

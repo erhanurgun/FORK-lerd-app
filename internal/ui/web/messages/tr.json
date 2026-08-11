@@ -795,6 +795,7 @@
   "debug_tests_hidden": "({count} gizli)",
   "queries_filter_allWorkers": "Tüm worker'lar",
   "queries_worker_badge": "worker",
+  "queries_copyPath": "Yolu kopyala",
   "queries_copySql": "Çalıştırılabilir SQL'i kopyala",
   "tinker_mode_tinkerTitle": "Laravel'i artisan tinker üzerinden bootstrap eder",
   "tinker_mode_phpTitle": "Düz PHP çalışma zamanı",
@@ -1309,6 +1310,5 @@
   "docs_load_failed": "Bu sayfa yüklenemedi.",
   "docs_no_results": "Eşleşen sayfa yok.",
   "docs_pick_page": "Okumak için bir sayfa seç.",
-  "docs_search_placeholder": "Belgelerde ara",
-  "queries_copyPath": "Yolu kopyala"
+  "docs_search_placeholder": "Belgelerde ara"
 }

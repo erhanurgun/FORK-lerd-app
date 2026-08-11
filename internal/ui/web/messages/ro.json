@@ -795,6 +795,7 @@
   "debug_tests_hidden": "({count} ascunse)",
   "queries_filter_allWorkers": "Toți workerii",
   "queries_worker_badge": "worker",
+  "queries_copyPath": "Copiază calea",
   "queries_copySql": "Copiază SQL-ul executabil",
   "tinker_mode_tinkerTitle": "Inițializează Laravel prin artisan tinker",
   "tinker_mode_phpTitle": "Runtime PHP simplu",
@@ -1309,6 +1310,5 @@
   "docs_load_failed": "Această pagină nu a putut fi încărcată.",
   "docs_no_results": "Nicio pagină nu se potrivește.",
   "docs_pick_page": "Alege o pagină de citit.",
-  "docs_search_placeholder": "Caută în documentație",
-  "queries_copyPath": "Copiază calea"
+  "docs_search_placeholder": "Caută în documentație"
 }

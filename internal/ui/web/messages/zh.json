@@ -795,6 +795,7 @@
   "debug_tests_hidden": "(已隐藏 {count})",
   "queries_filter_allWorkers": "所有 workers",
   "queries_worker_badge": "worker",
+  "queries_copyPath": "复制路径",
   "queries_copySql": "复制可执行的 SQL",
   "tinker_mode_tinkerTitle": "通过 artisan tinker 引导 Laravel",
   "tinker_mode_phpTitle": "纯 PHP 运行时",
@@ -1309,6 +1310,5 @@
   "docs_load_failed": "无法加载此页面。",
   "docs_no_results": "没有匹配的页面。",
   "docs_pick_page": "请选择要阅读的页面。",
-  "docs_search_placeholder": "搜索文档",
-  "queries_copyPath": "复制路径"
+  "docs_search_placeholder": "搜索文档"
 }

@@ -795,6 +795,7 @@
   "debug_tests_hidden": "({count} 件非表示)",
   "queries_filter_allWorkers": "すべてのワーカー",
   "queries_worker_badge": "ワーカー",
+  "queries_copyPath": "パスをコピー",
   "queries_copySql": "実行可能な SQL をコピー",
   "tinker_mode_tinkerTitle": "artisan tinker 経由で Laravel をブートストラップ",
   "tinker_mode_phpTitle": "プレーンな PHP ランタイム",
@@ -1309,6 +1310,5 @@
   "docs_load_failed": "このページを読み込めませんでした。",
   "docs_no_results": "一致するページはありません。",
   "docs_pick_page": "読むページを選択してください。",
-  "docs_search_placeholder": "ドキュメントを検索",
-  "queries_copyPath": "パスをコピー"
+  "docs_search_placeholder": "ドキュメントを検索"
 }

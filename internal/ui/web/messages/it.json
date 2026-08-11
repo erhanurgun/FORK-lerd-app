@@ -795,6 +795,7 @@
   "debug_tests_hidden": "({count} nascosti)",
   "queries_filter_allWorkers": "Tutti i worker",
   "queries_worker_badge": "worker",
+  "queries_copyPath": "Copia il percorso",
   "queries_copySql": "Copia l'SQL eseguibile",
   "tinker_mode_tinkerTitle": "Avvia Laravel tramite artisan tinker",
   "tinker_mode_phpTitle": "Runtime PHP semplice",
@@ -1309,6 +1310,5 @@
   "docs_load_failed": "Impossibile caricare questa pagina.",
   "docs_no_results": "Nessuna pagina corrisponde.",
   "docs_pick_page": "Scegli una pagina da leggere.",
-  "docs_search_placeholder": "Cerca nella documentazione",
-  "queries_copyPath": "Copia il percorso"
+  "docs_search_placeholder": "Cerca nella documentazione"
 }
