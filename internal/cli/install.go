@@ -722,7 +722,7 @@ func runInstall(cmd *cobra.Command, _ []string) error {
 					path := filepath.Join(config.QuadletDir(), "lerd-"+svc.Name+".container")
 					before, _ := os.ReadFile(path)
 					if svc.Custom != nil {
-						ensureCustomServiceQuadlet(svc.Custom) //nolint:errcheck
+						ensureCustomServiceQuadlet(installedServiceDefinition(svc.Name, svc.Custom)) //nolint:errcheck
 					} else {
 						ensureServiceQuadlet(svc.Name) //nolint:errcheck
 					}
