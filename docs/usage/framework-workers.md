@@ -146,11 +146,36 @@ custom_workers:
 
 Custom workers are merged with the framework's workers at runtime. They are committed to git so teammates get the same setup.
 
+## Worker icons
+
+A worker declares how the dashboard draws it, so a new worker gets an identity from the store with no binary release:
+
+```yaml
+workers:
+  queue:
+    label: Queue Worker
+    icon: queue                 # built-in glyph, inked in the framework's colour
+    command: php artisan queue:work
+  vite:
+    label: Vite
+    icon: vite                  # a mark the store ships at workers/vite.svg
+    color: "#9135ff"            # the mark's own tone, not the framework's
+    command: npm run dev
+```
+
+`icon` names either one of the built-in glyphs (`queue`, `clock`, `bolt`, `broadcast`, `card`, `gear`, …) or a mark the framework store carries under `workers/<icon>.svg`. Marks are keyed by icon name rather than by framework, so every framework that runs Vite shares one drawing. lerd caches a mark beside the definition that named it, sanitises it on the way in, and serves it to the dashboard from its own copy, so a worker keeps its icon offline and over remote access.
+
+`color` is optional. A worker without one takes its framework's brand colour, which is what tells two schedulers from different products apart; a worker whose mark has a tone of its own (Vite, Horizon) declares it, because inking Vite in Laravel red would read as a different product. A worker that declares neither falls back to its framework's own mark, and then to a plain gear.
+
+Both keys are optional and ignored by older binaries, so a store update carrying them is safe for installs that have not updated yet.
+
 ## Worker logs
 
 ```bash
 journalctl --user -u lerd-messenger-myapp -f
 ```
+
+In the dashboard, a worker keeps its Logs tab whatever state it is in, drawn muted while it is stopped. The journal outlives the unit, so the tab is still the place to read why a worker died after it has gone down, or after the health banner stopped it.
 
 ## Managing custom workers
 

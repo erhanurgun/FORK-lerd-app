@@ -205,15 +205,22 @@ type FrameworkWorker struct {
 	TuneCommand string `yaml:"tune_command,omitempty"`
 	// RestartCommand gracefully restarts the queue worker in-container (e.g.
 	// Laravel's "php artisan queue:restart"). Empty means no graceful restart.
-	RestartCommand string         `yaml:"restart_command,omitempty"`
-	Restart        string         `yaml:"restart,omitempty"`        // always | on-failure (default: always)
-	Schedule       string         `yaml:"schedule,omitempty"`       // systemd OnCalendar expression (e.g. "minutely"); when set, the worker is run as a Type=oneshot service triggered by a .timer rather than a long-running daemon. Use this for Laravel <=10 schedule:run, cron-style cleanup tasks, etc.
-	Check          *FrameworkRule `yaml:"check,omitempty"`          // only show when check passes (file exists or composer package installed)
-	ExcludeCheck   *FrameworkRule `yaml:"exclude_check,omitempty"`  // only show when check FAILS (e.g. queue is hidden when laravel/horizon is installed because horizon supersedes it)
-	ConflictsWith  []string       `yaml:"conflicts_with,omitempty"` // workers to stop before starting this one (e.g. horizon conflicts_with queue)
-	Proxy          *WorkerProxy   `yaml:"proxy,omitempty"`          // WebSocket/HTTP proxy config for nginx
-	Health         *WorkerHealth  `yaml:"health,omitempty"`         // reachability probe: process alive but server not accepting = unhealthy
-	Host           bool           `yaml:"host,omitempty"`           // run on the host via fnm instead of inside the PHP-FPM container
+	RestartCommand string `yaml:"restart_command,omitempty"`
+	// Icon names how the dashboard draws this worker: either one of the
+	// built-in glyphs (queue, clock) or a mark the store ships beside the
+	// definitions under workers/<icon>.svg. Color is the tone it is inked in;
+	// a worker that declares none takes its framework's, which is what tells a
+	// Laravel queue apart from a Symfony one at a glance.
+	Icon          string         `yaml:"icon,omitempty"`
+	Color         string         `yaml:"color,omitempty"`
+	Restart       string         `yaml:"restart,omitempty"`        // always | on-failure (default: always)
+	Schedule      string         `yaml:"schedule,omitempty"`       // systemd OnCalendar expression (e.g. "minutely"); when set, the worker is run as a Type=oneshot service triggered by a .timer rather than a long-running daemon. Use this for Laravel <=10 schedule:run, cron-style cleanup tasks, etc.
+	Check         *FrameworkRule `yaml:"check,omitempty"`          // only show when check passes (file exists or composer package installed)
+	ExcludeCheck  *FrameworkRule `yaml:"exclude_check,omitempty"`  // only show when check FAILS (e.g. queue is hidden when laravel/horizon is installed because horizon supersedes it)
+	ConflictsWith []string       `yaml:"conflicts_with,omitempty"` // workers to stop before starting this one (e.g. horizon conflicts_with queue)
+	Proxy         *WorkerProxy   `yaml:"proxy,omitempty"`          // WebSocket/HTTP proxy config for nginx
+	Health        *WorkerHealth  `yaml:"health,omitempty"`         // reachability probe: process alive but server not accepting = unhealthy
+	Host          bool           `yaml:"host,omitempty"`           // run on the host via fnm instead of inside the PHP-FPM container
 	// PerWorktree opts the worker into running independently per git worktree
 	// (lerd-<wname>-<site>-<wt>). Defaults to false; set true on workers that
 	// need a separate process per checkout (e.g. dev servers like vite).

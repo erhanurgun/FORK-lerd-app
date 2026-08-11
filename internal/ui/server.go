@@ -234,6 +234,7 @@ func Start(currentVersion string) error {
 	mux.HandleFunc("/api/services/presets", withCORS(handleServicePresets))
 	mux.HandleFunc("/api/services/icons", withCORS(handleServiceIcons))
 	mux.HandleFunc("/api/frameworks/marks", withCORS(handleFrameworkMarks))
+	mux.HandleFunc("/api/workers/marks", withCORS(handleWorkerMarks))
 	mux.HandleFunc("/api/frameworks/catalogue", withCORS(handleFrameworkCatalogue))
 	mux.HandleFunc("/api/project/questions", withCORS(handleProjectQuestions))
 	mux.HandleFunc("/api/project/setup-steps", withCORS(handleProjectSetupSteps))
@@ -303,6 +304,7 @@ func Start(currentVersion string) error {
 	mux.HandleFunc("/api/settings/dns-upstream", withCORS(handleSettingsDNSUpstream))
 	mux.HandleFunc("/api/workers/health", withCORS(handleWorkersHealth))
 	mux.HandleFunc("/api/workers/heal", withCORS(handleWorkersHeal))
+	mux.HandleFunc("/api/workers/stop", withCORS(handleWorkersStop))
 	mux.HandleFunc("/api/stats", withCORS(handleStats))
 	mux.HandleFunc("/api/disk", withCORS(handleDisk))
 	mux.HandleFunc("/api/xdebug/", withCORS(publishAfter(handleXdebugAction, eventbus.KindStatus)))
@@ -1853,6 +1855,19 @@ func handleFrameworkMarks(w http.ResponseWriter, r *http.Request) {
 		marks = map[string]config.FrameworkMark{}
 	}
 	writeJSON(w, marks)
+}
+
+// handleWorkerMarks returns how each cached framework's workers ask to be
+// drawn, and the marks themselves keyed by icon name. Split that way because a
+// mark belongs to the worker rather than to the framework running it: Laravel
+// and Tempest both run Vite and share one drawing, while the tone comes from
+// whichever of the two declared it.
+func handleWorkerMarks(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	writeJSON(w, config.WorkerMarks())
 }
 
 // handleServicePresetInstall installs a bundled preset and streams per-phase
