@@ -24,6 +24,15 @@ func launchctl(args ...string) ([]byte, error) {
 	return exec.CommandContext(ctx, "launchctl", args...).CombinedOutput()
 }
 
+// bootout removes a job from the launchd domain. Every bootout of the watcher
+// goes through here so it is always marked as a lerd-initiated stop first:
+// launchd delivers a bootout as the same SIGTERM a logout does, and the watcher
+// tears the whole environment down when it reads one as a logout.
+func bootout(name, domain, label string) ([]byte, error) {
+	podman.MarkManagedWatcherStop(name)
+	return launchctl("bootout", domain+"/"+label)
+}
+
 // uidDomain returns the launchd GUI domain for the current user, e.g. "gui/501".
 func uidDomain() string {
 	return fmt.Sprintf("gui/%d", os.Getuid())
@@ -173,6 +182,14 @@ const (
 	keepAliveOnFailure
 )
 
+// watcherExitTimeout is how long launchd lets the logout teardown run before it
+// SIGKILLs the watcher. The containers stop first, and a database declares up to
+// 60s so it can finish writing, so a grace sized for them alone is already gone
+// when the Podman Machine stop starts, which is the step whose loss is the whole
+// point of the teardown. This covers that stop plus the 90s a machine stop gets
+// elsewhere, with room to spare.
+const watcherExitTimeout = 180
+
 func buildPlist(lbl string, args []string, runAtLoad bool, keepAlive keepAlivePolicy, stdoutPath, stderrPath string) string {
 	var sb strings.Builder
 	sb.WriteString(`<?xml version="1.0" encoding="UTF-8"?>
@@ -208,8 +225,37 @@ func buildPlist(lbl string, args []string, runAtLoad bool, keepAlive keepAlivePo
 		sb.WriteString(xmlEscStr(stderrPath))
 		sb.WriteString("</string>\n")
 	}
+	// The watcher runs the full teardown (containers, then the Podman Machine
+	// VM) when launchd signals a logout, which does not fit the 5s grace
+	// launchd gives these jobs before SIGKILL. Every other job stops fast, and
+	// a longer timeout there would only slow down a hung unit.
+	if lbl == plistLabel(podman.WatcherUnit) {
+		sb.WriteString(fmt.Sprintf("\t<key>ExitTimeOut</key>\n\t<integer>%d</integer>\n", watcherExitTimeout))
+	}
+	if ownsPodmanMachine(lbl) {
+		sb.WriteString("\t<key>AbandonProcessGroup</key>\n\t<true/>\n")
+	}
 	sb.WriteString("</dict>\n</plist>\n")
 	return sb.String()
+}
+
+// machineOwningUnits are the host jobs that can bring the Podman Machine up:
+// lerd-autostart and lerd-tray by running `lerd start`, lerd-ui in-process from
+// the dashboard, and lerd-watcher when it remounts stale container storage.
+var machineOwningUnits = []string{"lerd-autostart", "lerd-ui", "lerd-tray", podman.WatcherUnit}
+
+// ownsPodmanMachine reports whether a job needs AbandonProcessGroup. vfkit and
+// gvproxy reparent to init but keep the process group of whatever started them,
+// and launchd's default is to kill what remains in a job's group once the job
+// exits, taking the VM with it. Container and worker jobs never start the VM
+// and want that cleanup, so the key stays scoped to the units above.
+func ownsPodmanMachine(lbl string) bool {
+	for _, unit := range machineOwningUnits {
+		if lbl == plistLabel(unit) {
+			return true
+		}
+	}
+	return false
 }
 
 func ensurePlistDirs(name string) error {
@@ -712,7 +758,7 @@ func (m *darwinServiceManager) Start(name string) error {
 	alreadyInDomain := false
 	if _, err := launchctl("print", domain+"/"+label); err == nil {
 		alreadyInDomain = true
-		launchctl("bootout", domain+"/"+label) //nolint:errcheck
+		bootout(name, domain, label) //nolint:errcheck
 		// Brief pause so macOS Sequoia+ doesn't reject the immediately-following
 		// bootstrap with a spurious "already bootstrapped" (36) or EBUSY (5) error.
 		time.Sleep(200 * time.Millisecond)
@@ -745,6 +791,11 @@ func (m *darwinServiceManager) Start(name string) error {
 					return nil
 				}
 			}
+			// kickstart -k kills the running job first, which reaches the
+			// watcher as the same SIGTERM a logout does. Nothing booted it
+			// out on this path (print said it wasn't in the domain), so the
+			// mark has to happen here or a start tears the environment down.
+			podman.MarkManagedWatcherStop(name)
 			if kout, kerr := launchctl("kickstart", "-k", domain+"/"+label); kerr != nil {
 				ks := string(kout)
 				// 37 = EALREADY — job is already running, treat as success.
@@ -827,7 +878,7 @@ func (m *darwinServiceManager) Stop(name string) error {
 	domain := uidDomain()
 	label := plistLabel(name)
 
-	out, err := launchctl("bootout", domain+"/"+label)
+	out, err := bootout(name, domain, label)
 	if err != nil {
 		s := string(out)
 		// 36 = not loaded / already gone — treat as success
@@ -856,7 +907,7 @@ func (m *darwinServiceManager) Restart(name string) error {
 	// Bootout so the subsequent Start (bootstrap) picks up the current
 	// plist on disk. kickstart -k would use launchd's cached copy.
 	if _, err := launchctl("print", domain+"/"+label); err == nil {
-		launchctl("bootout", domain+"/"+label) //nolint:errcheck
+		bootout(name, domain, label) //nolint:errcheck
 		time.Sleep(200 * time.Millisecond)
 	}
 	return m.Start(name)

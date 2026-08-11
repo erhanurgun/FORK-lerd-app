@@ -1,6 +1,6 @@
 <script lang="ts">
   import { dashboardOpen, closeDashboard } from '$stores/dashboard';
-  import { dashboardIconSvg } from '$lib/dashboardIcons';
+  import ServiceIcon from './ServiceIcon.svelte';
   import {
     profilerEnabled,
     loadProfilerStatus,
@@ -166,9 +166,7 @@
             <Icon name="back" />
           </button>
         {/if}
-        <svg class="w-5 h-5 text-gray-500 dark:text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          {@html dashboardIconSvg(d.name, d.icon)}
-        </svg>
+        <ServiceIcon name={d.name} icon={d.icon} bare compact />
         <span class="text-sm font-medium text-gray-900 dark:text-white truncate">{d.label || d.name}</span>
         <a
           href={externalHref}

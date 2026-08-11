@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"time"
 )
 
 // DumpsTCPPort is the loopback port the dump receiver binds on darwin
@@ -583,6 +584,39 @@ func ClearStopped() error {
 func IsStopped() bool {
 	_, err := os.Stat(stoppedMarkerPath())
 	return err == nil
+}
+
+// watcherManagedStopMarkerPath is the sentinel lerd writes just before it stops
+// the watcher itself. The watcher is signalled the same way by a logout and by
+// `lerd install`, `lerd update`, or `lerd quit` restarting it, and SIGTERM
+// carries nothing to tell those apart; this marker does.
+func watcherManagedStopMarkerPath() string {
+	return filepath.Join(RunDir(), "watcher-managed-stop")
+}
+
+// watcherManagedStopTTL bounds how long a marker stays believable. A managed
+// stop signals within milliseconds of the write, so anything older is a marker
+// whose watcher died before reading it, and a real logout must not inherit it.
+const watcherManagedStopTTL = 60 * time.Second
+
+// MarkWatcherManagedStop records that lerd is about to stop the watcher itself,
+// so the watcher exits without running the shutdown teardown.
+func MarkWatcherManagedStop() error {
+	if err := os.MkdirAll(RunDir(), 0755); err != nil {
+		return err
+	}
+	guardRealWrite(watcherManagedStopMarkerPath())
+	return os.WriteFile(watcherManagedStopMarkerPath(), []byte("managed\n"), 0644)
+}
+
+// ConsumeWatcherManagedStop reports whether the stop the watcher just received
+// came from lerd rather than from the OS, clearing the marker either way so a
+// later logout is never mistaken for another managed stop.
+func ConsumeWatcherManagedStop() bool {
+	st, err := os.Stat(watcherManagedStopMarkerPath())
+	guardRealWrite(watcherManagedStopMarkerPath())
+	_ = os.Remove(watcherManagedStopMarkerPath())
+	return err == nil && time.Since(st.ModTime()) < watcherManagedStopTTL
 }
 
 // PprofMarkerPath is the sentinel that unlocks lerd-ui's profiling endpoints.

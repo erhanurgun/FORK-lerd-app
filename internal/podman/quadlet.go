@@ -395,9 +395,26 @@ func StartUnit(name string) error {
 	return nil
 }
 
+// WatcherUnit is the lerd daemon that runs the shutdown teardown when the OS
+// signals a logout. It is the one unit whose stop is ambiguous: launchd and
+// systemd both deliver a plain SIGTERM whether the machine is powering off or
+// lerd is merely restarting the watcher during an install or an update.
+const WatcherUnit = "lerd-watcher"
+
+// MarkManagedWatcherStop tells the watcher that the stop it is about to receive
+// came from lerd, not from the OS, so it exits without tearing the environment
+// down. Called from the unit funnels below rather than from each caller, so a
+// new path that stops the watcher inherits the guard instead of having to know.
+func MarkManagedWatcherStop(name string) {
+	if name == WatcherUnit {
+		_ = config.MarkWatcherManagedStop()
+	}
+}
+
 // StopUnit stops a service unit.
 func StopUnit(name string) error {
 	logUnitOp("stop", name)
+	MarkManagedWatcherStop(name)
 	if realSystemdBlocked() {
 		return errNoRealSystemd
 	}
@@ -430,6 +447,7 @@ func ResetFailedUnit(name string) {
 // RestartUnit restarts a service unit.
 func RestartUnit(name string) error {
 	logUnitOp("restart", name)
+	MarkManagedWatcherStop(name)
 	if realSystemdBlocked() {
 		return errNoRealSystemd
 	}

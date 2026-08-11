@@ -3,6 +3,7 @@
 package services
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -129,6 +130,64 @@ func TestBuildPlistNoOptionalFields(t *testing.T) {
 	}
 	if strings.Contains(plist, "StandardOutPath") {
 		t.Error("expected no StandardOutPath key")
+	}
+}
+
+// TestBuildPlistExitTimeoutOnlyForWatcher pins that the extended exit grace is
+// scoped to the watcher, which runs the full teardown on logout. Granting it to
+// every job would make launchd wait a minute on any unit that hangs on stop.
+func TestBuildPlistExitTimeoutOnlyForWatcher(t *testing.T) {
+	watcher := buildPlist(plistLabel(podman.WatcherUnit), []string{"/bin/true"}, true, keepAliveAlways, "", "")
+	if !strings.Contains(watcher, "<key>ExitTimeOut</key>") {
+		t.Error("watcher plist must set ExitTimeOut so the teardown survives launchd's default exit grace")
+	}
+
+	other := buildPlist(plistLabel("lerd-nginx"), []string{"/bin/true"}, true, keepAliveAlways, "", "")
+	if strings.Contains(other, "ExitTimeOut") {
+		t.Error("non-watcher plists must not set ExitTimeOut")
+	}
+}
+
+// TestWatcherExitTimeoutFitsTheTeardown pins the grace to something the work can
+// actually fit in. The containers stop first and a database asks for up to 60s
+// to finish writing, so a grace that only covers them is spent before the
+// machine stop begins, and launchd kills the watcher partway through the one
+// step the teardown exists for.
+func TestWatcherExitTimeoutFitsTheTeardown(t *testing.T) {
+	const longestContainerStop = 60 // databases declare this in the service store
+	const machineStopBudget = 90    // what lerd allows a machine stop elsewhere
+
+	if watcherExitTimeout < longestContainerStop+machineStopBudget {
+		t.Errorf("exit grace of %ds cannot fit a %ds container stop followed by a %ds machine stop",
+			watcherExitTimeout, longestContainerStop, machineStopBudget)
+	}
+
+	plist := buildPlist(plistLabel(podman.WatcherUnit), []string{"/bin/true"}, true, keepAliveAlways, "", "")
+	if !strings.Contains(plist, fmt.Sprintf("<integer>%d</integer>", watcherExitTimeout)) {
+		t.Errorf("watcher plist does not carry the %ds grace:\n%s", watcherExitTimeout, plist)
+	}
+}
+
+// TestBuildPlistAbandonProcessGroupForMachineOwners pins which jobs keep their
+// process group alive on exit. vfkit and gvproxy reparent to init but stay in
+// the group of whatever ran `podman machine start`, and launchd kills what is
+// left in a job's group when the job exits, so any unit that can bring the VM
+// up has to abandon its group or it takes the VM down with it.
+func TestBuildPlistAbandonProcessGroupForMachineOwners(t *testing.T) {
+	for _, unit := range []string{"lerd-autostart", "lerd-ui", "lerd-tray", podman.WatcherUnit} {
+		plist := buildPlist(plistLabel(unit), []string{"/bin/true"}, true, keepAliveAlways, "", "")
+		if !strings.Contains(plist, "<key>AbandonProcessGroup</key>") {
+			t.Errorf("%s can start the Podman Machine, so it must abandon its process group on exit", unit)
+		}
+	}
+
+	// Container and worker jobs never start the VM, and the group kill is how
+	// their strays get cleaned up.
+	for _, unit := range []string{"lerd-nginx", "lerd-horizon-app"} {
+		plist := buildPlist(plistLabel(unit), []string{"/bin/true"}, false, keepAliveNever, "", "")
+		if strings.Contains(plist, "AbandonProcessGroup") {
+			t.Errorf("%s must keep launchd's process group cleanup", unit)
+		}
 	}
 }
 
@@ -697,6 +756,30 @@ func TestPrecreateBindMountDirs_SkipsNamedVolume(t *testing.T) {
 	}
 	if _, err := os.Stat(bind); err != nil {
 		t.Errorf("bind-mount source not pre-created: %v", err)
+	}
+}
+
+// TestBootout_MarksWatcherStops is the regression test for a logout the watcher
+// invented. launchd delivers a bootout as the same SIGTERM a real logout does,
+// so every bootout of the watcher has to mark itself first; otherwise `lerd
+// start`, which boots the watcher out before re-bootstrapping it, makes the
+// watcher tear down everything start had just brought up.
+func TestBootout_MarksWatcherStops(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmp, ".config"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(tmp, ".local", "share"))
+
+	// A domain that cannot exist, so launchctl fails fast without touching any
+	// real job. The marker is written before the call either way.
+	bootout(podman.WatcherUnit, "gui/4294967290", "com.lerd.does-not-exist") //nolint:errcheck
+	if !config.ConsumeWatcherManagedStop() {
+		t.Error("booting out the watcher must mark the stop as lerd-initiated")
+	}
+
+	bootout("lerd-nginx", "gui/4294967290", "com.lerd.does-not-exist") //nolint:errcheck
+	if config.ConsumeWatcherManagedStop() {
+		t.Error("booting out any other unit must not mark a watcher stop")
 	}
 }
 

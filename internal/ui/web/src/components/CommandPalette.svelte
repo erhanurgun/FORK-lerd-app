@@ -31,6 +31,7 @@
     type Command
   } from '$stores/commands';
   import FrameworkMark from '$components/FrameworkMark.svelte';
+  import ServiceIcon from '$components/ServiceIcon.svelte';
   import { m } from '../paraglide/messages.js';
 
   type Group = 'pages' | 'sites' | 'services' | 'presets' | 'toggles' | 'commands' | 'actions';
@@ -38,8 +39,10 @@
     id: string;
     label: string;
     hint?: string;
-    // Framework name for a site entry, so its hint can carry the mark.
+    // Framework name for a site entry, service name for a service one, so the
+    // hint can carry the mark either one is known by.
     framework?: string;
+    service?: string;
     group: Group;
     action: () => void | Promise<void>;
   }
@@ -73,6 +76,7 @@
         id: 'svc:' + svc.name,
         label: serviceLabel(svc.name),
         hint: svc.version || (svc.status === 'active' ? 'active' : 'inactive'),
+        service: svc.name,
         group: 'services',
         action: () => goToTab('services', svc.name)
       });
@@ -388,7 +392,11 @@
                 <span class="flex-1 truncate">{e.label}</span>
                 {#if e.hint}
                   <span class="flex items-center gap-1 text-[11px] font-mono text-gray-400 dark:text-gray-500 truncate">
-                    <FrameworkMark name={e.framework} />
+                    {#if e.service}
+                      <ServiceIcon name={e.service} bare inline />
+                    {:else}
+                      <FrameworkMark name={e.framework} />
+                    {/if}
                     {e.hint}
                   </span>
                 {/if}

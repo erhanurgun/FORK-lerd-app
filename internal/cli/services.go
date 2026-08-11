@@ -13,6 +13,7 @@ import (
 	"charm.land/huh/v2"
 	"github.com/geodro/lerd/internal/config"
 	"github.com/geodro/lerd/internal/feedback"
+	"github.com/geodro/lerd/internal/lifecycle"
 	phpPkg "github.com/geodro/lerd/internal/php"
 	"github.com/geodro/lerd/internal/podman"
 	"github.com/geodro/lerd/internal/serviceops"
@@ -1161,35 +1162,8 @@ func autoStopUnusedServices() {
 }
 
 // activePHPVersions returns the set of PHP versions actually in use by
-// non-ignored, non-paused sites, using live disk detection (.php-version file)
-// with the stored registry value as fallback.
-func activePHPVersions() map[string]bool {
-	reg, err := config.LoadSites()
-	if err != nil {
-		return nil
-	}
-	active := make(map[string]bool)
-	for _, s := range reg.Sites {
-		if s.Ignored {
-			continue
-		}
-		phpMin, phpMax := "", ""
-		if s.Framework != "" {
-			// A guessed framework definition's PHP range must not constrain the
-			// site (a Laravel 6 served by the Laravel 10 def still runs on 7.4),
-			// so skip its range and let the real detected version drive which
-			// FPM unit coreUnits starts.
-			if fw, fwOk := config.GetFrameworkForDir(s.Framework, s.Path); fwOk && !fw.VersionGuessed {
-				phpMin, phpMax = fw.PHP.Min, fw.PHP.Max
-			}
-		}
-		v := phpPkg.DetectVersionClamped(s.Path, phpMin, phpMax, s.PHPVersion)
-		if v != "" {
-			active[v] = true
-		}
-	}
-	return active
-}
+// non-ignored, non-paused sites.
+func activePHPVersions() map[string]bool { return lifecycle.ActivePHPVersions() }
 
 // activeFrankenPHPVersions returns the distinct, normalized PHP versions used by
 // non-ignored, non-paused FrankenPHP sites, for derived-image rebuild detection.

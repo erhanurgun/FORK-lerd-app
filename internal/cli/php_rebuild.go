@@ -8,6 +8,7 @@ import (
 
 	"github.com/geodro/lerd/internal/config"
 	"github.com/geodro/lerd/internal/feedback"
+	"github.com/geodro/lerd/internal/lifecycle"
 	phpPkg "github.com/geodro/lerd/internal/php"
 	"github.com/geodro/lerd/internal/podman"
 	lerdSystemd "github.com/geodro/lerd/internal/systemd"
@@ -130,7 +131,7 @@ func RebuildPHPVersion(version string, w io.Writer) error {
 // via podman exec. BindsTo stops them when the FPM container stops but does not
 // bring them back when it returns, so a rebuild has to do it explicitly.
 func restartInContainerWorkers() {
-	for _, unit := range append(append(registeredReverbUnits(), registeredQueueUnits()...), registeredScheduleUnits()...) {
+	for _, unit := range append(append(lifecycle.RegisteredReverbUnits(), lifecycle.RegisteredQueueUnits()...), lifecycle.RegisteredScheduleUnits()...) {
 		if !lerdSystemd.IsServiceActive(unit) && !lerdSystemd.IsServiceEnabled(unit) {
 			continue
 		}

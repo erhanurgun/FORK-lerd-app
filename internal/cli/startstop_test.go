@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/geodro/lerd/internal/config"
+	"github.com/geodro/lerd/internal/lifecycle"
 )
 
 // A host-proxy site whose .lerd.yaml dev command has drifted from the approved
@@ -30,7 +31,7 @@ func TestRegisteredFrameworkWorkerUnits_EnumeratesDriftedHostProxy(t *testing.T)
 	}
 	want := config.HostProxyWorkerUnit("site")
 	found := false
-	for _, u := range registeredFrameworkWorkerUnits() {
+	for _, u := range lifecycle.RegisteredFrameworkWorkerUnits() {
 		if u == want {
 			found = true
 		}
@@ -188,7 +189,7 @@ func TestMigrateExecWorkerPlists_linux(t *testing.T) {
 }
 
 // TestStopUnitSet_KeepsDNSRunning pins that `lerd stop` excludes lerd-dns even
-// when lerd manages DNS, while coreUnits (the start path) still includes it.
+// when lerd manages DNS, while the start path's core units still include it.
 // The resolver keeps pointing .test at lerd-dns until uninstall, so stopping
 // it would strand that pointer at a dead :5300.
 func TestStopUnitSet_KeepsDNSRunning(t *testing.T) {
@@ -199,11 +200,11 @@ func TestStopUnitSet_KeepsDNSRunning(t *testing.T) {
 		t.Fatalf("SaveGlobal: %v", err)
 	}
 
-	if !slices.Contains(coreUnits(), "lerd-dns") {
-		t.Fatal("coreUnits must include lerd-dns when DNS is managed (start path)")
+	if !slices.Contains(lifecycle.CoreUnits(), "lerd-dns") {
+		t.Fatal("CoreUnits must include lerd-dns when DNS is managed (start path)")
 	}
-	if slices.Contains(stopUnitSet(), "lerd-dns") {
-		t.Error("stopUnitSet must exclude lerd-dns so it stays running across `lerd stop`")
+	if slices.Contains(lifecycle.StopUnitSet(), "lerd-dns") {
+		t.Error("StopUnitSet must exclude lerd-dns so it stays running across `lerd stop`")
 	}
 }
 
@@ -211,7 +212,7 @@ func TestStopUnitSet_KeepsDNSRunning(t *testing.T) {
 // stops lerd-dns (unlike `lerd stop`), and stops lerd-watcher before lerd-dns so
 // the watcher can't restart dns after it goes down.
 func TestQuitProcessUnits_FullTeardown(t *testing.T) {
-	units := quitProcessUnits()
+	units := lifecycle.QuitProcessUnits()
 	dns := slices.Index(units, "lerd-dns")
 	watcher := slices.Index(units, "lerd-watcher")
 	if dns < 0 {
