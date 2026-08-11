@@ -133,6 +133,22 @@ func plistPath(name string) string {
 	return filepath.Join(launchAgentsDir(), name+".plist")
 }
 
+// writePlist and removePlist are the only ways a unit file is created or
+// deleted, so the guard that keeps a forgetful test off the developer's own
+// LaunchAgents dir sits on the single path all of them go through.
+func writePlist(name, plist string) error {
+	config.GuardRealWrite(plistPath(name))
+	return os.WriteFile(plistPath(name), []byte(plist), 0644)
+}
+
+func removePlist(name string) error {
+	config.GuardRealWrite(plistPath(name))
+	if err := os.Remove(plistPath(name)); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
 func plistLabel(name string) string {
 	return "com.lerd." + name
 }
@@ -628,7 +644,7 @@ func (m *darwinServiceManager) WriteServiceUnit(name, content string) error {
 	}
 	logPath := filepath.Join(lerdLogsDir(), name+".log")
 	plist := buildPlist(plistLabel(name), args, true, keepAlive, logPath, logPath)
-	return os.WriteFile(plistPath(name), []byte(plist), 0644)
+	return writePlist(name, plist)
 }
 
 func (m *darwinServiceManager) WriteServiceUnitIfChanged(name, content string) (bool, error) {
@@ -646,7 +662,7 @@ func (m *darwinServiceManager) WriteServiceUnitIfChanged(name, content string) (
 	if err := ensurePlistDirs(name); err != nil {
 		return false, err
 	}
-	return true, os.WriteFile(plistPath(name), []byte(newPlist), 0644)
+	return true, writePlist(name, newPlist)
 }
 
 // WriteTimerUnitIfChanged is a no-op on macOS until launchd
@@ -665,10 +681,7 @@ func (m *darwinServiceManager) RemoveTimerUnit(_ string) error { return nil }
 func (m *darwinServiceManager) ListTimerUnits(_ string) []string { return nil }
 
 func (m *darwinServiceManager) RemoveServiceUnit(name string) error {
-	if err := os.Remove(plistPath(name)); err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	return nil
+	return removePlist(name)
 }
 
 func (m *darwinServiceManager) ListServiceUnits(nameGlob string) []string {
@@ -714,7 +727,7 @@ func (m *darwinServiceManager) WriteContainerUnit(name, content string) error {
 	// Stdout is suppressed (/dev/null) because `podman run -d` only prints the container
 	// ID there; real container output is accessible via `podman logs <name>`.
 	plist := buildPlist(plistLabel(name), args, false, keepAliveNever, "/dev/null", logPath)
-	return os.WriteFile(plistPath(name), []byte(plist), 0644)
+	return writePlist(name, plist)
 }
 
 func (m *darwinServiceManager) ContainerUnitInstalled(name string) bool {
@@ -723,10 +736,7 @@ func (m *darwinServiceManager) ContainerUnitInstalled(name string) bool {
 }
 
 func (m *darwinServiceManager) RemoveContainerUnit(name string) error {
-	if err := os.Remove(plistPath(name)); err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	return nil
+	return removePlist(name)
 }
 
 func (m *darwinServiceManager) ListContainerUnits(nameGlob string) []string {
