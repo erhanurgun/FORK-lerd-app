@@ -82,6 +82,26 @@ func (c *Client) fetchFrameworkIcon(name string) {
 	_ = config.SaveStoreFrameworkIcon(name, data)
 }
 
+// fetchWorkerIcons caches the marks a definition's workers name, under
+// workers/<icon>.svg. A worker's icon is often one of the built-in glyphs and
+// not a mark at all, so a miss here is the normal case and costs one 404 per
+// icon per install. Best effort throughout, exactly like a framework's own mark.
+func (c *Client) fetchWorkerIcons(workers map[string]config.FrameworkWorker) {
+	for _, w := range workers {
+		if w.Icon == "" {
+			continue
+		}
+		if _, ok := config.WorkerIcon(w.Icon); ok {
+			continue
+		}
+		data, err := c.fetch("workers/" + w.Icon + ".svg")
+		if err != nil {
+			continue
+		}
+		_ = config.SaveStoreWorkerIcon(w.Icon, data)
+	}
+}
+
 // NewClient returns a store client with default settings.
 func NewClient() *Client {
 	urls := origin.StoreBaseURLs()
@@ -211,6 +231,7 @@ func (c *Client) FetchFramework(name, version string) (*config.Framework, error)
 	// Every path that caches a remote definition comes through here, so the mark
 	// is pulled alongside it in one place rather than at each of the callers.
 	c.fetchFrameworkIcon(name)
+	c.fetchWorkerIcons(fw.Workers)
 
 	return &fw, nil
 }

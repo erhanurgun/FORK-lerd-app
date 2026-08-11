@@ -17,6 +17,7 @@
   import { loadServices } from '$stores/services';
   import { loadServiceIcons } from '$stores/serviceIcons';
   import { loadFrameworkMarks } from '$stores/frameworkMarks';
+  import { loadWorkerMarks } from '$stores/workerMarks';
   import { loadWorkerHealth } from '$stores/workerHealth';
   import { watchActiveRun } from '$stores/wizard';
   import { connectWs, disconnectWs } from '$lib/ws';
@@ -58,6 +59,7 @@
     loadServices();
     loadServiceIcons();
     loadFrameworkMarks();
+    loadWorkerMarks();
     loadWorkerHealth();
     // A scaffold or setup the wizard sent to the background outlives the page,
     // so the dashboard asks on load whether anything is still going.
