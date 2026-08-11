@@ -10,10 +10,12 @@ func init() {
 	siteops.StopSiteShares = stopSiteShares
 }
 
-// stopSiteShares releases every listener a site holds, so unlinking it cannot
-// leave one bound with no registry entry left to reach it by.
+// stopSiteShares releases every listener a site holds, its worktrees' included,
+// so unlinking it cannot leave one bound with no registry entry left to reach it
+// by. Worktree shares are keyed per branch, so they need releasing by name.
 func stopSiteShares(siteName string) {
 	LANShareStopServer(siteName)
+	LANShareStopWorktrees(siteName)
 	PublicShareStopServer(siteName)
-	_ = TunnelStop(siteName, "")
+	StopSiteTunnels(siteName)
 }

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/geodro/lerd/internal/activityping"
+	"github.com/geodro/lerd/internal/certs"
 	"github.com/geodro/lerd/internal/config"
 	"github.com/geodro/lerd/internal/idle"
 	"github.com/geodro/lerd/internal/nginx"
@@ -41,18 +42,37 @@ var StopSiteWorkers func(site *config.Site)
 // remove certs, update registry (ignore if parked, remove otherwise), update
 // container hosts, and reload nginx.
 func UnlinkSiteCore(site *config.Site, parkedDirs []string) error {
+	TeardownSite(site, parkedDirs)
+
+	if err := FinishSiteRemoval(); err != nil {
+		return err
+	}
+
+	// See FinishLink: unlinking doesn't start/stop a systemd unit, so
+	// the shared hook wouldn't otherwise fire. Notify explicitly.
+	if podman.AfterUnitChange != nil {
+		podman.AfterUnitChange("site:" + site.Name)
+	}
+	return nil
+}
+
+// TeardownSite applies everything an unlink does to one site and nothing that
+// reaches past it. The install-wide tail is FinishSiteRemoval, so a sweep that
+// reaps several deleted sites at once applies it once for all of them.
+func TeardownSite(site *config.Site, parkedDirs []string) {
 	if StopSiteWorkers != nil {
 		StopSiteWorkers(site)
 	}
 	StopSiteShares(site.Name)
 
 	_ = nginx.RemoveVhost(site.PrimaryDomain())
+	// The site's worktrees are served by subdomain vhosts of their own, and
+	// they go with it: a branch of a site lerd no longer knows about has
+	// nothing left to serve.
+	RemoveWorktreeVhosts(site.PrimaryDomain())
 
 	if site.Secured {
-		certsDir := config.CertsDir()
-		domain := site.PrimaryDomain()
-		os.Remove(filepath.Join(certsDir, domain+".crt")) //nolint:errcheck
-		os.Remove(filepath.Join(certsDir, domain+".key")) //nolint:errcheck
+		certs.RemoveSiteCerts(site.PrimaryDomain())
 	}
 
 	// Clean up the per-project custom container if this site uses one.
@@ -87,20 +107,15 @@ func UnlinkSiteCore(site *config.Site, parkedDirs []string) error {
 	}
 
 	forgetSiteState(site.Name)
+}
 
+// FinishSiteRemoval applies what removing a site changes for the whole install:
+// the container hosts files, the FPM quadlets, and the nginx reload that puts
+// the dropped vhosts into effect.
+func FinishSiteRemoval() error {
 	_ = podman.WriteContainerHosts()
 	_ = podman.RewriteFPMQuadlets()
-
-	if err := nginx.Reload(); err != nil {
-		return err
-	}
-
-	// See FinishLink: unlinking doesn't start/stop a systemd unit, so
-	// the shared hook wouldn't otherwise fire. Notify explicitly.
-	if podman.AfterUnitChange != nil {
-		podman.AfterUnitChange("site:" + site.Name)
-	}
-	return nil
+	return nginx.Reload()
 }
 
 // forgetSiteState drops the per-site request-timing and idle state the watcher

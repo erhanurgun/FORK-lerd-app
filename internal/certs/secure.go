@@ -169,10 +169,16 @@ func UnsecureSite(site config.Site) error {
 		}
 	}
 
-	// Remove cert files
-	certsDir := filepath.Join(config.CertsDir(), "sites")
-	os.Remove(filepath.Join(certsDir, site.PrimaryDomain()+".crt")) //nolint:errcheck
-	os.Remove(filepath.Join(certsDir, site.PrimaryDomain()+".key")) //nolint:errcheck
+	RemoveSiteCerts(site.PrimaryDomain())
 
 	return nil
+}
+
+// RemoveSiteCerts deletes a domain's certificate pair. Site certs live in the
+// sites/ subdirectory, so a caller building the path from CertsDir alone
+// silently removes nothing.
+func RemoveSiteCerts(domain string) {
+	certsDir := filepath.Join(config.CertsDir(), "sites")
+	os.Remove(filepath.Join(certsDir, domain+".crt")) //nolint:errcheck
+	os.Remove(filepath.Join(certsDir, domain+".key")) //nolint:errcheck
 }

@@ -481,7 +481,7 @@ func newWatchCmd() *cobra.Command {
 			go func() {
 				for range time.Tick(30 * time.Second) {
 					if removeStale(cfg) {
-						if err := nginx.Reload(); err != nil {
+						if err := siteops.FinishSiteRemoval(); err != nil {
 							fmt.Printf("[WARN] nginx reload: %v\n", err)
 						}
 						// Tell the UI and anyone else subscribed that the
@@ -823,7 +823,9 @@ func bootScan(cfg *config.GlobalConfig) {
 
 	// Remove stale sites (deleted while we were offline or during the scan above).
 	if removeStale(cfg) {
-		reloadNeeded = true
+		if err := siteops.FinishSiteRemoval(); err != nil {
+			fmt.Printf("[WARN] nginx reload: %v\n", err)
+		}
 	}
 
 	// Generate vhosts for any existing worktrees. The heavy per-worktree work
@@ -1156,7 +1158,7 @@ func shouldInheritNginxOnSync(action string) bool {
 // domain, then re-generates for worktrees still on disk. Survivors keep their
 // .env; deps and APP_URL are handled by syncWorktree on add/rename, not here.
 func cleanupWorktreeVhosts(site *config.Site) bool {
-	removed := removeWorktreeVhosts(site)
+	removed := siteops.RemoveWorktreeVhosts(site.PrimaryDomain())
 	worktrees, _ := gitpkg.DetectWorktrees(site.Path, site.PrimaryDomain())
 	// Drop the custom nginx override + backups for worktrees that are truly
 	// gone. removeWorktreeVhosts wipes every worktree vhost, so a survivor is
@@ -1230,32 +1232,6 @@ func removeStaleWorktreeVhosts(site *config.Site, worktrees []gitpkg.Worktree) b
 	return changed
 }
 
-// removeWorktreeVhosts removes every worktree subdomain vhost for the site and
-// returns the domains it removed (each vhost filename minus ".conf").
-func removeWorktreeVhosts(site *config.Site) []string {
-	confD := config.NginxConfD()
-	entries, err := os.ReadDir(confD)
-	if err != nil {
-		return nil
-	}
-	suffix := "." + site.PrimaryDomain() + ".conf"
-	var removed []string
-	for _, e := range entries {
-		if strings.HasSuffix(e.Name(), suffix) {
-			// A conf whose domain belongs to a separately-registered site (e.g. a
-			// group secondary at <label>.<primary>) is not a worktree vhost; never
-			// delete it, or the secondary stops being served.
-			domain := strings.TrimSuffix(e.Name(), ".conf")
-			if _, err := config.FindSiteByDomain(domain); err == nil {
-				continue
-			}
-			_ = os.Remove(filepath.Join(confD, e.Name()))
-			removed = append(removed, domain)
-		}
-	}
-	return removed
-}
-
 // removeStale removes registered sites whose paths no longer exist on disk.
 // Covers both parked-dir projects (caught by the fast fsnotify path when it
 // fires) and manually site_link'd projects outside any park. Returns true if
@@ -1276,26 +1252,11 @@ func removeStale(_ *config.GlobalConfig) bool {
 		if _, statErr := os.Stat(site.Path); os.IsNotExist(statErr) {
 			fmt.Printf("Removing stale site: %s (%s)\n", site.Name, site.Path)
 			s := site
-			// Tear down the site's workers and any per-site container before
-			// dropping the vhost and registry entry. Without this a host-proxy
-			// site's always-restart dev server (and a custom-container/FrankenPHP
-			// container) keeps running after the project directory is gone. The
-			// nginx reload is batched by the caller.
-			if siteops.StopSiteWorkers != nil {
-				siteops.StopSiteWorkers(&s)
-			}
-			if s.IsCustomContainer() {
-				_ = podman.StopUnit(podman.CustomContainerName(s.Name))
-				podman.RemoveCustomContainer(s.Name)
-				_ = podman.RemoveCustomContainerQuadlet(s.Name)
-			}
-			if s.IsFrankenPHP() {
-				_ = podman.StopUnit(podman.FrankenPHPContainerName(s.Name))
-				_ = podman.RemoveFrankenPHPQuadlet(s.Name)
-			}
-			_ = nginx.RemoveVhost(s.PrimaryDomain())
-			_ = config.RemoveSite(s.Name)
-			_ = config.RemoveSiteFromWorkspaces(s.Name)
+			// Same teardown an explicit unlink performs, so a deleted project
+			// leaves nothing behind: its workers, per-site container, certs,
+			// shares and recorded state all go with the registry entry. The
+			// install-wide tail is batched by the caller.
+			siteops.TeardownSite(&s, nil)
 			removed = true
 		}
 	}
