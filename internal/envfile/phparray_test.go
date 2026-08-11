@@ -463,6 +463,42 @@ func TestApplyPhpArrayUpdates_GroupsKeysUnderOneNewParent(t *testing.T) {
 	}
 }
 
+// Several keys descending through the same value that is not an array, as an
+// app_local.php reading its datasource from env() has. One replacement serves
+// them all, or the second splices over the first and the file stops parsing.
+func TestApplyPhpArrayUpdates_KeysThroughOneNonArray(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "app_local.php")
+	body := "<?php\nuse function Cake\\Core\\env;\nreturn [\n    'Datasources' => env('DATABASE_URL'),\n    'debug' => true,\n];\n"
+	if err := os.WriteFile(path, []byte(body), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ApplyPhpArrayUpdates(path, map[string]string{
+		"Datasources.default.database": "site",
+		"Datasources.default.host":     "lerd-mysql",
+		"Datasources.default.username": "lerd",
+	}); err != nil {
+		t.Fatalf("ApplyPhpArrayUpdates: %v", err)
+	}
+	vals, err := ReadPhpArray(path)
+	if err != nil {
+		t.Fatalf("re-read: %v", err)
+	}
+	for key, want := range map[string]string{
+		"Datasources.default.database": "site",
+		"Datasources.default.host":     "lerd-mysql",
+		"Datasources.default.username": "lerd",
+	} {
+		if vals[key] != want {
+			out, _ := os.ReadFile(path)
+			t.Errorf("%s = %q, want %q:\n%s", key, vals[key], want, out)
+		}
+	}
+	if out, _ := os.ReadFile(path); !strings.Contains(string(out), "'debug' => true") {
+		t.Errorf("the rest of the file did not survive:\n%s", out)
+	}
+}
+
 // A value the reader cannot evaluate is nobody's to report: the key is absent
 // from a read rather than carrying the source text as if it were the value.
 func TestReadPhpArray_OmitsExpressionValues(t *testing.T) {

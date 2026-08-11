@@ -131,6 +131,8 @@ func writePhpArrayInPlace(path, original string, root *phpValue, keys []string, 
 	// under the same new parent produce one entry rather than two of the same name.
 	grafts := map[*phpValue]*phpValue{}
 	var graftOrder []*phpValue
+	replacements := map[*phpValue]*phpValue{}
+	var replaceOrder []*phpValue
 
 	for _, key := range keys {
 		segs := strings.Split(key, ".")
@@ -142,10 +144,15 @@ func writePhpArrayInPlace(path, original string, root *phpValue, keys []string, 
 		}
 		if node.kind != phpArray {
 			// Something that is not an array sits where one has to be. Replacing it
-			// is the only way through, and it is what the whole-file writer did.
-			replacement := &phpValue{kind: phpArray}
+			// is the only way through, and every key reaching it shares the one
+			// replacement: a second edit over the same span would splice over the first.
+			replacement := replacements[node]
+			if replacement == nil {
+				replacement = &phpValue{kind: phpArray}
+				replacements[node] = replacement
+				replaceOrder = append(replaceOrder, node)
+			}
 			setPath(replacement, rest, updates[key])
-			edits = append(edits, edit{node.start, node.end, renderPhpValue(replacement, indentAt(original, node.start))})
 			continue
 		}
 		graft := grafts[node]
@@ -155,6 +162,11 @@ func writePhpArrayInPlace(path, original string, root *phpValue, keys []string, 
 			graftOrder = append(graftOrder, node)
 		}
 		setPath(graft, rest, updates[key])
+	}
+
+	for _, node := range replaceOrder {
+		edits = append(edits, edit{node.start, node.end,
+			renderPhpValue(replacements[node], indentAt(original, node.start))})
 	}
 
 	for _, node := range graftOrder {
