@@ -795,6 +795,7 @@
   "debug_tests_hidden": "({count} masqués)",
   "queries_filter_allWorkers": "Tous les workers",
   "queries_worker_badge": "worker",
+  "queries_copyPath": "Copier le chemin",
   "queries_copySql": "Copier le SQL exécutable",
   "tinker_mode_tinkerTitle": "Démarre Laravel via artisan tinker",
   "tinker_mode_phpTitle": "Environnement PHP simple",

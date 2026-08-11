@@ -542,6 +542,7 @@
   "queries_capturing": "Capturando",
   "queries_clearCaptured": "Borrar consultas capturadas",
   "queries_clearFilter": "Borrar filtro",
+  "queries_copyPath": "Copiar ruta",
   "queries_copySql": "Copiar SQL ejecutable",
   "queries_description": "Captura cada consulta a la base de datos con su SQL, sus bindings, su duración y la línea que la ejecutó.",
   "queries_details": "Detalles",

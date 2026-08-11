@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -9,6 +10,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/geodro/lerd/internal/config"
@@ -611,6 +613,35 @@ func mustExtractPort(t *testing.T, rawURL string) int {
 	return p
 }
 
+// A probed port is only free until the probe closes, and the proxy binds every
+// interface rather than the loopback the probe held, so a busy runner can take
+// it in between. Probe the same address the proxy will bind and retry when it
+// loses the race.
+func mustStartLANShareProxy(t *testing.T, domain string, httpPort, httpsPort int, secured bool, reach shareReach) (*http.Server, int) {
+	t.Helper()
+	var lastErr error
+	for attempt := 0; attempt < 8; attempt++ {
+		probe, err := net.Listen("tcp", "0.0.0.0:0")
+		if err != nil {
+			t.Fatalf("probe listen: %v", err)
+		}
+		port := probe.Addr().(*net.TCPAddr).Port
+		probe.Close()
+
+		srv, err := startLANShareProxy(domain, port, httpPort, httpsPort, secured, reach)
+		if err == nil {
+			t.Cleanup(func() { srv.Close() })
+			return srv, port
+		}
+		lastErr = err
+		if !errors.Is(err, syscall.EADDRINUSE) {
+			break
+		}
+	}
+	t.Fatalf("startLANShareProxy: %v", lastErr)
+	return nil, 0
+}
+
 func TestLANShareProxy_rewritesHTTPSLocationRedirects(t *testing.T) {
 	// Upstream stands in for nginx/the app. It builds a redirect Location from
 	// the path: /to-domain uses the origin domain, /to-lanhost uses the
@@ -631,19 +662,7 @@ func TestLANShareProxy_rewritesHTTPSLocationRedirects(t *testing.T) {
 	defer upstream.Close()
 	upstreamPort := mustExtractPort(t, upstream.URL)
 
-	// Reserve a free port for the proxy, then hand it to startLANShareProxy.
-	probe, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("probe listen: %v", err)
-	}
-	proxyPort := probe.Addr().(*net.TCPAddr).Port
-	probe.Close()
-
-	srv, err := startLANShareProxy(domain, proxyPort, upstreamPort, 0, false, reachLAN)
-	if err != nil {
-		t.Fatalf("startLANShareProxy: %v", err)
-	}
-	defer srv.Close()
+	_, proxyPort := mustStartLANShareProxy(t, domain, upstreamPort, 0, false, reachLAN)
 
 	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
 		return http.ErrUseLastResponse
@@ -814,18 +833,7 @@ func TestShareProxyForwardsLoopbackPortsOnlyOnLAN(t *testing.T) {
 		{"public", reachPublic, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			probe, err := net.Listen("tcp", "127.0.0.1:0")
-			if err != nil {
-				t.Fatalf("probe listen: %v", err)
-			}
-			proxyPort := probe.Addr().(*net.TCPAddr).Port
-			probe.Close()
-
-			srv, err := startLANShareProxy(domain, proxyPort, nginxPort, 0, false, tc.reach)
-			if err != nil {
-				t.Fatalf("startLANShareProxy: %v", err)
-			}
-			defer srv.Close()
+			_, proxyPort := mustStartLANShareProxy(t, domain, nginxPort, 0, false, tc.reach)
 
 			url := fmt.Sprintf("http://127.0.0.1:%d%s%d/", proxyPort, vitePrefix, loopbackPort)
 			resp, err := http.Get(url) //nolint:noctx

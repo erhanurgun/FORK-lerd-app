@@ -542,6 +542,7 @@
   "queries_capturing": "Capturing",
   "queries_clearCaptured": "Clear captured queries",
   "queries_clearFilter": "Clear filter",
+  "queries_copyPath": "Copy path",
   "queries_copySql": "Copy runnable SQL",
   "queries_description": "Captures every database query with its SQL, bindings, duration, and the line that ran it.",
   "queries_details": "Details",

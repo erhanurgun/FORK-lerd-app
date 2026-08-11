@@ -795,6 +795,7 @@
   "debug_tests_hidden": "(ẩn {count})",
   "queries_filter_allWorkers": "Tất cả workers",
   "queries_worker_badge": "worker",
+  "queries_copyPath": "Sao chép đường dẫn",
   "queries_copySql": "Sao chép SQL có thể chạy",
   "tinker_mode_tinkerTitle": "Khởi động Laravel qua artisan tinker",
   "tinker_mode_phpTitle": "Runtime PHP thuần",

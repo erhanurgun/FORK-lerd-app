@@ -542,6 +542,7 @@
   "queries_capturing": "Erfassung läuft",
   "queries_clearCaptured": "Erfasste Abfragen löschen",
   "queries_clearFilter": "Filter löschen",
+  "queries_copyPath": "Pfad kopieren",
   "queries_copySql": "Ausführbares SQL kopieren",
   "queries_description": "Erfasst jede Datenbankabfrage mit ihrem SQL, den Bindings, der Dauer und der Zeile, die sie ausgeführt hat.",
   "queries_details": "Details",
