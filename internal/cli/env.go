@@ -911,28 +911,15 @@ func runEnv(_ *cobra.Command, _ []string) error {
 	}
 
 	// 3a-bis. SQLite is not a containerized service but is a valid choice from
-	// the init wizard / runtime DB prompt. Apply the framework's sqlite env vars
-	// and ensure the database file exists so migrations can run immediately. No
-	// service to start, no SQL DB to create.
-	if projectUsesSQLite(lerdYAMLServices, envMap, fw, externalDBPicked(extServices)) {
+	// the init wizard / runtime DB prompt. Apply the framework's sqlite env vars;
+	// the database file itself is created after step 4e, once every value that
+	// can name it, the personal override included, has had its say.
+	sqliteWired := projectUsesSQLite(lerdYAMLServices, envMap, fw, externalDBPicked(extServices))
+	if sqliteWired {
 		envApplyLine("sqlite", !lerdYAMLServices["sqlite"])
 		for _, kv := range sqliteVarsFor(fw) {
 			k, v, _ := strings.Cut(kv, "=")
 			updates[k] = applySiteHandle(v, tplCtx)
-		}
-		// The file to create is the one those values name, not a fixed path:
-		// Symfony's DSN points at var/data.db, and creating database.sqlite beside
-		// it leaves an empty stray file and the real one still missing.
-		if rel, ok := sitedoctor.SQLiteFileFromValues(updates, fw); ok {
-			sqlitePath := filepath.Join(cwd, filepath.FromSlash(rel))
-			if _, statErr := os.Stat(sqlitePath); os.IsNotExist(statErr) {
-				if err := os.MkdirAll(filepath.Dir(sqlitePath), 0o755); err == nil {
-					if f, err := os.Create(sqlitePath); err == nil {
-						_ = f.Close()
-						envInfo("  Created %s\n", rel)
-					}
-				}
-			}
 		}
 	}
 
@@ -1084,6 +1071,26 @@ func runEnv(_ *cobra.Command, _ []string) error {
 		envInfo("  Applying %d override(s) from %s\n", len(envOverrides), envOverrideFile)
 		for k, v := range envOverrides {
 			updates[k] = v
+		}
+	}
+
+	// The SQLite file is created here, not at 3a-bis, so it is the one the
+	// final values name: an override pointing the database somewhere else, or a
+	// DSN like Symfony's naming var/data.db, must not leave an empty stray file
+	// at a default path while the file the application opens is still missing.
+	// Where it lands follows the doctor's own resolution rules.
+	if sqliteWired {
+		if rel, ok := sitedoctor.SQLiteFileFromValues(updates, fw); ok {
+			if target, create := sitedoctor.SQLiteCreationTarget(cwd, fw, filepath.FromSlash(rel)); create {
+				if err := os.MkdirAll(filepath.Dir(target), 0o755); err == nil {
+					if f, err := os.Create(target); err == nil {
+						_ = f.Close()
+						if shown, relErr := filepath.Rel(cwd, target); relErr == nil {
+							envInfo("  Created %s\n", shown)
+						}
+					}
+				}
+			}
 		}
 	}
 
