@@ -21,6 +21,13 @@ import (
 // ok is false when the project is not configured for SQLite at all, which is
 // most of them.
 func declaredSQLiteFile(envPath, envFormat string, fw *config.Framework) (string, bool) {
+	return SQLiteFileFromValues(envfile.Values(envPath, envFormat), fw)
+}
+
+// SQLiteFileFromValues is declaredSQLiteFile against values already in hand,
+// which is what `lerd env` has: it knows what it is about to write before the
+// file says it, and the file it creates has to be the one those values name.
+func SQLiteFileFromValues(vals map[string]string, fw *config.Framework) (string, bool) {
 	declared := declaredEnvKeys(fw)
 	if len(declared) == 0 {
 		// A framework that declares no env vocabulary, or no framework at all,
@@ -28,7 +35,6 @@ func declaredSQLiteFile(envPath, envFormat string, fw *config.Framework) (string
 		// convention such a project follows.
 		declared = map[string]bool{"DB_CONNECTION": true, "DB_DATABASE": true}
 	}
-	vals := envfile.Values(envPath, envFormat)
 
 	// The flat shape: a declared key names the connection, another names the
 	// file. Laravel spells them DB_CONNECTION and DB_DATABASE; a framework
@@ -119,7 +125,16 @@ func declaredEnvKeys(fw *config.Framework) map[string]bool {
 	for _, kv := range fw.Env.Vars {
 		add(kv)
 	}
+	defs := make([]config.FrameworkServiceDef, 0, len(fw.Env.Services)+1)
 	for _, def := range fw.Env.Services {
+		defs = append(defs, def)
+	}
+	// The file database is wired through keys of its own, and they are as much
+	// the project's vocabulary as any service's.
+	if fw.Env.SQLite != nil {
+		defs = append(defs, *fw.Env.SQLite)
+	}
+	for _, def := range defs {
 		for _, rule := range def.Detect {
 			if rule.Key != "" {
 				keys[rule.Key] = true

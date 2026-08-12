@@ -23,6 +23,7 @@ import (
 	phpDet "github.com/geodro/lerd/internal/php"
 	"github.com/geodro/lerd/internal/podman"
 	"github.com/geodro/lerd/internal/serviceops"
+	"github.com/geodro/lerd/internal/sitedoctor"
 	"github.com/geodro/lerd/internal/sitetpl"
 	"github.com/spf13/cobra"
 )
@@ -919,12 +920,17 @@ func runEnv(_ *cobra.Command, _ []string) error {
 			k, v, _ := strings.Cut(kv, "=")
 			updates[k] = applySiteHandle(v, tplCtx)
 		}
-		sqlitePath := filepath.Join(cwd, "database", "database.sqlite")
-		if _, statErr := os.Stat(sqlitePath); os.IsNotExist(statErr) {
-			if err := os.MkdirAll(filepath.Dir(sqlitePath), 0o755); err == nil {
-				if f, err := os.Create(sqlitePath); err == nil {
-					_ = f.Close()
-					envInfo("  Created %s\n", filepath.Join("database", "database.sqlite"))
+		// The file to create is the one those values name, not a fixed path:
+		// Symfony's DSN points at var/data.db, and creating database.sqlite beside
+		// it leaves an empty stray file and the real one still missing.
+		if rel, ok := sitedoctor.SQLiteFileFromValues(updates, fw); ok {
+			sqlitePath := filepath.Join(cwd, filepath.FromSlash(rel))
+			if _, statErr := os.Stat(sqlitePath); os.IsNotExist(statErr) {
+				if err := os.MkdirAll(filepath.Dir(sqlitePath), 0o755); err == nil {
+					if f, err := os.Create(sqlitePath); err == nil {
+						_ = f.Close()
+						envInfo("  Created %s\n", rel)
+					}
 				}
 			}
 		}

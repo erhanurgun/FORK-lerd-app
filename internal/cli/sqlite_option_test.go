@@ -1,9 +1,11 @@
 package cli
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/geodro/lerd/internal/config"
+	"github.com/geodro/lerd/internal/sitedoctor"
 )
 
 // Which databases a framework can use is the definition's to declare, like
@@ -77,5 +79,41 @@ func TestBuildDatabaseOptions_keepsSQLiteWithoutAFramework(t *testing.T) {
 	empty := &config.Framework{}
 	if _, names := buildDatabaseOptions(empty); !names["sqlite"] {
 		t.Error("a framework declaring no env services at all was not offered sqlite")
+	}
+}
+
+// The file lerd creates has to be the one the framework's own values name. A
+// Symfony project keeps its path inside the DSN, and creating Laravel's
+// database/database.sqlite beside it leaves an empty stray file while the file
+// the application opens is still missing.
+func TestSQLiteFileFollowsTheDeclaredValues(t *testing.T) {
+	symfonyish := &config.Framework{Env: config.FrameworkEnvConf{
+		SQLite: &config.FrameworkServiceDef{
+			Detect: []config.FrameworkServiceDetect{{Key: "DATABASE_URL", ValuePrefix: "sqlite://"}},
+			Vars:   []string{"DATABASE_URL=sqlite:///%kernel.project_dir%/var/data.db"},
+		},
+	}}
+	vals := map[string]string{}
+	for _, kv := range sqliteVarsFor(symfonyish) {
+		k, v, _ := strings.Cut(kv, "=")
+		vals[k] = v
+	}
+	got, ok := sitedoctor.SQLiteFileFromValues(vals, symfonyish)
+	if !ok || got != "var/data.db" {
+		t.Errorf("resolved %q (ok=%v), want var/data.db", got, ok)
+	}
+
+	laravelish := &config.Framework{Env: config.FrameworkEnvConf{
+		SQLite: &config.FrameworkServiceDef{
+			Vars: []string{"DB_CONNECTION=sqlite", "DB_DATABASE=database/database.sqlite"},
+		},
+	}}
+	vals = map[string]string{}
+	for _, kv := range sqliteVarsFor(laravelish) {
+		k, v, _ := strings.Cut(kv, "=")
+		vals[k] = v
+	}
+	if got, ok := sitedoctor.SQLiteFileFromValues(vals, laravelish); !ok || got != "database/database.sqlite" {
+		t.Errorf("resolved %q (ok=%v), want database/database.sqlite", got, ok)
 	}
 }
