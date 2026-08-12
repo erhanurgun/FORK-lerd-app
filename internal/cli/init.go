@@ -500,6 +500,9 @@ func runCustomContainerWizard(cwd string, defaults *config.ProjectConfig, gcfg *
 		Container:     containerCfg,
 		AppURL:        defaults.AppURL,
 		Domains:       defaults.Domains,
+		// This wizard never asks about Node, so a pin the project carries is
+		// not its to drop.
+		NodeVersion: defaults.NodeVersion,
 	}, nil
 }
 

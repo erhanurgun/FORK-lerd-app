@@ -268,3 +268,24 @@ func TestProjectConfigFromAnswersHonoursClearingTheNodePin(t *testing.T) {
 		t.Errorf("node_version = %q, want the pin cleared", cfg.NodeVersion)
 	}
 }
+
+// The dashboard renders the Node question only for the PHP kind, so a proxy or
+// container answer arrives empty even on a machine where lerd manages Node.
+// That empty is nobody having been asked, and the pin stays.
+func TestProjectConfigFromAnswersKeepsThePinWhereTheQuestionIsNotAsked(t *testing.T) {
+	setNodeManaged(t, true)
+	defaults := &config.ProjectConfig{NodeVersion: "22"}
+
+	for _, a := range []ProjectAnswers{
+		{Kind: ProjectKindProxy, ProxyCommand: "npm run dev", ProxyPort: 5173},
+		{Kind: ProjectKindContainer, ContainerPort: 8080},
+	} {
+		cfg, err := projectConfigFromAnswers(t.TempDir(), defaults, a, true)
+		if err != nil {
+			t.Fatalf("%s: %v", a.Kind, err)
+		}
+		if cfg.NodeVersion != "22" {
+			t.Errorf("%s: node_version = %q, want the pin kept", a.Kind, cfg.NodeVersion)
+		}
+	}
+}

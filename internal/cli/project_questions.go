@@ -454,12 +454,14 @@ func SaveProjectAnswers(cwd string, answers ProjectAnswers) error {
 // carrying over the parts of an existing config the questions never ask about
 // (the public dir, the app URL, extra domains, custom workers).
 func projectConfigFromAnswers(cwd string, defaults *config.ProjectConfig, a ProjectAnswers, httpsAvailable bool) (*config.ProjectConfig, error) {
-	// An empty answer means two different things. Where lerd manages Node the
-	// question was asked and offers an unpinned entry, so empty is the user
-	// clearing the pin. Where it does not, the question is never filled in and
-	// empty is nobody having been asked, which must not erase what is pinned.
+	// An empty answer means two different things. The dashboard only renders
+	// the Node question for a PHP project on a machine where lerd manages Node,
+	// and there it offers a "Not pinned" entry whose value is exactly this empty
+	// string, so empty is the user clearing the pin. Everywhere else, proxy and
+	// container kinds included, the question was never asked and empty must not
+	// erase what the project pins.
 	nodeVersion := a.NodeVersion
-	if nodeVersion == "" && !lerdManagesNode() {
+	if nodeVersion == "" && !(a.Kind == ProjectKindPHP && lerdManagesNode()) {
 		nodeVersion = defaults.NodeVersion
 	}
 
