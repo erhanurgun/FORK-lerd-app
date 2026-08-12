@@ -454,10 +454,12 @@ func SaveProjectAnswers(cwd string, answers ProjectAnswers) error {
 // carrying over the parts of an existing config the questions never ask about
 // (the public dir, the app URL, extra domains, custom workers).
 func projectConfigFromAnswers(cwd string, defaults *config.ProjectConfig, a ProjectAnswers, httpsAvailable bool) (*config.ProjectConfig, error) {
-	// An empty answer is the dashboard not asking, not the user clearing the
-	// pin: the question is only filled in where lerd manages Node.
+	// An empty answer means two different things. Where lerd manages Node the
+	// question was asked and offers an unpinned entry, so empty is the user
+	// clearing the pin. Where it does not, the question is never filled in and
+	// empty is nobody having been asked, which must not erase what is pinned.
 	nodeVersion := a.NodeVersion
-	if nodeVersion == "" {
+	if nodeVersion == "" && !lerdManagesNode() {
 		nodeVersion = defaults.NodeVersion
 	}
 

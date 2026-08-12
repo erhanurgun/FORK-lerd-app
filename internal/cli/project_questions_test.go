@@ -212,10 +212,11 @@ func TestSaveProjectAnswersRejectsProxyWithoutPort(t *testing.T) {
 	}
 }
 
-// A pinned Node version is the project's, not the wizard's to drop. The
-// dashboard leaves the field empty on a machine where lerd does not manage
-// Node, and saving that back must not erase what .lerd.yaml already pins.
+// A pinned Node version is the project's, not the wizard's to drop. Where lerd
+// does not manage Node the question is never filled in, so the empty answer that
+// comes back must not erase what .lerd.yaml already pins.
 func TestProjectConfigFromAnswersKeepsAPinnedNodeVersion(t *testing.T) {
+	setNodeManaged(t, false)
 	defaults := &config.ProjectConfig{NodeVersion: "20"}
 
 	for _, a := range []ProjectAnswers{
@@ -230,5 +231,40 @@ func TestProjectConfigFromAnswersKeepsAPinnedNodeVersion(t *testing.T) {
 		if cfg.NodeVersion != "20" {
 			t.Errorf("%s: node_version = %q, want the pin kept", a.Kind, cfg.NodeVersion)
 		}
+	}
+}
+
+// setNodeManaged persists the Node-management choice the wizard reads, so a test
+// can put itself on either side of what an empty answer means.
+func setNodeManaged(t *testing.T, managed bool) {
+	t.Helper()
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	cfg, err := config.LoadGlobal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.SetNodeManaged(managed)
+	if err := config.SaveGlobal(cfg); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Where lerd manages Node the wizard offers an unpinned entry whose value is the
+// empty string, so an empty answer is the user clearing the pin and has to be
+// saved as one. Restoring the old value would leave no way to unpin from the
+// dashboard at all.
+func TestProjectConfigFromAnswersHonoursClearingTheNodePin(t *testing.T) {
+	setNodeManaged(t, true)
+	defaults := &config.ProjectConfig{NodeVersion: "20"}
+
+	cfg, err := projectConfigFromAnswers(t.TempDir(), defaults, ProjectAnswers{
+		Kind: ProjectKindPHP, PHPVersion: "8.3", NodeVersion: "",
+	}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.NodeVersion != "" {
+		t.Errorf("node_version = %q, want the pin cleared", cfg.NodeVersion)
 	}
 }
