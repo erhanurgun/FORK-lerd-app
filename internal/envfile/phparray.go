@@ -97,6 +97,25 @@ func ApplyPhpArrayUpdates(path string, updates map[string]string) error {
 	}
 	sort.Strings(keys)
 
+	// A key naming a node another key descends through cannot hold at the same
+	// time as that key: the node is either the scalar or the array. The deeper
+	// key is the one that makes the other's parent exist, so it wins, and the
+	// shallower one is dropped rather than fought over the same span of the file.
+	kept := keys[:0]
+	for _, k := range keys {
+		ancestor := false
+		for _, other := range keys {
+			if other != k && strings.HasPrefix(other, k+".") {
+				ancestor = true
+				break
+			}
+		}
+		if !ancestor {
+			kept = append(kept, k)
+		}
+	}
+	keys = kept
+
 	if root != nil && root.kind == phpArray {
 		return writePhpArrayInPlace(path, original, root, keys, updates)
 	}
@@ -131,21 +150,34 @@ func writePhpArrayInPlace(path, original string, root *phpValue, keys []string, 
 	// under the same new parent produce one entry rather than two of the same name.
 	grafts := map[*phpValue]*phpValue{}
 	var graftOrder []*phpValue
+	replacements := map[*phpValue]*phpValue{}
+	var replaceOrder []*phpValue
+
+	type scalarEdit struct {
+		node *phpValue
+		text string
+	}
+	var scalars []scalarEdit
 
 	for _, key := range keys {
 		segs := strings.Split(key, ".")
 		node, rest := descendPhpArray(root, segs)
 		if len(rest) == 0 {
-			edits = append(edits, edit{node.start, node.end,
+			scalars = append(scalars, scalarEdit{node,
 				renderPhpValue(scalarValue(updates[key], node.kind), indentAt(original, node.start))})
 			continue
 		}
 		if node.kind != phpArray {
 			// Something that is not an array sits where one has to be. Replacing it
-			// is the only way through, and it is what the whole-file writer did.
-			replacement := &phpValue{kind: phpArray}
+			// is the only way through, and every key reaching it shares the one
+			// replacement: a second edit over the same span would splice over the first.
+			replacement := replacements[node]
+			if replacement == nil {
+				replacement = &phpValue{kind: phpArray}
+				replacements[node] = replacement
+				replaceOrder = append(replaceOrder, node)
+			}
 			setPath(replacement, rest, updates[key])
-			edits = append(edits, edit{node.start, node.end, renderPhpValue(replacement, indentAt(original, node.start))})
 			continue
 		}
 		graft := grafts[node]
@@ -157,17 +189,51 @@ func writePhpArrayInPlace(path, original string, root *phpValue, keys []string, 
 		setPath(graft, rest, updates[key])
 	}
 
+	for _, s := range scalars {
+		// A node other keys descend through is written as the array they need,
+		// and that replacement covers this very span. Emitting both would put two
+		// edits on it.
+		if replacements[s.node] != nil {
+			continue
+		}
+		edits = append(edits, edit{s.node.start, s.node.end, s.text})
+	}
+
+	for _, node := range replaceOrder {
+		edits = append(edits, edit{node.start, node.end,
+			renderPhpValue(replacements[node], indentAt(original, node.start))})
+	}
+
 	for _, node := range graftOrder {
 		at, indent, ok := phpArrayInsertion(original, node)
 		if !ok {
-			// An array written on one line has nowhere to insert a line, so it is
-			// reprinted whole. It has no comments inside it to lose.
-			merged := clonePhpValue(node)
-			for _, e := range grafts[node].entries {
-				setPathValue(merged, []string{e.key}, e.val)
+			// An array written on one line has no line to insert into, so the new
+			// entries go inline before its closing bracket. Reprinting the node
+			// whole would claim a span other edits may sit inside.
+			var b strings.Builder
+			for i, e := range grafts[node].entries {
+				if i > 0 {
+					b.WriteString(", ")
+				}
+				b.WriteString("'" + escapeSingle(e.key) + "' => ")
+				printValue(&b, e.val, 0)
 			}
-			edits = append(edits, edit{node.start, node.end, renderPhpValue(merged, indentAt(original, node.start))})
+			insertAt := node.end - 1
+			edits = append(edits, edit{insertAt, insertAt, inlineSep(original, node.start, insertAt) + b.String()})
 			continue
+		}
+		// The last entry may lack the trailing comma PHP needs between it and
+		// what is inserted after it. Anything but whitespace between them (a
+		// comment holding a comma, say) leaves this alone; the verify pass below
+		// then refuses the write rather than guess.
+		if n := len(node.entries); n > 0 {
+			lastEnd := node.entries[n-1].val.end
+			for lastEnd > 0 && (original[lastEnd-1] == ' ' || original[lastEnd-1] == '\t' || original[lastEnd-1] == '\n' || original[lastEnd-1] == '\r') {
+				lastEnd--
+			}
+			if lastEnd <= at && !strings.Contains(original[lastEnd:at], ",") {
+				edits = append(edits, edit{lastEnd, lastEnd, ","})
+			}
 		}
 		var b strings.Builder
 		for _, e := range grafts[node].entries {
@@ -178,13 +244,85 @@ func writePhpArrayInPlace(path, original string, root *phpValue, keys []string, 
 		edits = append(edits, edit{at, at, b.String()})
 	}
 
-	// Applied back to front so each splice leaves the earlier offsets valid.
+	// Applied back to front so each splice leaves the earlier offsets valid,
+	// which holds only while every edit sits wholly before the one applied
+	// before it. The edits are built never to overlap; one that does anyway
+	// would be spliced against an offset that has already moved and cut the
+	// file mid-expression, so it is an error, not a judgement call.
 	sort.SliceStable(edits, func(i, j int) bool { return edits[i].start > edits[j].start })
 	out := original
+	bound := len(original)
 	for _, e := range edits {
+		if e.end > bound {
+			return fmt.Errorf("refusing to rewrite %s: overlapping edits at offset %d", path, e.start)
+		}
 		out = out[:e.start] + e.text + out[e.end:]
+		bound = e.start
+	}
+	if err := verifyPhpArrayRewrite(original, out, keys, updates); err != nil {
+		return fmt.Errorf("refusing to rewrite %s: %w", path, err)
 	}
 	return writePhpArrayFile(path, original, out)
+}
+
+// inlineSep returns what separates an inline insertion from the entry before
+// it: nothing straight after the opening bracket or an existing comma, a comma
+// and space after an entry.
+func inlineSep(src string, open, insertAt int) string {
+	i := insertAt
+	for i > open && (src[i-1] == ' ' || src[i-1] == '\t') {
+		i--
+	}
+	if i <= open+1 || src[i-1] == ',' || src[i-1] == '[' || src[i-1] == '(' {
+		return ""
+	}
+	return ", "
+}
+
+// verifyPhpArrayRewrite refuses a rewrite that damaged the file: the output
+// must still parse, every update must read back as written, and every key the
+// updates did not touch must still hold its old value. The writer has had more
+// ways to be wrong than anyone predicted, and each reported success; whatever
+// shape the next one takes, it becomes an error here instead of a corrupted
+// config the application is left to discover.
+func verifyPhpArrayRewrite(original, out string, keys []string, updates map[string]string) error {
+	root, err := parsePhpReturn(out)
+	if err != nil || root == nil {
+		return fmt.Errorf("the rewrite no longer parses: %w", err)
+	}
+	got := map[string]string{}
+	flatten("", root, got)
+	for _, k := range keys {
+		if got[k] != updates[k] {
+			return fmt.Errorf("the rewrite lost %s: %q instead of %q", k, got[k], updates[k])
+		}
+	}
+	origRoot, err := parsePhpReturn(original)
+	if err != nil || origRoot == nil {
+		return nil
+	}
+	was := map[string]string{}
+	flatten("", origRoot, was)
+	for k, v := range was {
+		if updateTouches(k, keys) {
+			continue
+		}
+		if got[k] != v {
+			return fmt.Errorf("the rewrite changed %s unasked: %q instead of %q", k, got[k], v)
+		}
+	}
+	return nil
+}
+
+// updateTouches reports whether an update key claims k: exactly, as one of its
+// descendants, or as an ancestor a deeper update rebuilt on the way down.
+func updateTouches(k string, keys []string) bool {
+	for _, u := range keys {
+		if u == k || strings.HasPrefix(k, u+".") || strings.HasPrefix(u, k+".") {
+			return true
+		}
+	}
+	return false
 }
 
 // descendPhpArray walks as far into the tree as the file already goes, returning
@@ -543,14 +681,24 @@ func (p *phpParser) parseValueAt() (*phpValue, error) {
 			p.pos++
 		}
 		kind := phpInt
+		digits := 0
 		for p.pos < len(p.src) {
 			d := p.src[p.pos]
 			if d == '.' || d == 'e' || d == 'E' || d == '+' || d == '-' {
 				kind = phpFloat
-			} else if d < '0' || d > '9' {
+			} else if d >= '0' && d <= '9' {
+				digits++
+			} else {
 				break
 			}
 			p.pos++
+		}
+		// -PHP_INT_MAX is not the number "-": a sign with no digits behind it,
+		// or a number running straight into an identifier, is an expression and
+		// is kept whole.
+		if digits == 0 || (p.pos < len(p.src) && isIdentByte(p.src[p.pos])) {
+			p.pos = start
+			return p.parseExpression()
 		}
 		return &phpValue{kind: kind, str: p.src[start:p.pos]}, nil
 	}
@@ -639,6 +787,11 @@ func (p *phpParser) parseArrayBody(closer byte) (*phpValue, error) {
 		p.skipTrivia()
 		if p.pos < len(p.src) && p.src[p.pos] == ',' {
 			p.pos++
+		} else if p.pos >= len(p.src) || p.src[p.pos] != closer {
+			// PHP requires the comma between entries; only the last may omit it.
+			// Reading a file without them as if it parsed hides exactly the
+			// corruption the writer's own guard exists to catch.
+			return nil, fmt.Errorf("expected ',' or '%c' after array entry at offset %d", closer, p.pos)
 		}
 	}
 }

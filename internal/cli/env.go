@@ -23,6 +23,7 @@ import (
 	phpDet "github.com/geodro/lerd/internal/php"
 	"github.com/geodro/lerd/internal/podman"
 	"github.com/geodro/lerd/internal/serviceops"
+	"github.com/geodro/lerd/internal/sitedoctor"
 	"github.com/geodro/lerd/internal/sitetpl"
 	"github.com/spf13/cobra"
 )
@@ -461,8 +462,10 @@ func projectUsesSQLite(lerdYAMLServices map[string]bool, envMap map[string]strin
 	if fw == nil || externalDB || userPickedDBFromYAML(lerdYAMLServices) {
 		return false
 	}
-	def, ok := fw.Env.Services["sqlite"]
-	return ok && frameworkServiceDetected(def, envMap)
+	if fw.Env.SQLite == nil {
+		return false
+	}
+	return frameworkServiceDetected(*fw.Env.SQLite, envMap)
 }
 
 func userPickedDBFromYAML(lerdYAMLServices map[string]bool) bool {
@@ -908,23 +911,15 @@ func runEnv(_ *cobra.Command, _ []string) error {
 	}
 
 	// 3a-bis. SQLite is not a containerized service but is a valid choice from
-	// the init wizard / runtime DB prompt. Apply the framework's sqlite env vars
-	// and ensure the database file exists so migrations can run immediately. No
-	// service to start, no SQL DB to create.
-	if projectUsesSQLite(lerdYAMLServices, envMap, fw, externalDBPicked(extServices)) {
+	// the init wizard / runtime DB prompt. Apply the framework's sqlite env vars;
+	// the database file itself is created after step 4e, once every value that
+	// can name it, the personal override included, has had its say.
+	sqliteWired := projectUsesSQLite(lerdYAMLServices, envMap, fw, externalDBPicked(extServices))
+	if sqliteWired {
 		envApplyLine("sqlite", !lerdYAMLServices["sqlite"])
-		for _, kv := range serviceEnvVars("sqlite") {
+		for _, kv := range sqliteVarsFor(fw) {
 			k, v, _ := strings.Cut(kv, "=")
-			updates[k] = v
-		}
-		sqlitePath := filepath.Join(cwd, "database", "database.sqlite")
-		if _, statErr := os.Stat(sqlitePath); os.IsNotExist(statErr) {
-			if err := os.MkdirAll(filepath.Dir(sqlitePath), 0o755); err == nil {
-				if f, err := os.Create(sqlitePath); err == nil {
-					_ = f.Close()
-					envInfo("  Created %s\n", filepath.Join("database", "database.sqlite"))
-				}
-			}
+			updates[k] = applySiteHandle(v, tplCtx)
 		}
 	}
 
@@ -1076,6 +1071,26 @@ func runEnv(_ *cobra.Command, _ []string) error {
 		envInfo("  Applying %d override(s) from %s\n", len(envOverrides), envOverrideFile)
 		for k, v := range envOverrides {
 			updates[k] = v
+		}
+	}
+
+	// The SQLite file is created here, not at 3a-bis, so it is the one the
+	// final values name: an override pointing the database somewhere else, or a
+	// DSN like Symfony's naming var/data.db, must not leave an empty stray file
+	// at a default path while the file the application opens is still missing.
+	// Where it lands follows the doctor's own resolution rules.
+	if sqliteWired {
+		if rel, ok := sitedoctor.SQLiteFileFromValues(updates, fw); ok {
+			if target, create := sitedoctor.SQLiteCreationTarget(cwd, fw, filepath.FromSlash(rel)); create {
+				if err := os.MkdirAll(filepath.Dir(target), 0o755); err == nil {
+					if f, err := os.Create(target); err == nil {
+						_ = f.Close()
+						if shown, relErr := filepath.Rel(cwd, target); relErr == nil {
+							envInfo("  Created %s\n", shown)
+						}
+					}
+				}
+			}
 		}
 	}
 

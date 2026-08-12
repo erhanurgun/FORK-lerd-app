@@ -218,6 +218,10 @@
 
   async function scaffold() {
     if (!name.trim()) return;
+    // The target is known before the run starts, and persisting it now is what
+    // lets a resume carry on into the questions even after the finished run has
+    // aged out of the registry.
+    dir = joinPath(parent, name.trim());
     const ok = await runAndWait(
       { kind: 'scaffold', dir: parent, name: name.trim(), framework, framework_version: frameworkVersion },
       m.siteWizard_scaffolding()
@@ -381,6 +385,17 @@
         running = true;
         runTitle = known.label || m.siteWizard_scaffolding();
         logs = [];
+        // The queue that continues after a setup run reads each step's optional
+        // flag off the plan, which a reopened modal has not loaded yet; without
+        // it every remaining step counts as required and one optional failure
+        // stops the rest.
+        if (runKind === 'setup' && dir) {
+          try {
+            steps = await setupSteps(dir);
+          } catch {
+            steps = [];
+          }
+        }
         // The run panel takes the body from here: following a run that is still
         // going does not return until it ends, and holding the loader up for
         // that long is what hid the output the user came back to watch.
@@ -396,6 +411,9 @@
       // Nothing left to reattach to: rebuild the step from the project on disk.
       if (!dir) return;
       resuming = false;
+      // A scaffold whose run has aged out of the registry left its project on
+      // disk; the questions are what comes after it, same as afterRun.
+      if (step === 'create') await loadQuestions();
       if (step === 'questions') await loadQuestions();
       if (step === 'setup') await loadSetupSteps();
     } finally {

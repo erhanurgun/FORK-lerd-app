@@ -147,3 +147,119 @@ func TestDeclaredCompanionValue_noLaravelDefaultForADottedKey(t *testing.T) {
 		t.Errorf("companion = %q, want Laravel's default", got)
 	}
 }
+
+// A framework's own detect rules say how a project on a file database reads.
+// CakePHP spells the connection as a driver class and CodeIgniter as SQLite3,
+// neither of which the generic scan for the word "sqlite" may assume.
+func TestSQLiteFileFromValues_ReadsTheDeclaredDetectRules(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		detect []config.FrameworkServiceDetect
+		vals   map[string]string
+		want   string
+	}{
+		{
+			"cakephp driver class",
+			[]config.FrameworkServiceDetect{{Key: "Datasources.default.driver", ValuePrefix: `Cake\Database\Driver\Sqlite`}},
+			map[string]string{
+				"Datasources.default.driver":   `Cake\Database\Driver\Sqlite`,
+				"Datasources.default.database": "database/database.sqlite",
+			},
+			"database/database.sqlite",
+		},
+		{
+			"codeigniter SQLite3",
+			[]config.FrameworkServiceDetect{{Key: "database.default.DBDriver", ValuePrefix: "SQLite3"}},
+			map[string]string{
+				"database.default.DBDriver": "SQLite3",
+				"database.default.database": "writable/db.sqlite3",
+			},
+			"writable/db.sqlite3",
+		},
+		{
+			"laravel flat pair",
+			[]config.FrameworkServiceDetect{{Key: "DB_CONNECTION", ValuePrefix: "sqlite"}},
+			map[string]string{"DB_CONNECTION": "sqlite", "DB_DATABASE": "database/database.sqlite"},
+			"database/database.sqlite",
+		},
+		{
+			"symfony DSN",
+			[]config.FrameworkServiceDetect{{Key: "DATABASE_URL", ValuePrefix: "sqlite://"}},
+			map[string]string{"DATABASE_URL": "sqlite:///%kernel.project_dir%/var/data.db"},
+			"var/data.db",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// The store schema ships the wiring vars alongside the detect
+			// rules; they are the vocabulary the companion key is found in.
+			vars := make([]string, 0, len(tc.vals))
+			for k, v := range tc.vals {
+				vars = append(vars, k+"="+v)
+			}
+			fw := &config.Framework{Env: config.FrameworkEnvConf{SQLite: &config.FrameworkServiceDef{
+				Detect: tc.detect,
+				Vars:   vars,
+			}}}
+			got, ok := SQLiteFileFromValues(tc.vals, fw)
+			if !ok || got != tc.want {
+				t.Errorf("resolved %q (ok=%v), want %q", got, ok, tc.want)
+			}
+		})
+	}
+}
+
+// A detect rule that does not match must not detect: a MySQL driver value is
+// not a file database however the framework spells it.
+func TestSQLiteFileFromValues_ARuleThatDoesNotMatchSaysNothing(t *testing.T) {
+	fw := &config.Framework{Env: config.FrameworkEnvConf{SQLite: &config.FrameworkServiceDef{
+		Detect: []config.FrameworkServiceDetect{{Key: "Datasources.default.driver", ValuePrefix: `Cake\Database\Driver\Sqlite`}},
+	}}}
+	vals := map[string]string{
+		"Datasources.default.driver":   `Cake\Database\Driver\Mysql`,
+		"Datasources.default.database": "app",
+	}
+	if got, ok := SQLiteFileFromValues(vals, fw); ok {
+		t.Errorf("a mysql driver detected as sqlite: %q", got)
+	}
+}
+
+// Where the file gets created follows the same resolution the checks read by:
+// never an absolute path or one that already exists, preferably a candidate
+// whose parent directory the project already has.
+func TestSQLiteCreationTarget(t *testing.T) {
+	drupalish := &config.Framework{PublicDir: "web"}
+
+	t.Run("absolute is not lerd's to create", func(t *testing.T) {
+		if p, ok := SQLiteCreationTarget(t.TempDir(), nil, "/var/db/app.db"); ok {
+			t.Errorf("offered to create %q", p)
+		}
+	})
+
+	t.Run("an existing file needs nothing", func(t *testing.T) {
+		dir := t.TempDir()
+		os.MkdirAll(filepath.Join(dir, "database"), 0o755)
+		os.WriteFile(filepath.Join(dir, "database", "db.sqlite"), nil, 0o644)
+		if p, ok := SQLiteCreationTarget(dir, nil, "database/db.sqlite"); ok {
+			t.Errorf("offered to recreate %q", p)
+		}
+	})
+
+	t.Run("docroot candidate wins when its parent exists", func(t *testing.T) {
+		dir := t.TempDir()
+		os.MkdirAll(filepath.Join(dir, "web", "sites", "default", "files"), 0o755)
+		p, ok := SQLiteCreationTarget(dir, drupalish, filepath.Join("sites", "default", "files", ".ht.sqlite"))
+		want := filepath.Join(dir, "web", "sites", "default", "files", ".ht.sqlite")
+		if !ok || p != want {
+			t.Errorf("target %q (ok=%v), want %q", p, ok, want)
+		}
+	})
+
+	t.Run("project root stands when no parent exists", func(t *testing.T) {
+		dir := t.TempDir()
+		p, ok := SQLiteCreationTarget(dir, drupalish, "database/database.sqlite")
+		want := filepath.Join(dir, "database", "database.sqlite")
+		if !ok || p != want {
+			t.Errorf("target %q (ok=%v), want %q", p, ok, want)
+		}
+	})
+}

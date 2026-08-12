@@ -77,9 +77,7 @@ func WorkerMarks() WorkerMarkSet {
 // framework. Workers are declared per version, and the newest file that has
 // them answers, so a framework whose latest release added one still reports it.
 func cachedFrameworkWorkers(name string) map[string]FrameworkWorker {
-	paths, _ := filepath.Glob(filepath.Join(StoreFrameworksDir(), name+"@*.yaml"))
-	paths = append(paths, filepath.Join(StoreFrameworksDir(), name+".yaml"))
-	sort.Sort(sort.Reverse(sort.StringSlice(paths)))
+	paths := append(versionedFrameworkPaths(name), filepath.Join(StoreFrameworksDir(), name+".yaml"))
 	for _, p := range paths {
 		if fw := loadFrameworkYAML(p); fw != nil && len(fw.Workers) > 0 {
 			return fw.Workers

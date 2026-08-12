@@ -57,7 +57,7 @@ func TestSortEntityActions(t *testing.T) {
 // typed as an array on the client and a null breaks iteration over it.
 func TestDatabaseEntryAlwaysCarriesASnapshotList(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	eng := databaseEngine("nosuchengine")
+	eng := databaseEngine("nosuchengine", nil)
 	for _, db := range eng.Databases {
 		if db.Snapshots == nil {
 			t.Errorf("database %q carries a nil snapshot list", db.Name)

@@ -58,26 +58,40 @@ type dbOwner struct {
 	branch string
 }
 
-// databaseSiteIndex maps each database name in the given engine to the site that
-// owns it, resolved through each site's framework declaration and from the
-// isolated databases worktrees have registered. A "<db>_testing" database maps
-// to the same owner as "<db>", so both link to the same place. When a group
+// databaseSiteIndexes maps each engine to the databases owned in it, keyed by
+// database name, resolved through each site's framework declaration and from
+// the isolated databases worktrees have registered. A "<db>_testing" database
+// maps to the same owner as "<db>", so both link to the same place. When a group
 // shares one database across a main site and its secondaries, the database
 // belongs to the group main, so a secondary that merely shares it never wins
 // over the main.
-func databaseSiteIndex(service string) map[string]dbOwner {
+//
+// Every engine is answered from one pass over the sites: resolving a site's
+// targets detects its framework, which is far too much work to repeat per
+// engine on every poll of the Databases tab.
+func databaseSiteIndexes() map[string]map[string]dbOwner {
 	reg, err := config.LoadSites()
 	if err != nil {
 		return nil
 	}
-	idx := map[string]dbOwner{}
+	byService := map[string]map[string]dbOwner{}
+	idxFor := func(service string) map[string]dbOwner {
+		if byService[service] == nil {
+			byService[service] = map[string]dbOwner{}
+		}
+		return byService[service]
+	}
 	// authoritative[db] is true once db is claimed by a site that owns it rather
 	// than a secondary sharing the group's database.
-	authoritative := map[string]bool{}
-	claim := func(db string, owner dbOwner, owns bool) {
-		if _, seen := idx[db]; !seen || (!authoritative[db] && owns) {
+	authoritative := map[string]map[string]bool{}
+	claim := func(service, db string, owner dbOwner, owns bool) {
+		idx := idxFor(service)
+		if authoritative[service] == nil {
+			authoritative[service] = map[string]bool{}
+		}
+		if _, seen := idx[db]; !seen || (!authoritative[service][db] && owns) {
 			idx[db] = owner
-			authoritative[db] = owns
+			authoritative[service][db] = owns
 		}
 	}
 	domains := map[string]string{}
@@ -86,35 +100,30 @@ func databaseSiteIndex(service string) map[string]dbOwner {
 			continue
 		}
 		domains[s.Name] = s.PrimaryDomain()
-		db := ""
-		for _, t := range config.DBTargetsFor(s.Path) {
-			if t.Service == service {
-				db = t.Database
-				break
-			}
-		}
-		if db == "" {
-			continue
-		}
 		owns := !(s.IsGroupSecondary() && s.GroupSharedDB)
 		owner := dbOwner{domain: s.PrimaryDomain()}
-		claim(db, owner, owns)
-		claim(db+testingDBSuffix, owner, owns)
+		for _, t := range config.DBTargetsFor(s.Path) {
+			if t.Database == "" {
+				continue
+			}
+			claim(t.Service, t.Database, owner, owns)
+			claim(t.Service, t.Database+testingDBSuffix, owner, owns)
+		}
 	}
 	entries, err := config.LoadWorktreeDBRegistry()
 	if err != nil {
-		return idx
+		return byService
 	}
 	for _, e := range entries {
 		domain := domains[e.Site]
-		if e.Service != service || e.DBName == "" || domain == "" {
+		if e.DBName == "" || domain == "" {
 			continue
 		}
 		owner := dbOwner{domain: domain, branch: e.Branch}
-		claim(e.DBName, owner, true)
-		claim(e.DBName+testingDBSuffix, owner, true)
+		claim(e.Service, e.DBName, owner, true)
+		claim(e.Service, e.DBName+testingDBSuffix, owner, true)
 	}
-	return idx
+	return byService
 }
 
 // isDatabaseEngine reports whether a service belongs on the Databases surface: a
@@ -156,7 +165,7 @@ func installedDBEngines() []string {
 
 // databaseEngine builds one engine's response, introspecting its databases and
 // snapshots only when the container is running.
-func databaseEngine(name string) dbEngineResponse {
+func databaseEngine(name string, siteIndex map[string]dbOwner) dbEngineResponse {
 	base := buildServiceResponse(name)
 	family := config.FamilyOfName(name)
 	snapOps := serviceops.SnapshotSupported(name, false)
@@ -187,7 +196,6 @@ func databaseEngine(name string) dbEngineResponse {
 		eng.Error = err.Error()
 		return eng
 	}
-	siteIndex := databaseSiteIndex(name)
 	for _, db := range dbs {
 		owner := siteIndex[db.Name]
 		entry := dbEntryResponse{
@@ -212,9 +220,10 @@ func databaseEngine(name string) dbEngineResponse {
 // handleDatabases lists every installed database engine and its databases.
 func handleDatabases(w http.ResponseWriter, _ *http.Request) {
 	names := installedDBEngines()
+	indexes := databaseSiteIndexes()
 	engines := make([]dbEngineResponse, 0, len(names))
 	for _, name := range names {
-		engines = append(engines, databaseEngine(name))
+		engines = append(engines, databaseEngine(name, indexes[name]))
 	}
 	writeJSON(w, engines)
 }
@@ -236,7 +245,7 @@ func handleDatabaseAction(w http.ResponseWriter, r *http.Request) {
 	// GET /api/databases/<service> returns just that engine, for its detail tab.
 	if len(parts) == 1 {
 		if r.Method == http.MethodGet {
-			writeJSON(w, databaseEngine(service))
+			writeJSON(w, databaseEngine(service, databaseSiteIndexes()[service]))
 			return
 		}
 		http.Error(w, "not found", http.StatusNotFound)

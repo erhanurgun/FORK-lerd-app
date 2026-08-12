@@ -1,6 +1,7 @@
 package sitedoctor
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -21,6 +22,13 @@ import (
 // ok is false when the project is not configured for SQLite at all, which is
 // most of them.
 func declaredSQLiteFile(envPath, envFormat string, fw *config.Framework) (string, bool) {
+	return SQLiteFileFromValues(envfile.Values(envPath, envFormat), fw)
+}
+
+// SQLiteFileFromValues is declaredSQLiteFile against values already in hand,
+// which is what `lerd env` has: it knows what it is about to write before the
+// file says it, and the file it creates has to be the one those values name.
+func SQLiteFileFromValues(vals map[string]string, fw *config.Framework) (string, bool) {
 	declared := declaredEnvKeys(fw)
 	if len(declared) == 0 {
 		// A framework that declares no env vocabulary, or no framework at all,
@@ -28,7 +36,30 @@ func declaredSQLiteFile(envPath, envFormat string, fw *config.Framework) (string
 		// convention such a project follows.
 		declared = map[string]bool{"DB_CONNECTION": true, "DB_DATABASE": true}
 	}
-	vals := envfile.Values(envPath, envFormat)
+
+	// A framework with a sqlite wiring of its own says exactly how a project on
+	// a file database reads: its detect rules. CakePHP spells the connection
+	// Cake\Database\Driver\Sqlite and CodeIgniter SQLite3, neither of which a
+	// generic scan for the word "sqlite" is entitled to assume.
+	if fw != nil && fw.Env.SQLite != nil {
+		for _, rule := range fw.Env.SQLite.Detect {
+			if rule.Key == "" {
+				continue
+			}
+			val, exists := vals[rule.Key]
+			if !exists || (rule.ValuePrefix != "" && !strings.HasPrefix(val, rule.ValuePrefix)) {
+				continue
+			}
+			// A DSN-shaped rule carries the path in the matched value itself;
+			// a driver-shaped one names it in the database key beside it.
+			if file := sqliteDSNPath(val); file != "" {
+				return file, true
+			}
+			if file := declaredCompanionValue(vals, declared, rule.Key); file != "" {
+				return file, true
+			}
+		}
+	}
 
 	// The flat shape: a declared key names the connection, another names the
 	// file. Laravel spells them DB_CONNECTION and DB_DATABASE; a framework
@@ -119,7 +150,16 @@ func declaredEnvKeys(fw *config.Framework) map[string]bool {
 	for _, kv := range fw.Env.Vars {
 		add(kv)
 	}
+	defs := make([]config.FrameworkServiceDef, 0, len(fw.Env.Services)+1)
 	for _, def := range fw.Env.Services {
+		defs = append(defs, def)
+	}
+	// The file database is wired through keys of its own, and they are as much
+	// the project's vocabulary as any service's.
+	if fw.Env.SQLite != nil {
+		defs = append(defs, *fw.Env.SQLite)
+	}
+	for _, def := range defs {
 		for _, rule := range def.Detect {
 			if rule.Key != "" {
 				keys[rule.Key] = true
@@ -142,6 +182,32 @@ func declaredEnvKeys(fw *config.Framework) map[string]bool {
 // root, which is a directory down. Both are checked, and a database found at
 // either is the site's, so a healthy 20 MB file is not reported missing because
 // lerd measured from the wrong end.
+// SQLiteCreationTarget returns where `lerd env` should create a declared
+// SQLite file, by the same rules the checks above read by. Nothing to create
+// when the file already exists anywhere the application could open it, or when
+// the declared path is absolute: that file is the user's own to manage, not
+// lerd's to build a directory tree for. Among the candidates, one whose parent
+// directory already exists is where the project keeps such files (Laravel's
+// database/, Drupal's files dir under the docroot); failing that, the project
+// root resolution stands.
+func SQLiteCreationTarget(projectPath string, fw *config.Framework, dbFile string) (string, bool) {
+	if filepath.IsAbs(dbFile) {
+		return "", false
+	}
+	paths := sqliteFilePaths(projectPath, publicDirOf(fw), dbFile)
+	for _, p := range paths {
+		if _, err := os.Stat(p); err == nil {
+			return "", false
+		}
+	}
+	for _, p := range paths {
+		if fi, err := os.Stat(filepath.Dir(p)); err == nil && fi.IsDir() {
+			return p, true
+		}
+	}
+	return paths[0], true
+}
+
 func sqliteFilePaths(projectPath, publicDir, dbFile string) []string {
 	if filepath.IsAbs(dbFile) {
 		return []string{dbFile}

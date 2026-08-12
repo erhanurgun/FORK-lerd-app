@@ -18,6 +18,11 @@ import (
 // of it, and the buffer is what a reload reads back.
 const runMaxLines = 2000
 
+// runMaxLineBytes caps one line of output. A command that writes progress with
+// a bare carriage return produces a single line megabytes long; it is emitted
+// in pieces this size rather than held whole.
+const runMaxLineBytes = 1024 * 1024
+
 // runRetention is how long a finished run stays readable, so a page that
 // reloads just as the run ends still finds its result rather than a 404.
 const runRetention = 30 * time.Minute
@@ -224,10 +229,25 @@ var execRun = func(ctx context.Context, r *run, argv []string, dir string) error
 		close(waited)
 	}()
 
-	scanner := bufio.NewScanner(pr)
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-	for scanner.Scan() {
-		r.append(scanner.Text())
+	// Nothing else reads this pipe, so the drain has to reach EOF whatever the
+	// command writes: a reader that gave up on a line longer than its buffer
+	// would leave the command blocked writing to it and cmd.Wait below never
+	// returning. An over-long line is emitted in pieces instead of abandoned.
+	reader := bufio.NewReaderSize(pr, 64*1024)
+	var line []byte
+	for {
+		chunk, isPrefix, err := reader.ReadLine()
+		if err != nil {
+			break
+		}
+		line = append(line, chunk...)
+		if !isPrefix || len(line) >= runMaxLineBytes {
+			r.append(string(line))
+			line = line[:0]
+		}
+	}
+	if len(line) > 0 {
+		r.append(string(line))
 	}
 	<-waited
 	return waitErr
@@ -244,6 +264,11 @@ func (reg *runRegistry) Get(id string) (*run, bool) {
 // ForDir lists the runs started for a directory, newest first, so a reloaded
 // wizard finds the work it left behind rather than starting it again.
 func (reg *runRegistry) ForDir(dir string) []runSnapshot {
+	// Also swept here, not only when a run starts: a machine that scaffolded one
+	// project and was left alone would otherwise hold that run, its buffered
+	// output and its place in every listing for as long as lerd-ui is up.
+	reg.sweep()
+
 	reg.mu.Lock()
 	all := make([]*run, 0, len(reg.runs))
 	for _, r := range reg.runs {

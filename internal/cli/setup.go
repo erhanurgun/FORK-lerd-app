@@ -138,33 +138,23 @@ func printSetupStepPlan(cwd string, skipOpen bool) error {
 // (the asset build needs the install that precedes it). A name the plan does
 // not offer is an error naming what it does offer, so a caller working from a
 // stale list is told rather than silently running less than it asked for.
-func selectSetupSteps(steps []setupStep, labels []string) ([]setupStep, error) {
+func selectSetupSteps(steps []setupStep, labels []string) (selected []setupStep, skipped []string) {
 	wanted := make(map[string]bool, len(labels))
 	for _, l := range labels {
 		wanted[strings.TrimSpace(l)] = true
 	}
 
-	var selected []setupStep
 	for _, s := range steps {
 		if wanted[s.label] {
 			selected = append(selected, s)
 			delete(wanted, s.label)
 		}
 	}
-	if len(wanted) > 0 {
-		unknown := make([]string, 0, len(wanted))
-		for l := range wanted {
-			unknown = append(unknown, l)
-		}
-		sort.Strings(unknown)
-		offered := make([]string, 0, len(steps))
-		for _, s := range steps {
-			offered = append(offered, s.label)
-		}
-		return nil, fmt.Errorf("no such setup step: %s — this directory offers: %s",
-			strings.Join(unknown, ", "), strings.Join(offered, ", "))
+	for l := range wanted {
+		skipped = append(skipped, l)
 	}
-	return selected, nil
+	sort.Strings(skipped)
+	return selected, skipped
 }
 
 // runNamedSetupSteps runs exactly the steps it is given. The configure phase is
@@ -173,9 +163,13 @@ func selectSetupSteps(steps []setupStep, labels []string) ([]setupStep, error) {
 // invocation. Output is left alone rather than captured, so a caller streaming
 // this sees the step's progress as it happens.
 func runNamedSetupSteps(cwd string, labels []string, skipOpen bool) error {
-	selected, err := selectSetupSteps(planSetupSteps(cwd, skipOpen), labels)
-	if err != nil {
-		return err
+	// The plan is re-derived per invocation and its steps are gated on live state:
+	// securing the site, a worker scan, a file the previous step wrote. A label
+	// the plan no longer offers is work that no longer needs doing, so it is
+	// reported and passed over rather than failing the caller's whole queue.
+	selected, skipped := selectSetupSteps(planSetupSteps(cwd, skipOpen), labels)
+	for _, label := range skipped {
+		fmt.Printf("→ %s (nothing left to do)\n", label)
 	}
 	for _, s := range selected {
 		fmt.Printf("→ %s\n", s.label)

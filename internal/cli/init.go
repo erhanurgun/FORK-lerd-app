@@ -500,6 +500,9 @@ func runCustomContainerWizard(cwd string, defaults *config.ProjectConfig, gcfg *
 		Container:     containerCfg,
 		AppURL:        defaults.AppURL,
 		Domains:       defaults.Domains,
+		// This wizard never asks about Node, so a pin the project carries is
+		// not its to drop.
+		NodeVersion: defaults.NodeVersion,
 	}, nil
 }
 
@@ -730,15 +733,14 @@ func persistedServices(dbChoice string, nonDB []string) []string {
 }
 
 // frameworkSupportsSQLite reports whether a framework can be wired to a file
-// database, which the definition says by declaring a sqlite service alongside
-// its others. A project with no framework at all keeps the option: nothing has
-// declared otherwise, and lerd should not decide for it.
+// database, which the definition says with its own sqlite wiring. A project
+// with no framework at all keeps the option: nothing has declared otherwise,
+// and lerd should not decide for it.
 func frameworkSupportsSQLite(fw *config.Framework) bool {
-	if fw == nil || len(fw.Env.Services) == 0 {
+	if fw == nil || !fw.HasEnvConfig() {
 		return true
 	}
-	_, ok := fw.Env.Services["sqlite"]
-	return ok
+	return fw.Env.SQLite != nil
 }
 
 func formatDBOptionLabel(name string) string {

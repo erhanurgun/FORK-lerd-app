@@ -839,16 +839,18 @@ func TestWiredVarsFor_ExternalUnmappedKeepsThePresetKeys(t *testing.T) {
 // the file itself, and the first request 500'd on a database that was never
 // created. The project's own configuration is the signal instead.
 func TestProjectUsesSQLite(t *testing.T) {
-	laravelish := &config.Framework{Env: config.FrameworkEnvConf{Services: map[string]config.FrameworkServiceDef{
-		"sqlite": {
+	laravelish := &config.Framework{Env: config.FrameworkEnvConf{
+		SQLite: &config.FrameworkServiceDef{
 			Detect: []config.FrameworkServiceDetect{{Key: "DB_CONNECTION", ValuePrefix: "sqlite"}},
 			Vars:   []string{"DB_CONNECTION=sqlite", "DB_DATABASE=database/database.sqlite"},
 		},
-		"mysql": {
-			Detect: []config.FrameworkServiceDetect{{Key: "DB_CONNECTION", ValuePrefix: "mysql"}},
-			Vars:   []string{"DB_CONNECTION=mysql", "DB_HOST=lerd-mysql"},
+		Services: map[string]config.FrameworkServiceDef{
+			"mysql": {
+				Detect: []config.FrameworkServiceDetect{{Key: "DB_CONNECTION", ValuePrefix: "mysql"}},
+				Vars:   []string{"DB_CONNECTION=mysql", "DB_HOST=lerd-mysql"},
+			},
 		},
-	}}}
+	}}
 	sqliteEnv := map[string]string{"DB_CONNECTION": "sqlite"}
 
 	for _, tc := range []struct {

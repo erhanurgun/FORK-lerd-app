@@ -96,3 +96,25 @@ func TestWorkerMarks_VersionsCollapseToOneEntry(t *testing.T) {
 		t.Errorf("want queue and vite once each, got %v", got)
 	}
 }
+
+// Versions are numbers, not strings: a machine that once resolved a Laravel 9
+// project still has laravel@9.yaml beside laravel@12.yaml, and sorting the
+// names would let 9 outrank 12 and answer with a definition two majors old.
+func TestWorkerMarks_TheNewestVersionAnswers(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	writeCachedFramework(t, "laravel@9.yaml", `name: laravel
+label: Laravel
+version: "9"
+workers:
+  queue:
+    label: Queue Worker
+    command: php artisan queue:work
+    icon: queue
+`)
+	writeCachedFramework(t, "laravel@12.yaml", laravelWithWorkers)
+
+	got := WorkerMarks()
+	if _, ok := got.Workers["laravel/vite"]; !ok {
+		t.Errorf("the newer definition's worker is missing, an older file answered: %v", got.Workers)
+	}
+}

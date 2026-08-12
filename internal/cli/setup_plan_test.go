@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -130,23 +129,27 @@ func TestSetupStepPlanJSON(t *testing.T) {
 	}
 }
 
-// Naming a step that this directory does not offer is a mistake worth reporting
-// rather than a silent no-op, and the message names what is on offer.
-func TestSelectSetupStepsRejectsUnknownLabel(t *testing.T) {
+// The plan is re-derived for every `lerd setup --step`, and its steps are gated
+// on state an earlier step or the watcher can flip. A queued label the plan no
+// longer offers is work already done, so it is reported back and passed over
+// rather than failing the caller and stopping the rest of its queue.
+func TestSelectSetupStepsSkipsAStepThePlanNoLongerOffers(t *testing.T) {
 	isolateSetupPlan(t)
 	dir := t.TempDir()
 	writePlanFixture(t, dir, map[string]string{"composer.json": `{"require":{}}`})
 
 	steps := planSetupSteps(dir, true)
-	if _, err := selectSetupSteps(steps, []string{"composer install"}); err != nil {
-		t.Fatalf("selecting an offered step failed: %v", err)
+	selected, skipped := selectSetupSteps(steps, []string{"composer install"})
+	if len(selected) != 1 || len(skipped) != 0 {
+		t.Fatalf("an offered step was not selected: %d selected, skipped %v", len(selected), skipped)
 	}
-	_, err := selectSetupSteps(steps, []string{"npm install/ci"})
-	if err == nil {
-		t.Fatal("selecting a step the plan does not offer should fail")
+
+	selected, skipped = selectSetupSteps(steps, []string{"npm install/ci"})
+	if len(selected) != 0 {
+		t.Errorf("selected %d steps for a label the plan does not offer", len(selected))
 	}
-	if !strings.Contains(err.Error(), "composer install") {
-		t.Errorf("error should list the offered steps, got: %v", err)
+	if len(skipped) != 1 || skipped[0] != "npm install/ci" {
+		t.Errorf("the vanished label was not reported back: %v", skipped)
 	}
 }
 
@@ -161,9 +164,9 @@ func TestSelectSetupStepsKeepsPlanOrder(t *testing.T) {
 	})
 
 	steps := planSetupSteps(dir, true)
-	selected, err := selectSetupSteps(steps, []string{"npm run build", "composer install"})
-	if err != nil {
-		t.Fatal(err)
+	selected, skipped := selectSetupSteps(steps, []string{"npm run build", "composer install"})
+	if len(skipped) != 0 {
+		t.Fatalf("offered steps were skipped: %v", skipped)
 	}
 	if len(selected) != 2 {
 		t.Fatalf("selected %d steps, want 2", len(selected))

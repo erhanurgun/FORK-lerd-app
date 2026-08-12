@@ -52,7 +52,7 @@ func TestDatabaseSiteIndex_WordPressSiteOwnsItsDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got := databaseSiteIndex("mysql")["blog"]; got.domain != "blog.test" {
+	if got := databaseSiteIndexes()["mysql"]["blog"]; got.domain != "blog.test" {
 		t.Errorf("blog database = %+v, want domain blog.test", got)
 	}
 }
@@ -74,7 +74,7 @@ func TestDatabaseSiteIndex_IsolatedWorktreeDBCarriesItsBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	idx := databaseSiteIndex("mysql")
+	idx := databaseSiteIndexes()["mysql"]
 
 	if got := idx["astrolov"]; got.domain != "astrolov.test" || got.branch != "" {
 		t.Errorf("parent database = %+v, want domain astrolov.test with no branch", got)
@@ -102,7 +102,7 @@ func TestDatabaseSiteIndex_IgnoresWorktreeDBsOnAnotherService(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got, ok := databaseSiteIndex("mysql")["astrolov_staging"]; ok {
+	if got, ok := databaseSiteIndexes()["mysql"]["astrolov_staging"]; ok {
 		t.Errorf("postgres worktree database surfaced on mysql: %+v", got)
 	}
 }

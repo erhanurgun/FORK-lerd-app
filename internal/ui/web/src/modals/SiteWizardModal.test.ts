@@ -246,6 +246,75 @@ describe('SiteWizardModal', () => {
     });
   });
 
+  // The plan is what says which steps are optional. A resumed queue that never
+  // loaded it would treat every remaining step as required, so one optional
+  // failure would stop the rest.
+  it('keeps optional steps optional when the queue resumes', async () => {
+    localStorage.setItem(
+      'lerd.siteWizard',
+      JSON.stringify({
+        step: 'setup',
+        dir: '/home/u/acme',
+        runId: 'run-setup-head',
+        runKind: 'setup',
+        queue: ['composer install', 'npm audit', 'npm run build']
+      })
+    );
+    runsForDir.mockResolvedValue([
+      { id: 'run-setup-head', kind: 'setup', dir: '/home/u/acme', status: 'done', started: 0 }
+    ]);
+    setupSteps.mockResolvedValue([
+      { label: 'composer install', enabled: true, optional: false },
+      { label: 'npm audit', enabled: true, optional: true },
+      { label: 'npm run build', enabled: true, optional: false }
+    ]);
+    startRun.mockImplementation(async (req: { kind: string; steps?: string[] }) => ({
+      id: 'run-' + (req.steps?.[0] ?? req.kind),
+      kind: req.kind,
+      dir: '/home/u/acme',
+      status: 'done' as const,
+      started: 0
+    }));
+    streamRun.mockImplementation(async (id: string, onEvent: (e: unknown) => void) => {
+      onEvent({ done: true, ok: id !== 'run-npm audit' });
+    });
+
+    render(SiteWizardModal);
+
+    await waitFor(() => {
+      const setupCalls = startRun.mock.calls
+        .map((c) => c[0] as { kind: string; steps?: string[] })
+        .filter((c) => c.kind === 'setup')
+        .map((c) => c.steps?.[0]);
+      // The optional audit failed and the build after it still ran.
+      expect(setupCalls).toEqual(['npm audit', 'npm run build']);
+    });
+  });
+
+  // A finished run is only kept for so long. A scaffold parked past that is
+  // still a scaffolded project on disk, and reopening the wizard carries it
+  // into the questions instead of dead-ending on the create form.
+  it('continues a scaffold whose run has aged out of the registry', async () => {
+    localStorage.setItem(
+      'lerd.siteWizard',
+      JSON.stringify({
+        step: 'create',
+        dir: '/home/u/acme',
+        parent: '/home/u',
+        name: 'acme',
+        runId: 'run-scaffold',
+        runKind: 'scaffold'
+      })
+    );
+    runsForDir.mockResolvedValue([]);
+
+    render(SiteWizardModal);
+
+    await waitFor(() => {
+      expect(projectQuestions).toHaveBeenCalledWith('/home/u/acme');
+    });
+  });
+
   // Coming back to a run that is still going has to show the run, not a
   // spinner: watching the output is the whole point of reopening it.
   it('shows the live run rather than a loader when it reattaches', async () => {
