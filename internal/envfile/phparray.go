@@ -134,11 +134,17 @@ func writePhpArrayInPlace(path, original string, root *phpValue, keys []string, 
 	replacements := map[*phpValue]*phpValue{}
 	var replaceOrder []*phpValue
 
+	type scalarEdit struct {
+		node *phpValue
+		text string
+	}
+	var scalars []scalarEdit
+
 	for _, key := range keys {
 		segs := strings.Split(key, ".")
 		node, rest := descendPhpArray(root, segs)
 		if len(rest) == 0 {
-			edits = append(edits, edit{node.start, node.end,
+			scalars = append(scalars, scalarEdit{node,
 				renderPhpValue(scalarValue(updates[key], node.kind), indentAt(original, node.start))})
 			continue
 		}
@@ -162,6 +168,16 @@ func writePhpArrayInPlace(path, original string, root *phpValue, keys []string, 
 			graftOrder = append(graftOrder, node)
 		}
 		setPath(graft, rest, updates[key])
+	}
+
+	for _, s := range scalars {
+		// A node other keys descend through is written as the array they need,
+		// and that replacement covers this very span. Emitting both would put two
+		// edits on it.
+		if replacements[s.node] != nil {
+			continue
+		}
+		edits = append(edits, edit{s.node.start, s.node.end, s.text})
 	}
 
 	for _, node := range replaceOrder {
@@ -190,11 +206,20 @@ func writePhpArrayInPlace(path, original string, root *phpValue, keys []string, 
 		edits = append(edits, edit{at, at, b.String()})
 	}
 
-	// Applied back to front so each splice leaves the earlier offsets valid.
+	// Applied back to front so each splice leaves the earlier offsets valid, which
+	// holds only while every edit sits wholly before the one applied before it.
+	// One that overlaps it, because a key named a node another key writes inside,
+	// would be spliced against an offset that has already moved and would cut the
+	// file mid-expression; the narrower edit is already in, so this one is dropped.
 	sort.SliceStable(edits, func(i, j int) bool { return edits[i].start > edits[j].start })
 	out := original
+	bound := len(original)
 	for _, e := range edits {
+		if e.end > bound {
+			continue
+		}
 		out = out[:e.start] + e.text + out[e.end:]
+		bound = e.start
 	}
 	return writePhpArrayFile(path, original, out)
 }

@@ -2,6 +2,7 @@ package envfile
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -519,5 +520,71 @@ func TestReadPhpArray_OmitsExpressionValues(t *testing.T) {
 	}
 	if vals["Datasources.default.host"] != "localhost" {
 		t.Errorf("host = %q, want the literal alongside the expressions", vals["Datasources.default.host"])
+	}
+}
+
+// phpParses reports whether php accepts the file, which is the only assertion
+// that catches a splice landing mid-expression. Skipped where no php is on PATH.
+func phpParses(t *testing.T, path string) {
+	t.Helper()
+	bin, err := exec.LookPath("php")
+	if err != nil {
+		t.Skip("no php on PATH to lint with")
+	}
+	out, err := exec.Command(bin, "-l", path).CombinedOutput()
+	if err != nil {
+		body, _ := os.ReadFile(path)
+		t.Fatalf("php rejected the rewritten file: %v\n%s\n--- file ---\n%s", err, out, body)
+	}
+}
+
+// A key naming a node and another key descending through it both want the same
+// span of the file. Only one edit can have it, or the second splices against an
+// offset the first has already moved and the file stops parsing.
+func TestApplyPhpArrayUpdates_KeyNamingANodeAnotherDescendsThrough(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "app_local.php")
+	body := "<?php\nreturn [\n    'Datasources' => null,\n    'debug' => true,\n];\n"
+	if err := os.WriteFile(path, []byte(body), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ApplyPhpArrayUpdates(path, map[string]string{
+		"Datasources":                  "x",
+		"Datasources.default.database": "site",
+	}); err != nil {
+		t.Fatalf("ApplyPhpArrayUpdates: %v", err)
+	}
+	phpParses(t, path)
+
+	vals, err := ReadPhpArray(path)
+	if err != nil {
+		t.Fatalf("re-read: %v", err)
+	}
+	// The descendant needs an array there, so that is what is written.
+	if vals["Datasources.default.database"] != "site" {
+		out, _ := os.ReadFile(path)
+		t.Errorf("the descending key did not survive: %v\n%s", vals, out)
+	}
+}
+
+// The same collision through an array node: one key rewrites the whole array,
+// another inserts into it.
+func TestApplyPhpArrayUpdates_WholeArrayAndAnInsertionIntoIt(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "app_local.php")
+	if err := os.WriteFile(path, []byte(cakeAppLocalPHP), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ApplyPhpArrayUpdates(path, map[string]string{
+		"Datasources.default":      "x",
+		"Datasources.default.port": "3306",
+	}); err != nil {
+		t.Fatalf("ApplyPhpArrayUpdates: %v", err)
+	}
+	phpParses(t, path)
+
+	out, _ := os.ReadFile(path)
+	if !strings.Contains(string(out), "use function Cake\\Core\\env;") {
+		t.Errorf("the file lost its import:\n%s", out)
 	}
 }
