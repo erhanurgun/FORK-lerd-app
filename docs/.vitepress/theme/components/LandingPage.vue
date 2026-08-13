@@ -525,11 +525,11 @@ onBeforeUnmount(() => {
 
       <!-- ============ DEV DIGEST BANNER ============ -->
       <div class="wrap">
-        <a class="digest" :href="withBase('/digest/v1.32.0.html')" target="_blank" rel="noopener">
+        <a class="digest" :href="withBase('/digest/v1.33.0.html')" target="_blank" rel="noopener">
           <span class="digest-pill">NEW</span>
           <span class="digest-body">
-            <span class="digest-title">v1.32.0 dev digest</span>
-            <span class="digest-sub">A public share through the reverse proxy you already run, managed engines reachable from the LAN, and daemons that stop working while the machine is idle.</span>
+            <span class="digest-title">v1.33.0 dev digest</span>
+            <span class="digest-sub">Every framework's own config file read and written where it lives, a dashboard that creates a project and takes it through setup, and marks and brand colours that ship from the store.</span>
           </span>
           <span class="digest-cta">Read the digest&nbsp;→</span>
         </a>

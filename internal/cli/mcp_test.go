@@ -588,9 +588,13 @@ func TestIsLerdBuiltImage_matchers(t *testing.T) {
 // names every route rather than reading as though only tunnels exist, then
 // 31000 → 31300 for the snapshot a data wipe now takes first: without it an
 // assistant hands back the renamed data dir as the recovery path, which after
-// a version change is a directory nothing installed can read.
+// a version change is a directory nothing installed can read, then 31300 →
+// 33200 for the env contract, which is what stops an assistant hand-editing a
+// settings.php or reading Laravel's key names on a project that declares none,
+// plus sqlite as a wiring rather than a service, and the doctor fixes that run
+// on the host rather than in the container.
 func TestLerdReference_underSizeCeiling(t *testing.T) {
-	const ceiling = 31300
+	const ceiling = 33200
 	if got := len(lerdReference); got > ceiling {
 		t.Errorf("lerd-reference.md is %d bytes, ceiling is %d — trim before raising", got, ceiling)
 	}
