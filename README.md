@@ -33,29 +33,29 @@ Lerd is built for PHP developers on Linux who want frictionless local developmen
 
 - 🧱 **Host-proxy sites.** Run a Node, Python, Go or any non-PHP dev server on the host and have nginx serve it at a `.test` domain with HTTPS, git worktrees included. A wedged dev server can be bounced from the site header without reaching for a terminal.
 
-- 🌳 **First-class git worktrees.** Auto-detected branch domains, per-worktree PHP and Node versions, optional database isolation, wildcard cert SANs for `*.branch.site.test`, and a per-branch Vite worker on the host. Add and remove them from a dashboard modal without touching the CLI. A bare `git worktree add` from any tool is set up automatically, and `lerd worktree wait` blocks until that pipeline has actually finished, so a script or an agent never touches a half-installed tree.
+- 🌳 **First-class git worktrees.** Auto-detected branch domains, per-worktree PHP and Node versions, optional database isolation, wildcard cert SANs and a per-branch Vite worker. A bare `git worktree add` from any tool is provisioned automatically, and `lerd worktree wait` blocks until the tree is ready.
 
-- 🌍 **Share a site.** On your LAN with a stable port and a QR code, or publicly through ngrok, cloudflared, Expose, Pinggy, serveo or localhost.run, from the CLI or the dashboard's share menu. Set a Cloudflare base domain once and every share is served on `<site>.<domain>`, so a webhook or OAuth callback keeps its URL between runs, and ngrok runs from its published image on a machine that never installed it. Or skip the tunnel services entirely: point a wildcard you control at the machine, set that base domain once, and lerd answers on `<site>.<domain>` through the reverse proxy or VPN you already run, with the site's ordinary `.test` vhost untouched beside it.
+- 🌍 **Share a site.** On your LAN with a stable port and a QR code, or publicly through ngrok, cloudflared, Expose, Pinggy, serveo or localhost.run. Set a base domain once and every share keeps the same URL between runs, through a tunnel service or the reverse proxy you already run.
 
 - 🎨 **Dev servers on the site's own domain.** A running Vite serves its assets and its hot-reload socket under the site's `.test` hostname instead of advertising `localhost:5173`, so a shared, LAN-opened or worktree page arrives styled. Nothing in the project is edited and nothing is declared per framework.
 
 ### PHP, Node and runtimes
 
-- 🐘 **Per-project PHP version.** 8.1 to 8.5, plus a frozen 7.4 / 8.0 legacy tier for projects hosted on the old stack, switched with one click. Custom PHP extensions and Alpine packages are declared once and applied to every image lerd builds, so changing a site's version never silently drops what you asked for.
+- 🐘 **Per-project PHP version.** 8.1 to 8.5, plus a frozen 7.4 / 8.0 legacy tier for projects on the old stack, switched with one click. Custom extensions and Alpine packages are declared once and applied to every image lerd builds.
 
 - ⚡ **FrankenPHP runtime.** Per site, as an alternative to shared PHP-FPM, with Laravel Octane and Symfony Runtime worker mode.
 
 - 📦 **Node.js isolation.** Node 22 or 24 per project, through the bundled fnm or an nvm you already have, switchable from the dashboard. Or **bun** as the JS runtime on the host and, opt-in, inside the container.
 
-- 🪄 **No per-framework setup.** Workers, env values and the nginx vhost are all configured for you when you link a project. "Env" means whatever file your framework actually reads: a `.env`, WordPress's `wp-config.php`, Magento's `env.php` or the `$databases` array Drupal keeps in `settings.php`, written in place with the rest of the file left exactly as it was.
+- 🪄 **No per-framework setup.** Workers, env values and the nginx vhost are configured for you when you link a project. "Env" means whatever file your framework actually reads: a `.env`, WordPress's `wp-config.php`, Magento's `env.php` or Drupal's `settings.php`, written in place.
 
-- 🧩 **Framework store.** Community definitions for Laravel, Symfony, WordPress, Drupal, Magento, CakePHP, CodeIgniter, Statamic and Tempest with versioned auto-detection, back to the majors that still run on PHP 7.4. Each one carries its own mark and brand colour, so a framework published tomorrow arrives complete without a new lerd release.
+- 🧩 **Framework store.** Community definitions for Laravel, Symfony, WordPress, Drupal, Magento, CakePHP, CodeIgniter, Statamic and Tempest, with versioned auto-detection back to the majors still on PHP 7.4. One published tomorrow arrives without a new lerd release.
 
 ### Services and databases
 
-- 🗄️ **One-click services.** MySQL, PostgreSQL, Redis, Meilisearch, RustFS, Mailpit, Reverb, OpenSearch and more, the default stack built in and every add-on fetched from a store that updates without a new lerd release. Browse, create and drop an engine's databases from its service page, with snapshots, export and import. Engines stay on loopback unless you publish them to the LAN, which is an opt-in that lives under the LAN exposure it depends on.
+- 🗄️ **One-click services.** MySQL, PostgreSQL, Redis, Meilisearch, RustFS, Mailpit, Reverb, OpenSearch and more, the default stack built in and every add-on from a store that updates without a lerd release. Create, drop, snapshot, export and import databases from the service page.
 
-- 🔌 **Host tools that reach the container.** `psql`, `mysql`, `pg_dump` and friends run on your host against lerd's engines with no client installed and no port to remember, by name or on the loopback port lerd publishes. Point an IDE's phpstan, php-cs-fixer or phpcs at the same shims and they run in the project's PHP container, including against the temp buffer copies PhpStorm analyses from outside the project tree. Prefer a bare `php` pointed at a host install? `lerd path:disable` takes the shims off your PATH and everything lerd runs keeps working.
+- 🔌 **Host tools that reach the container.** `psql`, `mysql`, `pg_dump` and friends run on your host against lerd's engines with no client installed and no port to remember. Point an IDE's phpstan, php-cs-fixer or phpcs at the same shims and they run in the project's PHP container.
 
 - 🧷 **IDE database wiring** for JetBrains. A project gets one data source pointed at its own lerd database on the host port it actually answers on, written on link and refreshed as the project's database changes, leaving every data source lerd doesn't own untouched.
 
@@ -67,13 +67,13 @@ Lerd is built for PHP developers on Linux who want frictionless local developmen
 
 - 📈 **Request timing analytics.** A durable per-site view of typical and p95 response times, throughput, error rate, and the slowest routes ranked by recent p95 with one-click profiling. Agents get the same signal over MCP with `route_timing` and `optimize_route`.
 
-- 🧪 **Tinker tab.** An in-browser PHP REPL per site with project-aware autocomplete, hover and diagnostics powered by [phpantom_lsp](https://github.com/PHPantom-dev/phpantom_lsp), so your models and Builder chains resolve alongside composer helpers. Works on Laravel, Symfony, and any composer project. Reusable snippets are read from the project, from an existing `.tinkerwell/snippets`, or from a personal folder that follows you across every site.
+- 🧪 **Tinker tab.** An in-browser PHP REPL per site with project-aware autocomplete, hover and diagnostics powered by [phpantom_lsp](https://github.com/PHPantom-dev/phpantom_lsp), so your models and Builder chains resolve as you type. Works on Laravel, Symfony and any composer project.
 
 ### Interfaces
 
-- 🖥️ **Built-in Web UI.** Sites and services dashboards, live widgets, a global Cmd+K command palette, and install/remove of PHP and Node versions from the System page. Available in fourteen languages. Reachable from another machine behind credentials when you expose it, where the actions that touch the host itself, terminals, filesystem browsing, raw `.env` reads, stay local until you grant them explicitly.
+- 🖥️ **Built-in Web UI.** Sites and services dashboards, live widgets, a global Cmd+K command palette, and install/remove of PHP and Node versions, in fourteen languages. Reachable from another machine behind credentials, with the actions that touch the host staying local until you grant them.
 
-- ✨ **Start a project from the dashboard.** The `+` in Sites scaffolds a new project from the framework store or links one you already have, asks the same questions `lerd init` asks about PHP version, Node, HTTPS and services, and then runs the setup steps with composer and the JS build streaming into the modal. Close the tab mid-install and it picks back up where it was.
+- ✨ **Start a project from the dashboard.** The `+` in Sites scaffolds a project from the framework store or links one you already have, asks what `lerd init` asks, then runs composer and the JS build in the modal. Close the tab mid-install and it picks back up.
 
 - 📚 **The documentation, offline.** Every page ships inside the binary, searchable and rendered in the dashboard, so the one moment you most need the docs, a machine with no internet, is not the moment they stop working. `lerd man` reads the same pages in the terminal.
 
@@ -91,11 +91,11 @@ Lerd is built for PHP developers on Linux who want frictionless local developmen
 
 - 🧰 **Environment doctor** (`lerd doctor`). Checks the host lerd itself depends on and repairs what it safely can with `--fix`: missing directories, linger, a missing PHP image, the DNS wiring. Anything needing sudo is printed as a command and never run for you, and `--dry-run` shows it first.
 
-- 🩺 **Site doctor.** Health checks that apply to any project (env drift, application key, composer and node install state, security audits, database presence, PHP version range, a key an env file sets twice) plus extra checks for your framework, with one-click fixes. It installs and starts the services a site declares, rewrites an nginx vhost that has drifted from what lerd would write today, and points a project at the database it picked, all from the button that reported the problem. From the web UI, the TUI, `lerd site:doctor` and MCP.
+- 🩺 **Site doctor.** Framework-agnostic health checks (env drift, application key, composer and node state, security audits, database presence, PHP version range) plus extra checks for your framework, each with a one-click fix, from the web UI, the TUI, `lerd site:doctor` and MCP.
 
 - ⚒️ **Worker self-heal.** Failed queue, schedule, horizon, reverb and stripe workers are surfaced everywhere (CLI, dashboard banner, TUI, MCP) and recovered with one click or `lerd worker heal`. A worker that keeps failing can be stopped from the same banner rather than restarted into the same wall.
 
-- 💾 **Nothing destructive without a way back.** A `service remove --purge` or a `reinstall --reset-data` takes a full snapshot of every database first, while the data is still where the engine expects it, so getting it back is an ordinary `db:restore -A` rather than a data directory only the old image could open. Each engine declares how long it gets to shut down, so a database finishes its checkpoint instead of being killed mid-write.
+- 💾 **Nothing destructive without a way back.** A `service remove --purge` or a `reinstall --reset-data` snapshots every database first, while the data is still where the engine expects it, so recovery is an ordinary `db:restore -A`. Each engine declares how long it gets to shut down.
 
 - 💤 **Idle-suspend.** Activity-driven suspension of a site's workers (queue, schedule, horizon, reverb, stripe, Vite) after a configurable idle timeout, resumed on the next request, CLI command, MCP call or file save, with per-site pinning.
 
