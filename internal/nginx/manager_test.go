@@ -693,8 +693,9 @@ func TestRemoveVhost_noError_whenMissing(t *testing.T) {
 // ── InstallSSLVhost ───────────────────────────────────────────────────────────
 
 // conf.d is a glob, so a generated -ssl.conf that is never installed is loaded
-// as a second server block for the same names and outlives the certificate an
-// unlink removes. Installing it is what leaves one file serving the site.
+// as a second server block for the same names, and it sorts ahead of the file
+// every other path rewrites. Installing it is what leaves one file serving the
+// site.
 func TestInstallSSLVhost_leavesOnlyTheServedConf(t *testing.T) {
 	confD := setupConfD(t)
 	os.MkdirAll(confD, 0755)

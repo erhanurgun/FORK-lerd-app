@@ -461,8 +461,11 @@ func GenerateSSLVhost(site config.Site, phpVersion string) error {
 // InstallSSLVhost moves the SSL vhost every Generate*SSLVhost writes onto the
 // name nginx serves the site under. It is the second half of generating one:
 // conf.d is a glob, so a <domain>-ssl.conf left beside <domain>.conf is loaded
-// as a second server block for the same names, and it outlives the certificate
-// an unlink deletes, which takes every reload down with it.
+// as a second server block for the same names, and it sorts first, so nginx
+// keeps the sidecar and ignores the file every other path rewrites. Unlink
+// clears both names, but unsecure removes only the served one and deletes the
+// certificate, leaving a sidecar that points at a file that is gone and a
+// configuration nginx can no longer load at all.
 func InstallSSLVhost(domain string) error {
 	confD := config.NginxConfD()
 	mainConf := filepath.Join(confD, domain+".conf")
