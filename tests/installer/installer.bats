@@ -7,8 +7,11 @@ INSTALLER="$BATS_TEST_DIRNAME/../../install.sh"
 # Source the installer so we can call its functions directly.
 # The guard at the bottom prevents main() from running when sourced.
 setup() {
-  # Isolate HOME so the installer never touches the real shell rc files.
+  # Isolate HOME so the installer never touches the real shell rc files. The
+  # XDG variables go with it: LERD_DATA_DIR falls back to $HOME only when they
+  # are unset, so leaving them would point the data directory at the real one.
   export HOME="$BATS_TMPDIR/home-$$"
+  unset XDG_DATA_HOME XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME
   mkdir -p "$HOME"
 
   # Source the script to load all function definitions.
@@ -18,6 +21,15 @@ setup() {
 
 teardown() {
   rm -rf "$BATS_TMPDIR/home-$$"
+}
+
+# Pins the isolation the whole file rests on: whatever the environment running
+# the suite looks like, the directories the uninstall removes must sit inside
+# the throwaway HOME and never in the real one.
+@test "the harness keeps the config and data directories inside the test HOME" {
+  [[ "$HOME" == "$BATS_TMPDIR/"* ]]
+  [[ "$LERD_CONFIG_DIR" == "$HOME/"* ]]
+  [[ "$LERD_DATA_DIR" == "$HOME/"* ]]
 }
 
 # ── detect_arch ───────────────────────────────────────────────────────────────
