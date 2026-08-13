@@ -1126,7 +1126,13 @@ func RepairVhosts() []VhostRepair {
 
 		repaired := false
 		for i, site := range reg.Sites {
-			if site.PrimaryDomain() != domain || !site.Secured {
+			// Ownership is the domain alone. Requiring the registry to also call
+			// the site secured meant a site whose entry and whose file disagreed,
+			// which is exactly what a half-finished unsecure leaves, read as
+			// belonging to nobody and had the only vhost serving it deleted. An
+			// ignored site is the one exception: it serves nothing by design, so
+			// its file goes rather than coming back.
+			if site.PrimaryDomain() != domain || site.Ignored {
 				continue
 			}
 			// Regenerate as plain HTTP vhost.
@@ -1144,8 +1150,10 @@ func RepairVhosts() []VhostRepair {
 			if regenErr != nil {
 				continue
 			}
-			reg.Sites[i].Secured = false
-			dirty = true
+			if site.Secured {
+				reg.Sites[i].Secured = false
+				dirty = true
+			}
 			repaired = true
 			repairs = append(repairs, VhostRepair{Domain: domain, Reason: "missing-cert"})
 			os.Remove(filepath.Join(certsDir, domain+".crt")) //nolint:errcheck

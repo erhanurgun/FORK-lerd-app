@@ -1638,3 +1638,55 @@ func TestRepairVhosts_leavesAPausedSitesSidecarAlone(t *testing.T) {
 		t.Errorf("the paused site's own vhost should still be served, got: %s", content)
 	}
 }
+
+// A half-finished unsecure leaves the registry saying plain and the file still
+// asking for a certificate that is gone. The site is registered either way, so
+// its vhost is re-rendered rather than deleted out from under it.
+func TestRepairVhosts_reRendersAnUnsecuredSiteRatherThanDeletingIt(t *testing.T) {
+	confD, _ := setupRepairEnv(t, `sites:
+- name: myapp
+  domains:
+    - myapp.test
+  path: /srv/myapp
+  php_version: "8.4"
+  secured: false
+`)
+
+	os.WriteFile(filepath.Join(confD, "myapp.test.conf"), []byte(`server {
+    listen 443 ssl;
+    server_name myapp.test;
+    ssl_certificate /etc/nginx/certs/myapp.test.crt;
+}
+`), 0644)
+
+	repairs := RepairVhosts()
+
+	if len(repairs) != 1 || repairs[0].Reason != "missing-cert" {
+		t.Fatalf("expected [{myapp.test missing-cert}], got %v", repairs)
+	}
+	content := readConf(t, filepath.Join(confD, "myapp.test.conf"))
+	if strings.Contains(content, "ssl_certificate") {
+		t.Errorf("expected a plain HTTP re-render, got: %s", content)
+	}
+}
+
+// Nobody owns the domain, so there is nothing to re-render and the file is the
+// crash waiting to happen it always was.
+func TestRepairVhosts_stillRemovesAVhostNoSiteOwns(t *testing.T) {
+	confD, _ := setupRepairEnv(t, "sites: []\n")
+
+	os.WriteFile(filepath.Join(confD, "gone.test.conf"), []byte(`server {
+    listen 443 ssl;
+    ssl_certificate /etc/nginx/certs/gone.test.crt;
+}
+`), 0644)
+
+	repairs := RepairVhosts()
+
+	if len(repairs) != 1 || repairs[0].Reason != "orphan-ssl" {
+		t.Fatalf("expected [{gone.test orphan-ssl}], got %v", repairs)
+	}
+	if _, err := os.Stat(filepath.Join(confD, "gone.test.conf")); !os.IsNotExist(err) {
+		t.Error("an unowned SSL vhost with no certificate should be removed")
+	}
+}
