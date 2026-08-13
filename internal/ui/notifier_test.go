@@ -96,11 +96,19 @@ func TestDispatchNotification_NativeSinkGoesThroughTheSeam(t *testing.T) {
 
 	var got desktopnotify.Request
 	prev := emitDesktopNotification
+	prevSupported := desktopSupported
 	emitDesktopNotification = func(r desktopnotify.Request) (uint32, error) {
 		got = r
 		return 0, nil
 	}
-	t.Cleanup(func() { emitDesktopNotification = prev })
+	// A CI runner has no notification daemon, so the live probe would send this
+	// down the browser branch and the test would pass or fail on the machine
+	// rather than on the code.
+	desktopSupported = func() bool { return true }
+	t.Cleanup(func() {
+		emitDesktopNotification = prev
+		desktopSupported = prevSupported
+	})
 
 	dispatchNotification(push.Notification{Kind: "test", Title: "Create finished: myapp", Body: "Took 0s."})
 
