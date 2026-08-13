@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -742,22 +744,24 @@ func MaterializeServiceFilesChanged(svc *CustomService) (bool, error) {
 			}
 			content = out
 		}
-		// A file whose content already matches needs no rewrite; comparing by
-		// content (not ownership) leaves a podman :U-chowned file in place and, most
-		// importantly, avoids a needless service restart when nothing changed. The
-		// mode is still enforced so a re-materialise stays idempotent on permissions,
-		// but a mode-only fixup is not a content change and triggers no restart.
-		if existing, err := os.ReadFile(path); err == nil && string(existing) == content {
+		// Skip the rewrite when content already matches; a mode-only fixup
+		// is not a content change and triggers no restart.
+		existing, readErr := os.ReadFile(path)
+		if readErr == nil && string(existing) == content {
 			if info, statErr := os.Stat(path); statErr == nil && info.Mode().Perm() != mode.Perm() {
 				if err := os.Chmod(path, mode); err != nil {
 					return changed, fmt.Errorf("chmod %s: %w", path, err)
 				}
 			}
+			writeContentSidecar(path, content)
 			continue
 		}
-		// Unlink first: with chown:true podman's :U flag re-owns the file to a
-		// userns-mapped uid, so a plain rewrite would EACCES. Removing the dir
-		// entry succeeds because the parent dir is owned by us.
+		// podman :U re-owns the file so os.ReadFile EACCES; a sidecar hash
+		// (never mounted, never re-owned) lets us compare without reading it.
+		if readErr != nil && !os.IsNotExist(readErr) && contentMatchesSidecar(path, content) {
+			continue
+		}
+		// Unlink first: podman's :U re-owns the file so a plain rewrite EACCES.
 		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 			return changed, fmt.Errorf("removing stale %s for service %s: %w", path, svc.Name, err)
 		}
@@ -770,8 +774,27 @@ func MaterializeServiceFilesChanged(svc *CustomService) (bool, error) {
 			return changed, fmt.Errorf("chmod %s: %w", path, err)
 		}
 		changed = true
+		writeContentSidecar(path, content)
 	}
 	return changed, nil
+}
+
+// contentSidecarPath is a hash file beside the service file, never mounted
+// into the container so podman's :U never re-owns it.
+func contentSidecarPath(path string) string { return path + ".sha256" }
+
+func writeContentSidecar(path, content string) {
+	sum := sha256.Sum256([]byte(content))
+	_ = os.WriteFile(contentSidecarPath(path), []byte(hex.EncodeToString(sum[:])), 0644)
+}
+
+func contentMatchesSidecar(path, content string) bool {
+	stored, err := os.ReadFile(contentSidecarPath(path))
+	if err != nil {
+		return false
+	}
+	sum := sha256.Sum256([]byte(content))
+	return string(stored) == hex.EncodeToString(sum[:])
 }
 
 // customServicePath returns the on-disk definition path for a service name, or

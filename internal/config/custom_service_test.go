@@ -189,6 +189,52 @@ func TestMaterializeServiceFilesChanged_DetectsContentDrift(t *testing.T) {
 	}
 }
 
+// podman :U re-owns the file so os.ReadFile EACCES; the sidecar hash must
+// prevent a rewrite so mtime does not move.
+func TestMaterializeServiceFilesChanged_UnreadableFileUsesSidecar(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", tmp)
+	svc := &CustomService{Name: "pgadmin", Image: "docker.io/dpage/pgadmin4:latest", Preset: "pgadmin"}
+
+	changed, err := MaterializeServiceFilesChanged(svc)
+	if err != nil {
+		t.Fatalf("first materialize: %v", err)
+	}
+	if !changed {
+		t.Fatal("first materialize must report a change")
+	}
+
+	// Simulate podman re-owning the file: make it unreadable by the host user.
+	path := ServiceFilePath(svc.Name, "/pgpass")
+	if err := os.Chmod(path, 0o000); err != nil {
+		t.Fatalf("chmod 000: %v", err)
+	}
+
+	mtimeBefore, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat before: %v", err)
+	}
+
+	changed, err = MaterializeServiceFilesChanged(svc)
+	if err != nil {
+		t.Fatalf("second materialize (unreadable): %v", err)
+	}
+	if changed {
+		t.Fatal("an unreadable file whose content has not changed must not be rewritten")
+	}
+
+	mtimeAfter, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat after: %v", err)
+	}
+	if !mtimeAfter.ModTime().Equal(mtimeBefore.ModTime()) {
+		t.Fatal("mtime moved on an unchanged unreadable file, the drift loop is not fixed")
+	}
+
+	// Restore so cleanup can remove it.
+	_ = os.Chmod(path, 0o600)
+}
+
 func TestValidateCustomService_rejectsEnvInjection(t *testing.T) {
 	svc := &CustomService{Name: "evil", Image: "alpine",
 		Environment: map[string]string{"X": "ok\nPodmanArgs=--privileged"}}
