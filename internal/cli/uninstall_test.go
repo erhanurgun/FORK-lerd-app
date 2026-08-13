@@ -386,3 +386,49 @@ func TestRemoveDataDir_reportsTheDirectoryWhenTheFallbackFails(t *testing.T) {
 		t.Errorf("removeDataDir = %q, want %q so the uninstall can say so", kept, dir)
 	}
 }
+
+// ── removeScriptInstalledBinaries ─────────────────────────────────────────────
+
+// The package-managed guard exists so lerd never deletes a file out of a Cellar
+// or an rpm's file list. It said nothing about ~/.local/bin, which no package
+// manager owns, so a machine carrying both installs kept a script-installed
+// lerd on PATH pointing at a data directory the same run had just deleted.
+func TestRemoveScriptInstalledBinaries_clearsTheInstallDirPair(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	binDir := filepath.Join(home, ".local", "bin")
+	if err := os.MkdirAll(binDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	lerd := filepath.Join(binDir, "lerd")
+	tray := filepath.Join(binDir, "lerd-tray")
+	mkbin(t, lerd)
+	mkbin(t, tray)
+
+	removeScriptInstalledBinaries("/usr/bin/lerd")
+
+	for _, p := range []string{lerd, tray} {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Errorf("%s survived, so a broken lerd stays on PATH", p)
+		}
+	}
+}
+
+// Nothing here may reach the binary the package manager is responsible for,
+// which is the whole point of the guard it runs under.
+func TestRemoveScriptInstalledBinaries_neverTouchesThePackagedBinary(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	binDir := filepath.Join(home, ".local", "bin")
+	if err := os.MkdirAll(binDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	self := filepath.Join(binDir, "lerd")
+	mkbin(t, self)
+
+	removeScriptInstalledBinaries(self)
+
+	if _, err := os.Stat(self); err != nil {
+		t.Error("the running binary is the package manager's to remove, not ours")
+	}
+}
