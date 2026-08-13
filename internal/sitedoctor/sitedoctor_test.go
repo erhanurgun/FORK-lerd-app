@@ -823,15 +823,14 @@ func TestCheckServerDatabase(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", tmp)
 	t.Setenv("XDG_DATA_HOME", tmp)
 
-	migrateFW := &config.Framework{Commands: []config.FrameworkCommand{{Name: "migrate"}}}
 	env := "DB_CONNECTION=mysql\nDB_HOST=lerd-mysql\nDB_DATABASE=shop\n"
 
-	t.Run("missing schema fails with a migrate fix", func(t *testing.T) {
+	t.Run("missing schema fails with a create fix", func(t *testing.T) {
 		dir := t.TempDir()
 		writeEnv(t, dir, ".env", env)
 		restore := stubDatabaseLister(func(string) ([]string, error) { return []string{"other", "lerd"}, nil })
 		defer restore()
-		c, ok := checkServerDatabase(dir, migrateFW)
+		c, ok := checkServerDatabase(dir)
 		if !ok || c.Status != StatusFail {
 			t.Fatalf("a missing schema should fail, got ok=%v %+v", ok, c)
 		}
@@ -842,7 +841,7 @@ func TestCheckServerDatabase(t *testing.T) {
 		writeEnv(t, dir, ".env", env)
 		restore := stubDatabaseLister(func(string) ([]string, error) { return []string{"shop"}, nil })
 		defer restore()
-		c, ok := checkServerDatabase(dir, migrateFW)
+		c, ok := checkServerDatabase(dir)
 		if !ok || c.Status != StatusOK {
 			t.Fatalf("an existing schema should pass, got ok=%v %+v", ok, c)
 		}
@@ -853,7 +852,7 @@ func TestCheckServerDatabase(t *testing.T) {
 		writeEnv(t, dir, ".env", env)
 		restore := stubDatabaseLister(func(string) ([]string, error) { return nil, errors.New("engine down") })
 		defer restore()
-		if _, ok := checkServerDatabase(dir, migrateFW); ok {
+		if _, ok := checkServerDatabase(dir); ok {
 			t.Fatal("an engine that could not be queried should produce no check")
 		}
 	})
@@ -861,7 +860,7 @@ func TestCheckServerDatabase(t *testing.T) {
 	t.Run("sqlite is left to the sqlite check", func(t *testing.T) {
 		dir := t.TempDir()
 		writeEnv(t, dir, ".env", "DB_CONNECTION=sqlite\n")
-		if _, ok := checkServerDatabase(dir, migrateFW); ok {
+		if _, ok := checkServerDatabase(dir); ok {
 			t.Fatal("sqlite should be skipped")
 		}
 	})
