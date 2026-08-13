@@ -6,6 +6,9 @@ import version from './fixtures/version.json';
 import sitesFixture from './fixtures/sites.json';
 import servicesFixture from './fixtures/services.json';
 import presetsFixture from './fixtures/presets.json';
+import serviceIcons from './fixtures/service-icons.json';
+import frameworkMarks from './fixtures/framework-marks.json';
+import workerMarks from './fixtures/worker-marks.json';
 import statusFixture from './fixtures/status.json';
 import accessMode from './fixtures/access-mode.json';
 import settings from './fixtures/settings.json';
@@ -571,9 +574,11 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
   if (path === '/api/sites') return jsonResponse(sites);
   if (path === '/api/services') return jsonResponse(services);
   if (path === '/api/services/presets') return jsonResponse(presets);
-  // The demo ships no store cache, so every service draws its built-in glyph.
-  if (path === '/api/services/icons') return jsonResponse({});
-  if (path === '/api/frameworks/marks') return jsonResponse({});
+  // Marks and brand colours captured from the store the same way every other
+  // fixture is, so the demo draws each service, framework and worker as itself.
+  if (path === '/api/services/icons') return jsonResponse(serviceIcons);
+  if (path === '/api/frameworks/marks') return jsonResponse(frameworkMarks);
+  if (path === '/api/workers/marks') return jsonResponse(workerMarks);
 
   if (path === '/api/lan/status' && method === 'POST') {
     const body = JSON.parse(String(init?.body || '{}')) as { action?: string };

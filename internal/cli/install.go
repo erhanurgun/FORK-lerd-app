@@ -1041,6 +1041,16 @@ func runInstall(cmd *cobra.Command, _ []string) error {
 		startPerSiteContainers()
 	}
 
+	// Pull the current preset for every installed service and re-render what it
+	// changed. A store preset that adds a file mount or moves a dashboard behind
+	// the lerd-ui proxy reaches a running container only through this pass, and
+	// the surfaces that read the preset itself switch over the moment it lands,
+	// so a service left on its old unit answers nowhere the dashboard looks.
+	// After the start above, not before: the family-discovery pass that follows a
+	// start rewrites a consumer's unit too, and a reconcile that ran first would
+	// have its restart undone by a unit written after it.
+	refreshPresetsThenReconcile()
+
 	if wantLaravelInstaller {
 		step("installing Laravel installer")
 		if err := installLaravelInstaller(); err != nil {
@@ -1087,7 +1097,6 @@ func runInstall(cmd *cobra.Command, _ []string) error {
 	}
 
 	refreshStoreFrameworks(storeIndex)
-	refreshStorePresets()
 	refreshGlobalMCPSkills()
 	refreshProjectMCPSkills()
 

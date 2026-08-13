@@ -34,7 +34,9 @@ onMounted(() => {
   document.documentElement.style.scrollBehavior = 'smooth'
 
   /* ---------- Glyph injection ---------- */
-  $$('[data-logo]').forEach((n) => { n.innerHTML = D.glyph(n.dataset.logo) })
+  $$('[data-logo]').forEach((n) => {
+    n.innerHTML = D.glyph(n.dataset.logo, undefined, { bare: n.hasAttribute('data-bare') })
+  })
 
   /* ---------- Nav: sticky shadow ---------- */
   const nav = $('#nav')
@@ -184,8 +186,8 @@ onMounted(() => {
   /* ---------- Services showcase ---------- */
   $('#svc-cards').innerHTML = D.SVC_SHOW.map((s) => `
     <div class="card svc-card reveal">
-      <span class="gl" style="display:block">${D.glyph(s.logo)}</span>
-      <b>${s.name}</b><span>${s.port}</span>
+      <span class="gl">${D.glyph(s.logo)}</span>
+      <span class="svc-t"><b>${s.name}</b><span>${s.port}</span></span>
     </div>`).join('')
   $$('#svc-cards .reveal').forEach(observeReveal)
 
@@ -344,15 +346,15 @@ onBeforeUnmount(() => {
         <div class="wrap strip-inner">
           <span class="strip-label">Auto-detected on lerd link</span>
           <div class="strip-items">
-            <span class="strip-item"><span class="gl" data-logo="laravel"></span> Laravel</span>
-            <span class="strip-item"><span class="gl" data-logo="symfony"></span> Symfony</span>
-            <span class="strip-item"><span class="gl" data-logo="wordpress"></span> WordPress</span>
-            <span class="strip-item"><span class="gl" data-logo="drupal"></span> Drupal</span>
-            <span class="strip-item"><span class="gl" data-logo="magento"></span> Magento</span>
-            <span class="strip-item"><span class="gl" data-logo="cake"></span> CakePHP</span>
-            <span class="strip-item"><span class="gl" data-logo="statamic"></span> Statamic</span>
-            <span class="strip-item"><span class="gl" data-logo="codeigniter"></span> CodeIgniter</span>
-            <span class="strip-item"><span class="gl" data-logo="tempest"></span> Tempest</span>
+            <a class="strip-item" :href="withBase('/getting-started/laravel')"><span class="gl" data-bare data-logo="laravel"></span> Laravel</a>
+            <a class="strip-item" :href="withBase('/getting-started/symfony')"><span class="gl" data-bare data-logo="symfony"></span> Symfony</a>
+            <a class="strip-item" :href="withBase('/getting-started/wordpress')"><span class="gl" data-bare data-logo="wordpress"></span> WordPress</a>
+            <a class="strip-item" :href="withBase('/getting-started/drupal')"><span class="gl" data-bare data-logo="drupal"></span> Drupal</a>
+            <a class="strip-item" :href="withBase('/getting-started/magento')"><span class="gl" data-bare data-logo="magento"></span> Magento</a>
+            <a class="strip-item" :href="withBase('/getting-started/cakephp')"><span class="gl" data-bare data-logo="cake"></span> CakePHP</a>
+            <a class="strip-item" :href="withBase('/getting-started/statamic')"><span class="gl" data-bare data-logo="statamic"></span> Statamic</a>
+            <a class="strip-item" :href="withBase('/getting-started/codeigniter')"><span class="gl" data-bare data-logo="codeigniter"></span> CodeIgniter</a>
+            <a class="strip-item" :href="withBase('/getting-started/tempest')"><span class="gl" data-bare data-logo="tempest"></span> Tempest</a>
           </div>
         </div>
       </div>
@@ -503,6 +505,7 @@ onBeforeUnmount(() => {
         </div>
       </section>
 
+
       <!-- ============ QUICK START ============ -->
       <section id="start">
         <div class="wrap">
@@ -525,11 +528,11 @@ onBeforeUnmount(() => {
 
       <!-- ============ DEV DIGEST BANNER ============ -->
       <div class="wrap">
-        <a class="digest" :href="withBase('/digest/v1.32.0.html')" target="_blank" rel="noopener">
+        <a class="digest" :href="withBase('/digest/v1.33.0.html')" target="_blank" rel="noopener">
           <span class="digest-pill">NEW</span>
           <span class="digest-body">
-            <span class="digest-title">v1.32.0 dev digest</span>
-            <span class="digest-sub">A public share through the reverse proxy you already run, managed engines reachable from the LAN, and daemons that stop working while the machine is idle.</span>
+            <span class="digest-title">v1.33.0 dev digest</span>
+            <span class="digest-sub">Every framework's own config file read and written where it lives, a dashboard that creates a project and takes it through setup, and marks and brand colours that ship from the store.</span>
           </span>
           <span class="digest-cta">Read the digest&nbsp;→</span>
         </a>
