@@ -672,6 +672,22 @@ cmd_update() {
 }
 
 # ── Uninstall ────────────────────────────────────────────────────────────────
+
+# Containers write their files as a subuid inside the rootless user namespace,
+# so a plain rm cannot remove them and set -e would abort the uninstall there.
+# podman unshare enters that namespace, where they are removable.
+remove_lerd_dir() {
+  local dir="$1"
+  [ -e "$dir" ] || return 0
+  rm -rf "$dir" 2>/dev/null || true
+  [ -e "$dir" ] || return 0
+  podman unshare rm -rf "$dir" >/dev/null 2>&1 || true
+  [ -e "$dir" ] || return 0
+  warn "Could not remove $dir"
+  info "Remove it with: podman unshare rm -rf $dir"
+  return 1
+}
+
 cmd_uninstall() {
   if [ "$(detect_os)" = "darwin" ]; then
     cmd_uninstall_macos
@@ -740,9 +756,10 @@ cmd_uninstall_macos() {
   remove_from_path
 
   if ask "Remove all Lerd data and config? (~/.config/lerd, ~/.local/share/lerd)"; then
-    rm -rf "$LERD_CONFIG_DIR"
-    rm -rf "$LERD_DATA_DIR"
-    success "Removed config and data directories"
+    local kept=0
+    remove_lerd_dir "$LERD_CONFIG_DIR" || kept=1
+    remove_lerd_dir "$LERD_DATA_DIR" || kept=1
+    [ "$kept" -eq 1 ] || success "Removed config and data directories"
   else
     info "Config kept at $LERD_CONFIG_DIR"
     info "Data kept at $LERD_DATA_DIR"
@@ -856,9 +873,10 @@ cmd_uninstall_linux() {
 
   # Optionally remove data
   if ask "Remove all Lerd data and config? (~/.config/lerd, ~/.local/share/lerd)"; then
-    rm -rf "$LERD_CONFIG_DIR"
-    rm -rf "$LERD_DATA_DIR"
-    success "Removed config and data directories"
+    local kept=0
+    remove_lerd_dir "$LERD_CONFIG_DIR" || kept=1
+    remove_lerd_dir "$LERD_DATA_DIR" || kept=1
+    [ "$kept" -eq 1 ] || success "Removed config and data directories"
   else
     info "Config kept at $LERD_CONFIG_DIR"
     info "Data kept at $LERD_DATA_DIR"

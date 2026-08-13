@@ -195,8 +195,12 @@ func runUninstall(force bool) error {
 		}
 		step("Removing config and data directories")
 		os.RemoveAll(config.ConfigDir())
-		removeDataDir(config.DataDir())
-		ok()
+		if kept := removeDataDir(config.DataDir()); kept != "" {
+			fmt.Println(feedback.Amber("!"))
+			feedback.Note("could not remove " + kept + ", remove it with: podman unshare rm -rf " + kept)
+		} else {
+			ok()
+		}
 	} else {
 		feedback.Note("config kept at " + config.ConfigDir())
 		feedback.Note("data kept at " + config.DataDir())
@@ -206,15 +210,18 @@ func runUninstall(force bool) error {
 	return nil
 }
 
-// removeDataDir removes the lerd data directory. Containers write files as a
-// subuid, so os.RemoveAll fails; podman unshare rm -rf enters the user
-// namespace where they are removable.
-func removeDataDir(dir string) {
-	os.RemoveAll(dir)
-	if _, err := os.Stat(dir); err != nil {
-		return
+// removeDataDir removes the lerd data directory and returns the path if it
+// survived. Containers write files as a subuid, so os.RemoveAll fails; podman
+// unshare rm -rf enters the user namespace where they are removable.
+func removeDataDir(dir string) string {
+	if err := os.RemoveAll(dir); err == nil {
+		return ""
 	}
 	_ = podman.Cmd("unshare", "rm", "-rf", dir).Run()
+	if _, err := os.Stat(dir); err == nil {
+		return dir
+	}
+	return ""
 }
 
 func confirmRemoveMCPIntegration() bool {

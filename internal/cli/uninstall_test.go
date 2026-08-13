@@ -311,3 +311,78 @@ func TestRemoveInstalledBinaries_leavesUnrelatedNeighbours(t *testing.T) {
 		t.Errorf("removed an unrelated neighbour %s: %v", other, err)
 	}
 }
+
+// ── removeDataDir ────────────────────────────────────────────────────────────
+
+// undeletableDir builds a tree os.RemoveAll cannot clear: the inner directory
+// has no write bit, which is what a subuid-owned service tree looks like to us.
+func undeletableDir(t *testing.T) string {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), "data")
+	sub := filepath.Join(dir, "redis")
+	if err := os.MkdirAll(sub, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sub, "dump.rdb"), []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(sub, 0500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(sub, 0755) })
+	return dir
+}
+
+// fakePodman puts a podman on PATH standing in for the user namespace. It is
+// handed the one directory the test built and refuses anything else, so a
+// mistake here can never widen into a path the test does not own.
+func fakePodman(t *testing.T, owned, script string) {
+	t.Helper()
+	dir := t.TempDir()
+	guard := "#!/bin/sh\ncase \"$4\" in\n  " + owned + ") ;;\n  *) echo \"refusing $4\" >&2; exit 2 ;;\nesac\n"
+	if err := os.WriteFile(filepath.Join(dir, "podman"), []byte(guard+script), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+func TestRemoveDataDir_removesAPlainTree(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "data")
+	if err := os.MkdirAll(filepath.Join(dir, "mysql"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	if kept := removeDataDir(dir); kept != "" {
+		t.Errorf("removeDataDir = %q, want an empty string", kept)
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Errorf("%s still present", dir)
+	}
+}
+
+func TestRemoveDataDir_fallsBackToPodmanUnshare(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root removes the tree without the fallback")
+	}
+	dir := undeletableDir(t)
+	fakePodman(t, dir, "chmod -R u+w \"$4\" && rm -rf \"$4\"\n")
+
+	if kept := removeDataDir(dir); kept != "" {
+		t.Errorf("removeDataDir = %q, want an empty string", kept)
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Errorf("%s survived the podman unshare fallback", dir)
+	}
+}
+
+func TestRemoveDataDir_reportsTheDirectoryWhenTheFallbackFails(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root removes the tree without the fallback")
+	}
+	dir := undeletableDir(t)
+	fakePodman(t, dir, "exit 1\n")
+
+	if kept := removeDataDir(dir); kept != dir {
+		t.Errorf("removeDataDir = %q, want %q so the uninstall can say so", kept, dir)
+	}
+}

@@ -642,6 +642,62 @@ _stub_dns_files() {
   [ "$dns_at" -lt "$bin_at" ]
 }
 
+# ── remove_lerd_dir ───────────────────────────────────────────────────────────
+
+# A service tree written as a subuid looks exactly like this to the uninstall:
+# a directory whose contents rm cannot touch. Everything here stays under the
+# isolated HOME the setup exports.
+_undeletable_dir() {
+  local dir="$HOME/share/lerd"
+  mkdir -p "$dir/redis"
+  : > "$dir/redis/dump.rdb"
+  chmod 500 "$dir/redis"
+  echo "$dir"
+}
+
+@test "remove_lerd_dir removes an ordinary directory" {
+  local dir="$HOME/config/lerd"
+  mkdir -p "$dir/certs"
+  run remove_lerd_dir "$dir"
+  [ "$status" -eq 0 ]
+  [ ! -e "$dir" ]
+}
+
+@test "remove_lerd_dir is a no-op when the directory was never there" {
+  run remove_lerd_dir "$HOME/nothing-here"
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+}
+
+@test "remove_lerd_dir falls back to podman unshare on a subuid-owned tree" {
+  [ "$(id -u)" -eq 0 ] && skip "root removes the tree without the fallback"
+  local dir; dir="$(_undeletable_dir)"
+  podman() { chmod -R u+w "$4"; command rm -rf "$4"; }
+  run remove_lerd_dir "$dir"
+  [ "$status" -eq 0 ]
+  [ ! -e "$dir" ]
+}
+
+@test "remove_lerd_dir reports the directory when the fallback fails too" {
+  [ "$(id -u)" -eq 0 ] && skip "root removes the tree without the fallback"
+  local dir; dir="$(_undeletable_dir)"
+  podman() { return 1; }
+  run remove_lerd_dir "$dir"
+  chmod -R u+w "$dir"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Could not remove $dir"* ]]
+  [[ "$output" == *"podman unshare rm -rf $dir"* ]]
+}
+
+@test "both uninstall paths route the data removal through remove_lerd_dir" {
+  for fn in cmd_uninstall_linux cmd_uninstall_macos; do
+    local body; body="$(declare -f "$fn")"
+    [[ "$body" == *'remove_lerd_dir "$LERD_DATA_DIR"'* ]]
+    [[ "$body" == *'remove_lerd_dir "$LERD_CONFIG_DIR"'* ]]
+    [[ "$body" != *'rm -rf "$LERD_DATA_DIR"'* ]]
+  done
+}
+
 # ── controlling terminal detection ────────────────────────────────────────────
 
 # [ -r /dev/tty ] tests the permission bits on the device node, which pass even
