@@ -710,6 +710,46 @@ _undeletable_dir() {
   done
 }
 
+# The cache is written without ceremony and nothing in it is state a user would
+# miss, which is exactly why an uninstall that leaves it behind reads as one
+# that did not finish.
+@test "both uninstall paths remove the cache directory too" {
+  for fn in cmd_uninstall_linux cmd_uninstall_macos; do
+    local body; body="$(declare -f "$fn")"
+    [[ "$body" == *'remove_lerd_dir "$LERD_CACHE_DIR"'* ]]
+  done
+}
+
+# The tray ships beside the binary, so removing one and not the other leaves a
+# tray on PATH polling an API that is gone.
+@test "the linux uninstall removes the tray binary and its unit" {
+  local body; body="$(declare -f cmd_uninstall_linux)"
+  [[ "$body" == *"lerd-tray"* ]]
+  [[ "$body" == *"reset-failed"* ]]
+}
+
+@test "remove_from_path removes the unmarked lerd bin entry" {
+  export SHELL="/bin/bash"
+  _force_linux_os
+  printf 'export PATH="%s/bin:$PATH"\n' "$LERD_DATA_DIR" > "$HOME/.bashrc"
+
+  remove_from_path
+
+  run grep "$LERD_DATA_DIR/bin" "$HOME/.bashrc"
+  [ "$status" -ne 0 ]
+}
+
+@test "remove_from_path leaves an unrelated PATH entry alone" {
+  export SHELL="/bin/bash"
+  _force_linux_os
+  echo 'export PATH="$HOME/other/bin:$PATH"' > "$HOME/.bashrc"
+
+  remove_from_path
+
+  run grep -c "other/bin" "$HOME/.bashrc"
+  [ "$output" = "1" ]
+}
+
 # ── controlling terminal detection ────────────────────────────────────────────
 
 # [ -r /dev/tty ] tests the permission bits on the device node, which pass even

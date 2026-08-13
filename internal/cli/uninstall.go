@@ -195,6 +195,7 @@ func runUninstall(force bool) error {
 		}
 		step("Removing config and data directories")
 		os.RemoveAll(config.ConfigDir())
+		os.RemoveAll(config.CacheDir())
 		if kept := removeDataDir(config.DataDir()); kept != "" {
 			fmt.Println(feedback.Amber("!"))
 			feedback.Note("could not remove " + kept + ", remove it with: podman unshare rm -rf " + kept)
@@ -261,8 +262,12 @@ func removeLerdImages() {
 	}
 }
 
-// isLerdBuiltImage matches the locally-built tags lerd owns.
+// isLerdBuiltImage matches the locally-built tags lerd owns. podman reports a
+// local build fully qualified, as localhost/lerd-dnsmasq:local, so the registry
+// is stripped before matching; comparing against the whole reference matched
+// nothing at all and the purge quietly kept every image it said it removed.
 func isLerdBuiltImage(ref string) bool {
+	ref = strings.TrimPrefix(ref, "localhost/")
 	switch {
 	case strings.HasPrefix(ref, "lerd-php") && strings.HasSuffix(ref, "-fpm:local"):
 		return true

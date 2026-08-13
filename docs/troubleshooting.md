@@ -354,6 +354,8 @@ podman unshare rm -rf ~/.local/share/lerd
 ```
 
 If podman is no longer installed either, `sudo rm -rf ~/.local/share/lerd` is the last resort.
+
+An uninstall also takes `~/.cache/lerd`, the `lerd-tray` binary alongside `lerd`, both PATH entries lerd ever wrote into your shell rc, and the images it built itself (`lerd-php*-fpm`, `lerd-custom-*`, `lerd-dnsmasq`) when you accept the purge. Images it only pulled, your databases and your project files are never touched.
 :::
 
 ::: details Workers missing after reinstall
