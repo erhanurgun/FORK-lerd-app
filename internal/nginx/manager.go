@@ -458,6 +458,20 @@ func GenerateSSLVhost(site config.Site, phpVersion string) error {
 	return writeSiteConf(site.PrimaryDomain()+"-ssl.conf", rendered)
 }
 
+// InstallSSLVhost moves the SSL vhost every Generate*SSLVhost writes onto the
+// name nginx serves the site under. It is the second half of generating one:
+// conf.d is a glob, so a <domain>-ssl.conf left beside <domain>.conf is loaded
+// as a second server block for the same names, and it outlives the certificate
+// an unlink deletes, which takes every reload down with it.
+func InstallSSLVhost(domain string) error {
+	confD := config.NginxConfD()
+	mainConf := filepath.Join(confD, domain+".conf")
+	if err := os.Remove(mainConf); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return os.Rename(filepath.Join(confD, domain+"-ssl.conf"), mainConf)
+}
+
 // renderContainerVhost renders the vhost for a site nginx reverse-proxies to a
 // container, which is FrankenPHP and custom-container sites alike: only the
 // container name, the port and whether the backend speaks TLS differ.
@@ -1072,7 +1086,15 @@ func RepairVhosts() []VhostRepair {
 		}
 
 		confPath := filepath.Join(confDir, entry.Name())
+		// A site is served from <domain>.conf, so a <domain>-ssl.conf beside it
+		// is a half-installed render. Both name the same site, and stripping
+		// only ".conf" would leave the sidecar matching none of them, so its
+		// site could never be repaired — only deleted as an orphan.
+		sidecar := strings.HasSuffix(entry.Name(), "-ssl.conf")
 		domain := strings.TrimSuffix(entry.Name(), ".conf")
+		if sidecar {
+			domain = strings.TrimSuffix(entry.Name(), "-ssl.conf")
+		}
 
 		data, err := os.ReadFile(confPath)
 		if err != nil {
@@ -1110,6 +1132,11 @@ func RepairVhosts() []VhostRepair {
 			repairs = append(repairs, VhostRepair{Domain: domain, Reason: "missing-cert"})
 			os.Remove(filepath.Join(certsDir, domain+".crt")) //nolint:errcheck
 			os.Remove(filepath.Join(certsDir, domain+".key")) //nolint:errcheck
+			// The HTTP render lands at <domain>.conf, so a sidecar is a
+			// separate file nginx would go on loading and failing over.
+			if sidecar {
+				os.Remove(confPath) //nolint:errcheck
+			}
 			break
 		}
 		if !repaired {

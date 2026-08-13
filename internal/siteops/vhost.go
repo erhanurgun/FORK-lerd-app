@@ -31,10 +31,7 @@ func RegenerateSiteVhost(site *config.Site, oldPrimary string) error {
 			if err := nginx.GenerateHostProxySSLVhost(*site); err != nil {
 				return fmt.Errorf("generating host-proxy SSL vhost: %w", err)
 			}
-			sslConf := filepath.Join(config.NginxConfD(), newPrimary+"-ssl.conf")
-			mainConf := filepath.Join(config.NginxConfD(), newPrimary+".conf")
-			_ = os.Remove(mainConf)
-			if err := os.Rename(sslConf, mainConf); err != nil {
+			if err := nginx.InstallSSLVhost(newPrimary); err != nil {
 				return fmt.Errorf("installing host-proxy SSL vhost: %w", err)
 			}
 		} else {
@@ -47,10 +44,7 @@ func RegenerateSiteVhost(site *config.Site, oldPrimary string) error {
 			if err := nginx.GenerateCustomSSLVhost(*site); err != nil {
 				return fmt.Errorf("generating custom SSL vhost: %w", err)
 			}
-			sslConf := filepath.Join(config.NginxConfD(), newPrimary+"-ssl.conf")
-			mainConf := filepath.Join(config.NginxConfD(), newPrimary+".conf")
-			_ = os.Remove(mainConf)
-			if err := os.Rename(sslConf, mainConf); err != nil {
+			if err := nginx.InstallSSLVhost(newPrimary); err != nil {
 				return fmt.Errorf("installing custom SSL vhost: %w", err)
 			}
 		} else {
@@ -62,10 +56,7 @@ func RegenerateSiteVhost(site *config.Site, oldPrimary string) error {
 		if err := nginx.GenerateSSLVhost(*site, site.PHPVersion); err != nil {
 			return fmt.Errorf("generating SSL vhost: %w", err)
 		}
-		sslConf := filepath.Join(config.NginxConfD(), newPrimary+"-ssl.conf")
-		mainConf := filepath.Join(config.NginxConfD(), newPrimary+".conf")
-		_ = os.Remove(mainConf)
-		if err := os.Rename(sslConf, mainConf); err != nil {
+		if err := nginx.InstallSSLVhost(newPrimary); err != nil {
 			return fmt.Errorf("installing SSL vhost: %w", err)
 		}
 	} else {

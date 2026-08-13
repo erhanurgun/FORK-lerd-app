@@ -690,6 +690,43 @@ func TestRemoveVhost_noError_whenMissing(t *testing.T) {
 	}
 }
 
+// ── InstallSSLVhost ───────────────────────────────────────────────────────────
+
+// conf.d is a glob, so a generated -ssl.conf that is never installed is loaded
+// as a second server block for the same names and outlives the certificate an
+// unlink removes. Installing it is what leaves one file serving the site.
+func TestInstallSSLVhost_leavesOnlyTheServedConf(t *testing.T) {
+	confD := setupConfD(t)
+	os.MkdirAll(confD, 0755)
+	os.WriteFile(filepath.Join(confD, "myapp.test.conf"), []byte("http vhost"), 0644)
+	os.WriteFile(filepath.Join(confD, "myapp.test-ssl.conf"), []byte("ssl vhost"), 0644)
+
+	if err := InstallSSLVhost("myapp.test"); err != nil {
+		t.Fatalf("InstallSSLVhost: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(confD, "myapp.test-ssl.conf")); !os.IsNotExist(err) {
+		t.Error("expected -ssl.conf to be moved, not left beside the served conf")
+	}
+	if got := readConf(t, filepath.Join(confD, "myapp.test.conf")); got != "ssl vhost" {
+		t.Errorf("served conf = %q, want the SSL render", got)
+	}
+}
+
+// Securing a site that was never rendered over plain HTTP has no .conf to
+// displace, and a missing one is not a failure.
+func TestInstallSSLVhost_withoutAnExistingConf(t *testing.T) {
+	confD := setupConfD(t)
+	os.MkdirAll(confD, 0755)
+	os.WriteFile(filepath.Join(confD, "fresh.test-ssl.conf"), []byte("ssl vhost"), 0644)
+
+	if err := InstallSSLVhost("fresh.test"); err != nil {
+		t.Fatalf("InstallSSLVhost: %v", err)
+	}
+	if got := readConf(t, filepath.Join(confD, "fresh.test.conf")); got != "ssl vhost" {
+		t.Errorf("served conf = %q, want the SSL render", got)
+	}
+}
+
 // ── EnsureDefaultVhost ────────────────────────────────────────────────────────
 
 // ── RepairVhosts ─────────────────────────────────────────────────────────────
@@ -755,6 +792,53 @@ server {
 	}
 
 	// Verify site registry was updated.
+	reg, err := config.LoadSites()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range reg.Sites {
+		if s.Name == "myapp" && s.Secured {
+			t.Error("expected site.Secured to be false after repair")
+		}
+	}
+}
+
+// A half-installed render leaves <domain>-ssl.conf beside the served vhost.
+// nginx loads it too, so once the certificate goes the sidecar takes every
+// reload down with it, and the repair has to reach the site behind the name.
+func TestRepairVhosts_missingCertRepairsSSLSidecar(t *testing.T) {
+	confD, _ := setupRepairEnv(t, `sites:
+- name: myapp
+  domains:
+    - myapp.test
+  path: /srv/myapp
+  php_version: "8.4"
+  secured: true
+`)
+
+	sslConf := `server {
+    listen 443 ssl;
+    server_name myapp.test *.myapp.test;
+    root /srv/myapp/public;
+    ssl_certificate /etc/nginx/certs/myapp.test.crt;
+    ssl_certificate_key /etc/nginx/certs/myapp.test.key;
+}
+`
+	os.WriteFile(filepath.Join(confD, "myapp.test-ssl.conf"), []byte(sslConf), 0644)
+
+	repairs := RepairVhosts()
+
+	if len(repairs) != 1 || repairs[0].Domain != "myapp.test" || repairs[0].Reason != "missing-cert" {
+		t.Fatalf("expected [{myapp.test missing-cert}], got %v", repairs)
+	}
+	if _, err := os.Stat(filepath.Join(confD, "myapp.test-ssl.conf")); !os.IsNotExist(err) {
+		t.Error("expected the sidecar to be removed, not left for nginx to load")
+	}
+	content := readConf(t, filepath.Join(confD, "myapp.test.conf"))
+	if strings.Contains(content, "ssl_certificate") {
+		t.Error("expected the site to be re-rendered over plain HTTP")
+	}
+
 	reg, err := config.LoadSites()
 	if err != nil {
 		t.Fatal(err)

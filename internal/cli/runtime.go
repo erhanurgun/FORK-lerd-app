@@ -184,6 +184,9 @@ func switchToFPM(site *config.Site) error {
 		if err := nginx.GenerateSSLVhost(*site, site.PHPVersion); err != nil {
 			return fmt.Errorf("regenerating SSL vhost: %w", err)
 		}
+		if err := nginx.InstallSSLVhost(site.PrimaryDomain()); err != nil {
+			return fmt.Errorf("installing SSL vhost: %w", err)
+		}
 	} else {
 		if err := nginx.GenerateVhost(*site, site.PHPVersion); err != nil {
 			return fmt.Errorf("regenerating vhost: %w", err)
