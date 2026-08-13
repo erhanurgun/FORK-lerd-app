@@ -47,9 +47,9 @@ Lerd is built for PHP developers on Linux who want frictionless local developmen
 
 - 📦 **Node.js isolation.** Node 22 or 24 per project, through the bundled fnm or an nvm you already have, switchable from the dashboard. Or **bun** as the JS runtime on the host and, opt-in, inside the container.
 
-- 🪄 **No per-framework setup.** Workers, env values and the nginx vhost are all configured for you when you link a project.
+- 🪄 **No per-framework setup.** Workers, env values and the nginx vhost are all configured for you when you link a project. "Env" means whatever file your framework actually reads: a `.env`, WordPress's `wp-config.php`, Magento's `env.php` or the `$databases` array Drupal keeps in `settings.php`, written in place with the rest of the file left exactly as it was.
 
-- 🧩 **Framework store.** Community definitions for Laravel, Symfony, WordPress, Drupal, Magento, CakePHP and Statamic with versioned auto-detection, back to the majors that still run on PHP 7.4.
+- 🧩 **Framework store.** Community definitions for Laravel, Symfony, WordPress, Drupal, Magento, CakePHP, CodeIgniter, Statamic and Tempest with versioned auto-detection, back to the majors that still run on PHP 7.4. Each one carries its own mark and brand colour, so a framework published tomorrow arrives complete without a new lerd release.
 
 ### Services and databases
 
@@ -73,6 +73,10 @@ Lerd is built for PHP developers on Linux who want frictionless local developmen
 
 - 🖥️ **Built-in Web UI.** Sites and services dashboards, live widgets, a global Cmd+K command palette, and install/remove of PHP and Node versions from the System page. Available in fourteen languages. Reachable from another machine behind credentials when you expose it, where the actions that touch the host itself, terminals, filesystem browsing, raw `.env` reads, stay local until you grant them explicitly.
 
+- ✨ **Start a project from the dashboard.** The `+` in Sites scaffolds a new project from the framework store or links one you already have, asks the same questions `lerd init` asks about PHP version, Node, HTTPS and services, and then runs the setup steps with composer and the JS build streaming into the modal. Close the tab mid-install and it picks back up where it was.
+
+- 📚 **The documentation, offline.** Every page ships inside the binary, searchable and rendered in the dashboard, so the one moment you most need the docs, a machine with no internet, is not the moment they stop working. `lerd man` reads the same pages in the terminal.
+
 - 💻 **Terminal dashboard** (`lerd tui`). A btop-style TUI with live status, site detail pane, inline domain and version editing, shell drop-in, log tailing, and filter/sort, the same operations surface as the web UI, for tmux and SSH workflows.
 
 - ✏️ **Edit config in the browser.** Per-site and global nginx, `php.ini` with the version's own file and the shared scope side by side, `.env` files, and database/service runtime tuning, each validated (`nginx -t` where it applies), with timestamped backups and one-click restore.
@@ -87,9 +91,11 @@ Lerd is built for PHP developers on Linux who want frictionless local developmen
 
 - 🧰 **Environment doctor** (`lerd doctor`). Checks the host lerd itself depends on and repairs what it safely can with `--fix`: missing directories, linger, a missing PHP image, the DNS wiring. Anything needing sudo is printed as a command and never run for you, and `--dry-run` shows it first.
 
-- 🩺 **Site doctor.** Health checks that apply to any project (env drift, application key, composer and node install state, security audits, database presence, PHP version range) plus extra checks for your framework, with one-click fixes. From the web UI, the TUI, `lerd site:doctor` and MCP.
+- 🩺 **Site doctor.** Health checks that apply to any project (env drift, application key, composer and node install state, security audits, database presence, PHP version range, a key an env file sets twice) plus extra checks for your framework, with one-click fixes. It installs and starts the services a site declares, rewrites an nginx vhost that has drifted from what lerd would write today, and points a project at the database it picked, all from the button that reported the problem. From the web UI, the TUI, `lerd site:doctor` and MCP.
 
-- ⚒️ **Worker self-heal.** Failed queue, schedule, horizon, reverb and stripe workers are surfaced everywhere (CLI, dashboard banner, TUI, MCP) and recovered with one click or `lerd worker heal`.
+- ⚒️ **Worker self-heal.** Failed queue, schedule, horizon, reverb and stripe workers are surfaced everywhere (CLI, dashboard banner, TUI, MCP) and recovered with one click or `lerd worker heal`. A worker that keeps failing can be stopped from the same banner rather than restarted into the same wall.
+
+- 💾 **Nothing destructive without a way back.** A `service remove --purge` or a `reinstall --reset-data` takes a full snapshot of every database first, while the data is still where the engine expects it, so getting it back is an ordinary `db:restore -A` rather than a data directory only the old image could open. Each engine declares how long it gets to shut down, so a database finishes its checkpoint instead of being killed mid-write.
 
 - 💤 **Idle-suspend.** Activity-driven suspension of a site's workers (queue, schedule, horizon, reverb, stripe, Vite) after a configurable idle timeout, resumed on the next request, CLI command, MCP call or file save, with per-site pinning.
 
@@ -249,7 +255,11 @@ Once it's installed, `lerd dashboard` opens the app instead of the browser.
 cd my-laravel-project
 lerd link
 # → https://my-laravel-project.test
+lerd open           # the site in your browser
+lerd code           # the project in your editor
 ```
+
+Starting from nothing, `lerd new` asks which framework and which major from the store, scaffolds it, and links the result, so you land on a served site rather than on three commands to type.
 
 `lerd install` already starts everything for you on first run, so you can `lerd link` immediately. Day-to-day:
 

@@ -143,6 +143,25 @@ func restartInContainerWorkers() {
 	}
 }
 
+// registerPHPVersionForRebuild writes the FPM quadlet for a version this machine
+// has never installed, so an explicit rebuild of it registers the version rather
+// than building an image nothing points at. Every surface that reports a missing
+// version sends the user here, and without the unit the build was invisible:
+// php:list omitted the version, the shims still called it uninstalled, and the
+// restart at the end of the rebuild failed on a unit that did not exist. Writing
+// it first mirrors the ensure path, which registers before it builds so a failed
+// build still leaves the version known.
+func registerPHPVersionForRebuild(version string) error {
+	if phpPkg.IsInstalled(version) {
+		return nil
+	}
+	if err := writeFPMQuadlet(version); err != nil {
+		return fmt.Errorf("registering PHP %s: %w", version, err)
+	}
+	feedback.Note("registered PHP " + version + ", which was not installed")
+	return nil
+}
+
 // NewPhpRebuildCmd returns the php:rebuild command.
 func NewPhpRebuildCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -163,6 +182,9 @@ func runPhpRebuild(cmd *cobra.Command, args []string) error {
 	if len(args) == 1 {
 		v, err := config.NormalizePHPVersion(args[0])
 		if err != nil {
+			return err
+		}
+		if err := registerPHPVersionForRebuild(v); err != nil {
 			return err
 		}
 		versions = []string{v}
