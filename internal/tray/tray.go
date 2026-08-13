@@ -27,7 +27,7 @@ import (
 // apiBase is the loopback URL used for polling the lerd HTTP API. It
 // deliberately stays on 127.0.0.1 because the tray should work even
 // before nginx / DNS are up.
-const apiBase = "http://127.0.0.1:7073"
+var apiBase = "http://127.0.0.1:7073"
 
 // dashboardURL is the user-facing URL opened by "Open Dashboard" — the
 // nginx-proxied vhost so the dashboard shows up under lerd.localhost
@@ -44,6 +44,7 @@ type Snapshot struct {
 	PHPVersions          []phpInfo
 	PHPDefault           string
 	Services             []serviceInfo
+	ServicesKnown        bool     // the services call answered; an empty list means none, not unread
 	WorkersRunning       int      // per-site worker units currently up
 	WorkersDown          []string // sites lerd considers unhealthy, not merely stopped
 	AutostartEnabled     bool
@@ -278,7 +279,11 @@ func runPoller(ctx context.Context, updateCh chan<- *Snapshot) {
 }
 
 func fetchSnapshot() *Snapshot {
-	client := &http.Client{Timeout: 4 * time.Second}
+	// The services snapshot is rebuilt from a subprocess per installed service,
+	// and the tray is the only poller for minutes at a time, so its request is
+	// routinely the one that pays for a cold cache. Four seconds lost that race
+	// on an ordinary install; the poll runs every 30s, so waiting is free.
+	client := &http.Client{Timeout: 20 * time.Second}
 
 	snap := &Snapshot{}
 
@@ -312,7 +317,10 @@ func fetchSnapshot() *Snapshot {
 		}
 		r.Body.Close()
 	} else {
-		// API unreachable — return empty (stopped) snapshot
+		// API unreachable — return empty (stopped) snapshot. A lerd that is down
+		// runs no services, so that emptiness is an answer and the menu may act
+		// on it, unlike a services call that simply did not come back.
+		snap.ServicesKnown = true
 		return snap
 	}
 
@@ -335,6 +343,7 @@ func fetchSnapshot() *Snapshot {
 	if r, err := client.Get(apiBase + "/api/services"); err == nil {
 		var all []serviceInfo
 		if json.NewDecoder(r.Body).Decode(&all) == nil {
+			snap.ServicesKnown = true
 			for _, svc := range all {
 				if svc.isWorker() {
 					snap.WorkersRunning++
