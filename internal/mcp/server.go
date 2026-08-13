@@ -4062,6 +4062,9 @@ func execSiteRuntime(args map[string]any) (any, *rpcError) {
 			if err := nginx.GenerateSSLVhost(*site, site.PHPVersion); err != nil {
 				return toolErr("regenerating SSL vhost: " + err.Error()), nil
 			}
+			if err := nginx.InstallSSLVhost(site.PrimaryDomain()); err != nil {
+				return toolErr("installing SSL vhost: " + err.Error()), nil
+			}
 		} else if err := nginx.GenerateVhost(*site, site.PHPVersion); err != nil {
 			return toolErr("regenerating vhost: " + err.Error()), nil
 		}
