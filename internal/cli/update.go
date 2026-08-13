@@ -188,6 +188,14 @@ func runUpdate(currentVersion string, beta bool) error {
 	// (gated on autostart), so we don't repeat them here.
 
 	restartLerdUserServices()
+
+	if feedback.Interactive() && changelog != "" {
+		fmt.Printf("\nWhat's new in v%s (you had v%s):\n\n", lat, cur)
+		for _, line := range strings.Split(changelog, "\n") {
+			fmt.Println(line)
+		}
+	}
+
 	return nil
 }
 
