@@ -304,6 +304,24 @@ func frameworkVersionOrder(version string) int {
 	return n
 }
 
+// Seams for the refresh/reconcile pair, swapped in tests so the order between
+// them can be asserted without a network fetch or a systemd reload.
+var (
+	refreshPresetsFn    = refreshStorePresets
+	reconcileServicesFn = reconcileCustomServices
+)
+
+// refreshPresetsThenReconcile pulls the current store preset for every installed
+// service and then re-renders the services those presets describe. The order is
+// the point: the reconcile is what carries a store change into a running
+// container, and running it against presets that have not been refreshed yet
+// leaves the container a release behind while every surface that reads the
+// preset directly has already moved on.
+func refreshPresetsThenReconcile() {
+	refreshPresetsFn()
+	reconcileServicesFn()
+}
+
 // refreshStorePresets re-fetches the store preset backing every installed
 // service so its definition and file mounts keep resolving offline after an
 // upgrade, mirroring refreshStoreFrameworks. Best-effort: a failed fetch leaves
