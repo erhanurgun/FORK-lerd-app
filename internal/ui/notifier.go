@@ -52,6 +52,10 @@ func nativeRequest(n push.Notification) desktopnotify.Request {
 // Drops everything when the global notifier toggle is off (lerd notify off /
 // tray). The target setting then picks the browser sink (WebSocket + Web Push,
 // per-device prefs applying downstream) or the native desktop sink.
+// emitDesktopNotification is the seam the test main replaces, so no test can
+// raise a real notification on the desktop of whoever is running the suite.
+var emitDesktopNotification = desktopnotify.Emit
+
 func dispatchNotification(n push.Notification) {
 	cfg, err := config.LoadGlobal()
 	if err != nil {
@@ -81,7 +85,7 @@ func dispatchNotification(n push.Notification) {
 		if n.Kind != "test" && !cfg.NativeKindEnabled(n.Kind) {
 			return
 		}
-		if _, err := desktopnotify.Emit(nativeRequest(n)); err != nil {
+		if _, err := emitDesktopNotification(nativeRequest(n)); err != nil {
 			fmt.Printf("[notifier] native notify failed: %v\n", err)
 		}
 	default:
