@@ -82,6 +82,47 @@ func TestLerdBinaryPrefersBrewOptPath(t *testing.T) {
 	}
 }
 
+// The keg brew is replacing is still on disk when its post-install hook runs;
+// the cleanup that deletes it comes later, with nobody watching. So an older
+// keg of the same formula counts as superseded while it is still there.
+func TestSupersededBinaryCoversAnOlderKegOfTheSameFormula(t *testing.T) {
+	prefix := resolvedTempDir(t)
+	previous := filepath.Join(prefix, "Cellar", "lerd", "1.32.0", "bin", "lerd")
+	opt := filepath.Join(prefix, "opt", "lerd", "bin", "lerd")
+	writeExecutable(t, previous)
+	writeExecutable(t, opt)
+
+	if !SupersededBinary(previous, opt) {
+		t.Errorf("SupersededBinary(%q, %q) = false; want the older keg superseded", previous, opt)
+	}
+}
+
+func TestSupersededBinaryCoversABinaryThatIsGone(t *testing.T) {
+	if !SupersededBinary("/home/linuxbrew/.linuxbrew/Cellar/lerd/1.31.0/bin/lerd", "/usr/bin/lerd") {
+		t.Error("a recorded binary that is not on disk should count as superseded")
+	}
+}
+
+// A working install of a different provenance keeps its units and shims: a brew
+// install has no claim on the lerd someone installed with the script.
+func TestSupersededBinaryLeavesAnotherInstallAlone(t *testing.T) {
+	prefix := resolvedTempDir(t)
+	script := filepath.Join(prefix, "home", ".local", "bin", "lerd")
+	opt := filepath.Join(prefix, "opt", "lerd", "bin", "lerd")
+	writeExecutable(t, script)
+	writeExecutable(t, opt)
+
+	if SupersededBinary(script, opt) {
+		t.Errorf("SupersededBinary(%q, %q) = true; want another install left alone", script, opt)
+	}
+	if SupersededBinary(opt, opt) {
+		t.Error("a binary that is the one running is not superseded by itself")
+	}
+	if SupersededBinary("", opt) || SupersededBinary(script, "") {
+		t.Error("an unknown path on either side is not something to repoint")
+	}
+}
+
 // resolvedTempDir is t.TempDir() with symlinks resolved, so a comparison
 // against a path LerdBinary resolved does not fail on macOS, where the temp dir
 // lives under the /var → /private/var symlink.

@@ -17,7 +17,7 @@ func TestHealDaemonUnitsRewritesUnitsWithAGoneBinary(t *testing.T) {
 	fake := &fakeServiceMgr{writeChanged: true}
 	swapMgr(t, fake)
 
-	healed := healDaemonUnits()
+	healed := healDaemonUnits(binaryGone)
 
 	if !equalStrings(fake.calls, []string{"write:lerd-ui", "reload"}) {
 		t.Errorf("expected the lerd-ui unit to be rewritten and reloaded, got %v", fake.calls)
@@ -38,7 +38,7 @@ func TestHealDaemonUnitsLeavesResolvableUnitsAlone(t *testing.T) {
 	fake := &fakeServiceMgr{writeChanged: true}
 	swapMgr(t, fake)
 
-	if healed := healDaemonUnits(); len(healed) != 0 {
+	if healed := healDaemonUnits(binaryGone); len(healed) != 0 {
 		t.Errorf("healDaemonUnits() = %v; want nothing repaired", healed)
 	}
 
@@ -55,7 +55,7 @@ func TestHealDaemonUnitsSkipsAUnitTheRewriteCannotFix(t *testing.T) {
 	fake := &fakeServiceMgr{writeChanged: true}
 	swapMgr(t, fake)
 
-	if healed := healDaemonUnits(); len(healed) != 0 {
+	if healed := healDaemonUnits(binaryGone); len(healed) != 0 {
 		t.Errorf("healDaemonUnits() = %v; want nothing reported", healed)
 	}
 	if len(fake.calls) != 0 {

@@ -19,6 +19,7 @@ import (
 var upgradeSkipCommands = map[string]bool{
 	"install":       true,
 	"bootstrap":     true,
+	"post-upgrade":  true,
 	"update":        true,
 	"uninstall":     true,
 	"serve-ui":      true,
