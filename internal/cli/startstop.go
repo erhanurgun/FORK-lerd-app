@@ -644,6 +644,9 @@ func runStart(_ *cobra.Command, _ []string) error {
 	// Re-apply DNS routing so .test resolves via lerd-dns on every start.
 	// resolvectl settings are ephemeral and reset on reboot; the NM dispatcher
 	// script fires on interface "up" but that event precedes lerd-dns starting.
+	// The NixOS note lives here (and on install), not inside ConfigureResolver:
+	// the watcher calls that whenever .test fails.
+	dns.NoteNixOSOwnsResolver()
 	if err := dns.ConfigureResolver(); err != nil {
 		fmt.Printf("  WARN: DNS resolver config: %v\n", err)
 	}

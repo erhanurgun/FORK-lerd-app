@@ -3,10 +3,14 @@
 package dns
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+
+	"github.com/geodro/lerd/internal/feedback"
 )
 
 // --- parseNmcliOutput ---
@@ -854,8 +858,96 @@ func TestConfigureResolver_doesNothingWhenHostOwnsResolver(t *testing.T) {
 	orig := HostOwnsResolver
 	t.Cleanup(func() { HostOwnsResolver = orig })
 	HostOwnsResolver = func() bool { return true }
+
+	var buf bytes.Buffer
+	defer feedback.SetTestWriter(&buf)()
+
 	if err := ConfigureResolver(); err != nil {
 		t.Fatalf("ConfigureResolver: %v", err)
+	}
+	if buf.Len() != 0 {
+		t.Fatalf("ConfigureResolver NixOS path must stay silent, got %q", buf.String())
+	}
+}
+
+// The watcher calls ConfigureResolver whenever .test fails. A Note there would
+// spam (or mislead) on every repair; the once-per-run explanation lives on the
+// interactive install and start paths instead.
+func TestConfigureResolver_hostOwnsResolverPathDoesNotPrint(t *testing.T) {
+	src, err := os.ReadFile("setup.go")
+	if err != nil {
+		t.Fatalf("reading setup.go: %v", err)
+	}
+	fn := section(t, string(src), "func ConfigureResolver() error {", "func setupDummyLink")
+	if strings.Contains(fn, "NoteNixOSOwnsResolver") {
+		t.Error("ConfigureResolver must not call NoteNixOSOwnsResolver; the watcher invokes it on every .test failure")
+	}
+	i := strings.Index(fn, "if HostOwnsResolver() {")
+	if i < 0 {
+		t.Fatal("HostOwnsResolver guard missing")
+	}
+	block := fn[i:]
+	if j := strings.Index(block, "return nil"); j >= 0 {
+		block = block[:j]
+	}
+	for _, needle := range []string{"feedback.Note", "feedback.Line", "fmt.Print", "fmt.Printf"} {
+		if strings.Contains(block, needle) {
+			t.Errorf("ConfigureResolver NixOS return path must stay silent, found %s", needle)
+		}
+	}
+}
+
+func TestNoteNixOSOwnsResolver_mentionsHostOwnsResolver(t *testing.T) {
+	src, err := os.ReadFile("setup.go")
+	if err != nil {
+		t.Fatalf("reading setup.go: %v", err)
+	}
+	fn := section(t, string(src), "func NoteNixOSOwnsResolver() {", "func ConfigureResolver()")
+	assertContains(t, fn, "HostOwnsResolver()")
+}
+
+func TestNoteNixOSOwnsResolver_printsOnceWhenHostOwnsResolver(t *testing.T) {
+	orig := HostOwnsResolver
+	t.Cleanup(func() {
+		HostOwnsResolver = orig
+		noteNixOSOwnsResolverOnce = sync.Once{}
+	})
+	noteNixOSOwnsResolverOnce = sync.Once{}
+	HostOwnsResolver = func() bool { return true }
+
+	var buf bytes.Buffer
+	defer feedback.SetTestWriter(&buf)()
+
+	NoteNixOSOwnsResolver()
+	NoteNixOSOwnsResolver()
+
+	got := buf.String()
+	if strings.Count(got, "NixOS owns the resolver") != 1 {
+		t.Fatalf("got %q, want the NixOS resolver note once", got)
+	}
+	if !strings.Contains(got, "127.0.0.1:5300") {
+		t.Errorf("note should mention 127.0.0.1:5300, got %q", got)
+	}
+	if !strings.Contains(got, "block #5") {
+		t.Errorf("note should point at configuration.nix block #5, got %q", got)
+	}
+}
+
+func TestNoteNixOSOwnsResolver_silentWhenHostDoesNotOwnResolver(t *testing.T) {
+	orig := HostOwnsResolver
+	t.Cleanup(func() {
+		HostOwnsResolver = orig
+		noteNixOSOwnsResolverOnce = sync.Once{}
+	})
+	noteNixOSOwnsResolverOnce = sync.Once{}
+	HostOwnsResolver = func() bool { return false }
+
+	var buf bytes.Buffer
+	defer feedback.SetTestWriter(&buf)()
+
+	NoteNixOSOwnsResolver()
+	if buf.Len() != 0 {
+		t.Fatalf("non-NixOS path must stay silent, got %q", buf.String())
 	}
 }
 

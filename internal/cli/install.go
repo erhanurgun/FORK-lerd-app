@@ -799,6 +799,7 @@ func runInstall(cmd *cobra.Command, _ []string) error {
 		ok()
 
 		feedback.Line("configuring DNS resolver")
+		dns.NoteNixOSOwnsResolver()
 		if err := dns.ConfigureResolver(); err != nil {
 			fmt.Printf("    WARN: %v\n", err)
 		}
@@ -869,6 +870,7 @@ func runInstall(cmd *cobra.Command, _ []string) error {
 		ok()
 
 		feedback.Line("configuring DNS resolver")
+		dns.NoteNixOSOwnsResolver()
 		if err := dns.ConfigureResolver(); err != nil {
 			fmt.Printf("    WARN: %v\n", err)
 		}
