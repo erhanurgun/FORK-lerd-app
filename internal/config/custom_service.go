@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -747,12 +749,22 @@ func MaterializeServiceFilesChanged(svc *CustomService) (bool, error) {
 		// importantly, avoids a needless service restart when nothing changed. The
 		// mode is still enforced so a re-materialise stays idempotent on permissions,
 		// but a mode-only fixup is not a content change and triggers no restart.
-		if existing, err := os.ReadFile(path); err == nil && string(existing) == content {
+		existing, readErr := os.ReadFile(path)
+		if readErr == nil && string(existing) == content {
 			if info, statErr := os.Stat(path); statErr == nil && info.Mode().Perm() != mode.Perm() {
 				if err := os.Chmod(path, mode); err != nil {
 					return changed, fmt.Errorf("chmod %s: %w", path, err)
 				}
 			}
+			syncContentSidecar(path, content, f.Chown)
+			continue
+		}
+		// A restrictive chown:true mount is unreadable to us once podman's :U has
+		// re-owned it, so the compare above cannot run and every pass would rewrite
+		// the file, move its mtime and earn another restart. Compare against the
+		// hash instead. The cost is that bytes tampered with in place are no longer
+		// repaired while the file stays unreadable.
+		if readErr != nil && !os.IsNotExist(readErr) && contentMatchesSidecar(path, content) {
 			continue
 		}
 		// Unlink first: with chown:true podman's :U flag re-owns the file to a
@@ -770,8 +782,34 @@ func MaterializeServiceFilesChanged(svc *CustomService) (bool, error) {
 			return changed, fmt.Errorf("chmod %s: %w", path, err)
 		}
 		changed = true
+		syncContentSidecar(path, content, f.Chown)
 	}
 	return changed, nil
+}
+
+// contentSidecarPath is the hash file recording what was last materialised into
+// path. It is never mounted, so podman's :U never re-owns it and it stays
+// readable when the file it describes does not.
+func contentSidecarPath(path string) string { return path + ".sha256" }
+
+// syncContentSidecar records the hash for the mounts that can become unreadable,
+// so only those carry the extra file. A failed write costs one more rewrite on
+// the next pass, which is not worth failing a materialise over.
+func syncContentSidecar(path, content string, chown bool) {
+	if !chown || contentMatchesSidecar(path, content) {
+		return
+	}
+	sum := sha256.Sum256([]byte(content))
+	_ = os.WriteFile(contentSidecarPath(path), []byte(hex.EncodeToString(sum[:])), 0644)
+}
+
+func contentMatchesSidecar(path, content string) bool {
+	stored, err := os.ReadFile(contentSidecarPath(path))
+	if err != nil {
+		return false
+	}
+	sum := sha256.Sum256([]byte(content))
+	return string(stored) == hex.EncodeToString(sum[:])
 }
 
 // customServicePath returns the on-disk definition path for a service name, or
