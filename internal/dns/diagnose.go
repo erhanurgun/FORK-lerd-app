@@ -68,6 +68,14 @@ type probeFns struct {
 	// for the nmDnsmasqKind hookup, where NetworkManager needs it to act on
 	// the config lerd writes.
 	hostDnsmasqPresent func() bool
+	// hostOwnsResolver reports a host whose own config owns the resolver, so
+	// the hookup, interface and lerd0 rungs probe files lerd never wrote.
+	hostOwnsResolver func() bool
+}
+
+// ownsResolver keeps the rungs working for callers that predate the field.
+func (p probeFns) ownsResolver() bool {
+	return p.hostOwnsResolver != nil && p.hostOwnsResolver()
 }
 
 // exposedIP is the LAN IP dnsmasq publishes under lan:expose, or "" when the
@@ -236,6 +244,7 @@ func diagnose(tld string, p probeFns) Diagnostic {
 
 	// Rung 5 — resolver hookup file.
 	kind, exists, path := p.resolverHookup()
+	hostOwned := p.ownsResolver()
 	if exists && kind == nmDnsmasqKind && p.hostDnsmasqPresent != nil && !p.hostDnsmasqPresent() {
 		// Config file is real, but with no dnsmasq binary to run it
 		// NetworkManager silently keeps using upstream DNS instead.
@@ -247,9 +256,20 @@ func diagnose(tld string, p probeFns) Diagnostic {
 		})
 		return finalize(d)
 	}
-	if exists {
+	switch {
+	case exists:
 		d.Steps = append(d.Steps, Step{Name: "resolver hookup", Status: StepOK, Detail: kind + ": " + path})
-	} else {
+	case hostOwned:
+		// Not a failure and not repairable by lerd: on NixOS the resolver is
+		// generated from configuration.nix, so lerd writes no hookup at all and
+		// the ~tld route there is what carries .test. Rung 7 is the real test.
+		d.Steps = append(d.Steps, Step{
+			Name:   "resolver hookup",
+			Status: StepSkip,
+			Detail: "NixOS owns the resolver; lerd installs no hookup here",
+			Hint:   "the ~" + tld + " route in configuration.nix is what carries ." + tld,
+		})
+	default:
 		d.Steps = append(d.Steps, Step{
 			Name:   "resolver hookup",
 			Status: StepFail,
@@ -263,7 +283,7 @@ func diagnose(tld string, p probeFns) Diagnostic {
 	// own dnsmasq answers .test without systemd-resolved, which is typically
 	// masked on those hosts, so resolvectl has nothing to report and probing it
 	// would warn about a healthy install.
-	if runtime.GOOS == "linux" && kind != nmDnsmasqKind {
+	if runtime.GOOS == "linux" && kind != nmDnsmasqKind && !hostOwned {
 		iface, has5300, hasTLD, err := p.interfaceRouting(tld)
 		switch {
 		case err != nil:
@@ -300,7 +320,7 @@ func diagnose(tld string, p probeFns) Diagnostic {
 	// way, and the damage only shows once the user goes offline, which is exactly
 	// why it's worth saying out loud here rather than leaving them to find it on a
 	// train.
-	if runtime.GOOS == "linux" && usesDummyLink(kind) && p.dummyLinkRouting != nil {
+	if runtime.GOOS == "linux" && usesDummyLink(kind) && p.dummyLinkRouting != nil && !hostOwned {
 		switch present, routed := p.dummyLinkRouting(tld); {
 		case !present:
 			d.Steps = append(d.Steps, Step{
@@ -331,10 +351,10 @@ func diagnose(tld string, p probeFns) Diagnostic {
 	accepted := acceptedAnswer(addrs, lanIP)
 	switch {
 	case err != nil:
-		d.Steps = append(d.Steps, systemLookupFailStep(err.Error(), vpn))
+		d.Steps = append(d.Steps, systemLookupFailStep(err.Error(), vpn, hostOwned))
 	case accepted == "":
 		d.Steps = append(d.Steps, systemLookupFailStep(
-			fmt.Sprintf("got %v, want one entry to be %s", addrs, want), vpn))
+			fmt.Sprintf("got %v, want one entry to be %s", addrs, want), vpn, hostOwned))
 	default:
 		d.Steps = append(d.Steps, Step{Name: "system DNS lookup", Status: StepOK, Detail: accepted})
 	}
@@ -347,7 +367,15 @@ func diagnose(tld string, p probeFns) Diagnostic {
 // taken over DNS, .test still resolves via lerd-dns directly, and the
 // watcher re-syncs container DNS automatically. That is a warning, not a
 // failure, so the chain doesn't flag a broken state lerd already handles.
-func systemLookupFailStep(detail string, vpn bool) Step {
+func systemLookupFailStep(detail string, vpn, hostOwned bool) Step {
+	if hostOwned && !vpn {
+		return Step{
+			Name:   "system DNS lookup",
+			Status: StepFail,
+			Detail: detail,
+			Hint:   "lerd leaves the resolver alone on NixOS; route the TLD yourself in configuration.nix (services.resolved.domains, see docs/getting-started/nixos.md)",
+		}
+	}
 	if vpn {
 		return Step{
 			Name:   "system DNS lookup",
@@ -401,6 +429,7 @@ func defaultProbes() probeFns {
 		vpnActive:          VPNActive,
 		lanExposedIP:       defaultLanExposedIP,
 		hostDnsmasqPresent: hostDnsmasqPresent,
+		hostOwnsResolver:   HostOwnsResolver,
 	}
 }
 
