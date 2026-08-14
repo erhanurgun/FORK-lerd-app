@@ -130,6 +130,8 @@ Since 1.30, lerd also writes an always-up dummy link (`lerd0`) and empties syste
 
 Lerd skips those host-resolver writes when `/etc/NIXOS` exists. The `lerd-dns` container still runs; block #5 is what routes `*.test` to it. Non-NixOS behaviour is unchanged.
 
+`lerd install` and `lerd start` say so when they skip, and `lerd doctor` reports the resolver hookup as skipped rather than failed, leaves out the interface and `lerd0` checks it no longer installs, and points at `configuration.nix` instead of `lerd install` when `.test` does not resolve.
+
 ## First-time lerd setup
 
 Do this once, in order. You need working internet DNS first, and if it's already broken from an earlier attempt, see [DNS is completely broken](#dns-is-completely-broken).

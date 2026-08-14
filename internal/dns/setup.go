@@ -428,15 +428,6 @@ func Setup() error {
 	return ConfigureResolver()
 }
 
-// HostOwnsResolver reports whether the OS, not lerd, owns systemd-resolved.
-// NixOS generates resolved.conf from configuration.nix; writing drop-ins,
-// the lerd0 dummy link, or FallbackDNS= there takes down all name resolution.
-// A func var so tests can force the non-NixOS path without touching /etc/NIXOS.
-var HostOwnsResolver = func() bool {
-	_, err := os.Stat("/etc/NIXOS")
-	return err == nil
-}
-
 var noteNixOSOwnsResolverOnce sync.Once
 
 // NoteNixOSOwnsResolver prints once per process that NixOS owns the resolver
