@@ -1572,3 +1572,121 @@ func TestGenerateVhost_rootsAtTheDefinitionWhenTheRecordedRootCannotServe(t *tes
 		t.Errorf("vhost should root at web/, got:\n%s", content)
 	}
 }
+
+// ── stranded sidecars ─────────────────────────────────────────────────────────
+
+// A sidecar whose certificate is fine was generated and never installed, so
+// nginx sorts it ahead of the served file and answers from it while every other
+// path rewrites the one it ignores.
+func TestRepairVhosts_installsAStrandedSidecar(t *testing.T) {
+	confD, certsDir := setupRepairEnv(t, `sites:
+- name: myapp
+  domains:
+    - myapp.test
+  path: /srv/myapp
+  php_version: "8.4"
+  secured: true
+`)
+
+	os.WriteFile(filepath.Join(confD, "myapp.test.conf"), []byte("# the served render\n"), 0644)
+	os.WriteFile(filepath.Join(confD, "myapp.test-ssl.conf"), []byte(`server {
+    listen 443 ssl;
+    server_name myapp.test *.myapp.test;
+    ssl_certificate /etc/nginx/certs/myapp.test.crt;
+}
+`), 0644)
+	os.WriteFile(filepath.Join(certsDir, "myapp.test.crt"), []byte("cert"), 0644)
+
+	repairs := RepairVhosts()
+
+	if len(repairs) != 1 || repairs[0].Domain != "myapp.test" || repairs[0].Reason != "stranded-ssl" {
+		t.Fatalf("expected [{myapp.test stranded-ssl}], got %v", repairs)
+	}
+	if _, err := os.Stat(filepath.Join(confD, "myapp.test-ssl.conf")); !os.IsNotExist(err) {
+		t.Error("the sidecar should have been installed, not left beside the served file")
+	}
+	if content := readConf(t, filepath.Join(confD, "myapp.test.conf")); !strings.Contains(content, "listen 443 ssl") {
+		t.Errorf("the served file should now be the SSL render, got: %s", content)
+	}
+}
+
+// A paused site is serving its landing page on purpose, so its sidecar waits
+// rather than putting the real vhost back under it.
+func TestRepairVhosts_leavesAPausedSitesSidecarAlone(t *testing.T) {
+	confD, certsDir := setupRepairEnv(t, `sites:
+- name: myapp
+  domains:
+    - myapp.test
+  path: /srv/myapp
+  php_version: "8.4"
+  secured: true
+  paused: true
+`)
+
+	os.WriteFile(filepath.Join(confD, "myapp.test.conf"), []byte("# the landing page\n"), 0644)
+	os.WriteFile(filepath.Join(confD, "myapp.test-ssl.conf"), []byte(`server {
+    listen 443 ssl;
+    ssl_certificate /etc/nginx/certs/myapp.test.crt;
+}
+`), 0644)
+	os.WriteFile(filepath.Join(certsDir, "myapp.test.crt"), []byte("cert"), 0644)
+
+	if repairs := RepairVhosts(); len(repairs) != 0 {
+		t.Fatalf("expected no repairs on a paused site, got %v", repairs)
+	}
+	if content := readConf(t, filepath.Join(confD, "myapp.test.conf")); !strings.Contains(content, "landing page") {
+		t.Errorf("the paused site's own vhost should still be served, got: %s", content)
+	}
+}
+
+// A half-finished unsecure leaves the registry saying plain and the file still
+// asking for a certificate that is gone. The site is registered either way, so
+// its vhost is re-rendered rather than deleted out from under it.
+func TestRepairVhosts_reRendersAnUnsecuredSiteRatherThanDeletingIt(t *testing.T) {
+	confD, _ := setupRepairEnv(t, `sites:
+- name: myapp
+  domains:
+    - myapp.test
+  path: /srv/myapp
+  php_version: "8.4"
+  secured: false
+`)
+
+	os.WriteFile(filepath.Join(confD, "myapp.test.conf"), []byte(`server {
+    listen 443 ssl;
+    server_name myapp.test;
+    ssl_certificate /etc/nginx/certs/myapp.test.crt;
+}
+`), 0644)
+
+	repairs := RepairVhosts()
+
+	if len(repairs) != 1 || repairs[0].Reason != "missing-cert" {
+		t.Fatalf("expected [{myapp.test missing-cert}], got %v", repairs)
+	}
+	content := readConf(t, filepath.Join(confD, "myapp.test.conf"))
+	if strings.Contains(content, "ssl_certificate") {
+		t.Errorf("expected a plain HTTP re-render, got: %s", content)
+	}
+}
+
+// Nobody owns the domain, so there is nothing to re-render and the file is the
+// crash waiting to happen it always was.
+func TestRepairVhosts_stillRemovesAVhostNoSiteOwns(t *testing.T) {
+	confD, _ := setupRepairEnv(t, "sites: []\n")
+
+	os.WriteFile(filepath.Join(confD, "gone.test.conf"), []byte(`server {
+    listen 443 ssl;
+    ssl_certificate /etc/nginx/certs/gone.test.crt;
+}
+`), 0644)
+
+	repairs := RepairVhosts()
+
+	if len(repairs) != 1 || repairs[0].Reason != "orphan-ssl" {
+		t.Fatalf("expected [{gone.test orphan-ssl}], got %v", repairs)
+	}
+	if _, err := os.Stat(filepath.Join(confD, "gone.test.conf")); !os.IsNotExist(err) {
+		t.Error("an unowned SSL vhost with no certificate should be removed")
+	}
+}

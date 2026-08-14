@@ -1104,6 +1104,21 @@ func RepairVhosts() []VhostRepair {
 			continue
 		}
 
+		// A sidecar whose certificate is fine is the second half of a render that
+		// never finished: nginx loads it as a duplicate server block, sorts it
+		// ahead of the served file and answers from it, so the site runs on
+		// whatever was true when it was generated. Installing it is the step that
+		// was skipped. A paused or idle-suspended site is serving a vhost lerd
+		// swapped on purpose, so its sidecar waits for the site to come back.
+		if sidecar && !hasMissingCert(string(data), certsDir) {
+			if site, ok := securedServingSite(reg, domain); ok {
+				if err := InstallSSLVhost(site.PrimaryDomain()); err == nil {
+					repairs = append(repairs, VhostRepair{Domain: domain, Reason: "stranded-ssl"})
+				}
+			}
+			continue
+		}
+
 		// Only act on vhosts with missing TLS certificates — those crash nginx.
 		if !hasMissingCert(string(data), certsDir) {
 			continue
@@ -1111,7 +1126,13 @@ func RepairVhosts() []VhostRepair {
 
 		repaired := false
 		for i, site := range reg.Sites {
-			if site.PrimaryDomain() != domain || !site.Secured {
+			// Ownership is the domain alone. Requiring the registry to also call
+			// the site secured meant a site whose entry and whose file disagreed,
+			// which is exactly what a half-finished unsecure leaves, read as
+			// belonging to nobody and had the only vhost serving it deleted. An
+			// ignored site is the one exception: it serves nothing by design, so
+			// its file goes rather than coming back.
+			if site.PrimaryDomain() != domain || site.Ignored {
 				continue
 			}
 			// Regenerate as plain HTTP vhost.
@@ -1129,8 +1150,10 @@ func RepairVhosts() []VhostRepair {
 			if regenErr != nil {
 				continue
 			}
-			reg.Sites[i].Secured = false
-			dirty = true
+			if site.Secured {
+				reg.Sites[i].Secured = false
+				dirty = true
+			}
 			repaired = true
 			repairs = append(repairs, VhostRepair{Domain: domain, Reason: "missing-cert"})
 			os.Remove(filepath.Join(certsDir, domain+".crt")) //nolint:errcheck
@@ -1154,6 +1177,23 @@ func RepairVhosts() []VhostRepair {
 	}
 
 	return repairs
+}
+
+// securedServingSite finds the registered site a sidecar belongs to, and only
+// when that site is the one nginx should be serving its SSL vhost for: a site
+// that is not secured, ignored, or paused is deliberately being served
+// something else.
+func securedServingSite(reg *config.SiteRegistry, domain string) (config.Site, bool) {
+	for _, site := range reg.Sites {
+		if site.PrimaryDomain() != domain {
+			continue
+		}
+		if !site.Secured || site.Paused || site.Ignored {
+			return config.Site{}, false
+		}
+		return site, true
+	}
+	return config.Site{}, false
 }
 
 // hasMissingCert returns true if the vhost content contains an ssl_certificate

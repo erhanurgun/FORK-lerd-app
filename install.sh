@@ -20,6 +20,7 @@ DESKTOP_INSTALL_CMD="${LERD_DESKTOP_INSTALL_CMD:-flatpak install --user https://
 INSTALL_DIR="${LERD_INSTALL_DIR:-$HOME/.local/bin}"
 LERD_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/lerd"
 LERD_DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/lerd"
+LERD_CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/lerd"
 
 # ── Colors ───────────────────────────────────────────────────────────────────
 if [ -t 1 ]; then
@@ -548,6 +549,14 @@ remove_from_path() {
     sed -i.bak -e "/^${SHELL_MARKER}/{N;d;}" "$rc" && rm -f "${rc}.bak"
     info "Removed PATH entry from $rc"
   fi
+
+  # lerd puts its own bin dir on PATH from inside the binary, unmarked, and only
+  # `lerd uninstall` ever took that line out. Removing the binary here leaves it
+  # pointing at a directory that is about to be deleted, so it goes too.
+  if grep -q "${LERD_DATA_DIR}/bin" "$rc" 2>/dev/null; then
+    sed -i.bak -e "\#^export PATH=\"${LERD_DATA_DIR}/bin:\$PATH\"\$#d" "$rc" && rm -f "${rc}.bak"
+    info "Removed the lerd bin entry from $rc"
+  fi
 }
 
 # ── Install ──────────────────────────────────────────────────────────────────
@@ -759,6 +768,7 @@ cmd_uninstall_macos() {
     local kept=0
     remove_lerd_dir "$LERD_CONFIG_DIR" || kept=1
     remove_lerd_dir "$LERD_DATA_DIR" || kept=1
+    remove_lerd_dir "$LERD_CACHE_DIR" || kept=1
     [ "$kept" -eq 1 ] || success "Removed config and data directories"
   else
     info "Config kept at $LERD_CONFIG_DIR"
@@ -851,8 +861,10 @@ cmd_uninstall_linux() {
     info "Removed Quadlet units from $quadlet_dir"
   fi
 
-  # Stop and remove user service unit files
-  for svc in lerd-watcher lerd-ui; do
+  # Stop and remove user service unit files. The tray is one of them: it is
+  # installed alongside the binary and left running it would keep polling an
+  # API that is going away.
+  for svc in lerd-watcher lerd-ui lerd-tray; do
     if systemctl --user is-active --quiet "$svc" 2>/dev/null; then
       systemctl --user stop "$svc" 2>/dev/null || true
     fi
@@ -861,12 +873,19 @@ cmd_uninstall_linux() {
   done
 
   systemctl --user daemon-reload 2>/dev/null || true
+  # A unit stopped by removing its file underneath it is left behind as failed
+  # and not-found, which is how an uninstalled lerd went on showing up in
+  # systemctl --user for good.
+  systemctl --user reset-failed 'lerd-*' 2>/dev/null || true
 
-  # Remove binary
-  if [ -f "${INSTALL_DIR}/${BINARY}" ]; then
-    rm -f "${INSTALL_DIR}/${BINARY}"
-    success "Removed ${INSTALL_DIR}/${BINARY}"
-  fi
+  # Remove binaries. The tray ships beside lerd, so an uninstall that took only
+  # one of them left the other on PATH with nothing to talk to.
+  for b in "$BINARY" lerd-tray; do
+    if [ -f "${INSTALL_DIR}/${b}" ]; then
+      rm -f "${INSTALL_DIR}/${b}"
+      success "Removed ${INSTALL_DIR}/${b}"
+    fi
+  done
 
   # Remove PATH entry from shell rc
   remove_from_path
@@ -876,6 +895,7 @@ cmd_uninstall_linux() {
     local kept=0
     remove_lerd_dir "$LERD_CONFIG_DIR" || kept=1
     remove_lerd_dir "$LERD_DATA_DIR" || kept=1
+    remove_lerd_dir "$LERD_CACHE_DIR" || kept=1
     [ "$kept" -eq 1 ] || success "Removed config and data directories"
   else
     info "Config kept at $LERD_CONFIG_DIR"

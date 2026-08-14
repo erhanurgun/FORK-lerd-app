@@ -40,6 +40,17 @@ func DataDir() string {
 	return filepath.Join(xdgDataHome(), "lerd")
 }
 
+// CacheDir returns ~/.cache/lerd/ (or $XDG_CACHE_HOME/lerd/). Nothing in here
+// is state a user would miss, which is why it is written without ceremony and
+// why the uninstall takes it along with the rest.
+func CacheDir() string {
+	if v := os.Getenv("XDG_CACHE_HOME"); v != "" {
+		return filepath.Join(v, "lerd")
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".cache", "lerd")
+}
+
 // BinDir returns the lerd bin directory.
 func BinDir() string {
 	return filepath.Join(DataDir(), "bin")

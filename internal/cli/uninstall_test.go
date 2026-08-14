@@ -386,3 +386,91 @@ func TestRemoveDataDir_reportsTheDirectoryWhenTheFallbackFails(t *testing.T) {
 		t.Errorf("removeDataDir = %q, want %q so the uninstall can say so", kept, dir)
 	}
 }
+
+// ── removeScriptInstalledBinaries ─────────────────────────────────────────────
+
+// The package-managed guard exists so lerd never deletes a file out of a Cellar
+// or an rpm's file list. It said nothing about ~/.local/bin, which no package
+// manager owns, so a machine carrying both installs kept a script-installed
+// lerd on PATH pointing at a data directory the same run had just deleted.
+func TestRemoveScriptInstalledBinaries_clearsTheInstallDirPair(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	binDir := filepath.Join(home, ".local", "bin")
+	if err := os.MkdirAll(binDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	lerd := filepath.Join(binDir, "lerd")
+	tray := filepath.Join(binDir, "lerd-tray")
+	mkbin(t, lerd)
+	mkbin(t, tray)
+
+	removeScriptInstalledBinaries("/usr/bin/lerd")
+
+	for _, p := range []string{lerd, tray} {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Errorf("%s survived, so a broken lerd stays on PATH", p)
+		}
+	}
+}
+
+// Nothing here may reach the binary the package manager is responsible for,
+// which is the whole point of the guard it runs under.
+func TestRemoveScriptInstalledBinaries_neverTouchesThePackagedBinary(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	binDir := filepath.Join(home, ".local", "bin")
+	if err := os.MkdirAll(binDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	self := filepath.Join(binDir, "lerd")
+	mkbin(t, self)
+
+	removeScriptInstalledBinaries(self)
+
+	if _, err := os.Stat(self); err != nil {
+		t.Error("the running binary is the package manager's to remove, not ours")
+	}
+}
+
+// ── removeServiceUnits ───────────────────────────────────────────────────────
+
+// unitListMgr answers the unit listings the removal walks and records nothing
+// else; the fake it embeds covers the rest of the interface.
+type unitListMgr struct {
+	*fakeServiceMgr
+	containers []string
+	services   []string
+	timers     []string
+}
+
+func (m *unitListMgr) ListContainerUnits(string) []string { return m.containers }
+func (m *unitListMgr) ListServiceUnits(string) []string   { return m.services }
+func (m *unitListMgr) ListTimerUnits(string) []string     { return m.timers }
+
+// A unit that is already failed when its file goes stays behind as failed and
+// not-found, so an uninstalled lerd went on being listed by systemctl on a
+// machine that no longer had one. The installer script has reset them all
+// along; this path deleted the files, reloaded and stopped there. It does not
+// cover a unit that fails after the uninstall has exited, which is a separate
+// problem in how long the stop waits.
+func TestRemoveServiceUnits_resetsEveryUnitItRemoved(t *testing.T) {
+	swapMgr(t, &unitListMgr{
+		fakeServiceMgr: &fakeServiceMgr{},
+		containers:     []string{"lerd-mysql", "lerd-nginx"},
+		services:       []string{"lerd-mysql", "lerd-ui"},
+		timers:         []string{"lerd-backup.timer"},
+	})
+
+	var reset []string
+	orig := resetFailedUnit
+	resetFailedUnit = func(name string) { reset = append(reset, name) }
+	t.Cleanup(func() { resetFailedUnit = orig })
+
+	removeServiceUnits()
+
+	want := []string{"lerd-mysql", "lerd-nginx", "lerd-ui", "lerd-backup"}
+	if !equalStrings(reset, want) {
+		t.Errorf("reset %v, want %v", reset, want)
+	}
+}
