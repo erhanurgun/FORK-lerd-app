@@ -84,7 +84,7 @@
   "dashboard_disk_cleaning": "Wird freigegeben…",
   "dashboard_disk_cleanup": "Aufräumen",
   "dashboard_disk_held": "{size} weitere von laufenden Containern belegt, werden beim Neustart frei",
-  "dashboard_disk_modalBody": "Diese Images können entfernt werden, um etwa {size} freizugeben:",
+  "dashboard_disk_modalBody": "Diese Elemente können entfernt werden, um etwa {size} freizugeben:",
   "dashboard_disk_modalConfirm": "Freigeben",
   "dashboard_disk_modalDeepNote": "Diese gründliche Bereinigung entfernt auch ungetaggte, verwaiste Images anderer Podman-Workloads auf diesem Rechner. Benannte Datenvolumes werden nie angetastet.",
   "dashboard_disk_modalTitle": "Speicher freigeben",

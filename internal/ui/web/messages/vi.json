@@ -84,7 +84,7 @@
   "dashboard_disk_cleaning": "Đang thu hồi…",
   "dashboard_disk_cleanup": "Dọn dẹp",
   "dashboard_disk_held": "{size} nữa đang bị các container đang chạy giữ, được giải phóng khi khởi động lại",
-  "dashboard_disk_modalBody": "Có thể xóa các image này để giải phóng khoảng {size}:",
+  "dashboard_disk_modalBody": "Có thể xóa các mục này để giải phóng khoảng {size}:",
   "dashboard_disk_modalConfirm": "Thu hồi",
   "dashboard_disk_modalDeepNote": "Việc dọn dẹp sâu này cũng xóa các image lơ lửng không gắn thẻ do các tải công việc podman khác trên máy này để lại. Nó không bao giờ đụng đến các volume dữ liệu có tên.",
   "dashboard_disk_modalTitle": "Thu hồi dung lượng đĩa",

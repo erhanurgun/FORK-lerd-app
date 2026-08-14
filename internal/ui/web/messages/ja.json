@@ -84,7 +84,7 @@
   "dashboard_disk_cleaning": "回収中…",
   "dashboard_disk_cleanup": "クリーンアップ",
   "dashboard_disk_held": "実行中のコンテナがさらに {size} を保持しています。再起動で解放されます",
-  "dashboard_disk_modalBody": "これらのイメージを削除すると約 {size} を解放できます:",
+  "dashboard_disk_modalBody": "これらの項目を削除すると約 {size} を解放できます:",
   "dashboard_disk_modalConfirm": "回収",
   "dashboard_disk_modalDeepNote": "このディープクリーンは、このマシン上の他の podman ワークロードが残した未タグのダングリングイメージも削除します。名前付きデータボリュームには一切触れません。",
   "dashboard_disk_modalTitle": "ディスクを回収",
