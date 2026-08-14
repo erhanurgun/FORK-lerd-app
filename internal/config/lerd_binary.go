@@ -31,6 +31,21 @@ func LerdBinary() string {
 	return exe
 }
 
+// SupersededBinary reports whether recorded names a lerd binary that current
+// has taken over from: one that is no longer on disk, or an older Homebrew keg
+// of the formula current is the opt link for. A path belonging to some other
+// install (a script install under ~/.local/bin, a distro package) is never
+// superseded, so a brew install standing next to one cannot claim its units.
+func SupersededBinary(recorded, current string) bool {
+	if recorded == "" || current == "" || recorded == current {
+		return false
+	}
+	if _, err := os.Stat(recorded); err != nil {
+		return true
+	}
+	return brewOptPath(recorded) == current
+}
+
 // brewOptPath maps a Homebrew keg path (<prefix>/Cellar/lerd/1.32.0/bin/lerd) to
 // its opt equivalent (<prefix>/opt/lerd/bin/lerd), the link brew repoints at the
 // current version on every upgrade. Returns "" for a path outside a Cellar, or

@@ -536,10 +536,7 @@ func runInstall(cmd *cobra.Command, _ []string) error {
 						fmt.Printf("\n    WARN %s: %v", site.PrimaryDomain(), err)
 						continue
 					}
-					sslConf := filepath.Join(config.NginxConfD(), site.PrimaryDomain()+"-ssl.conf")
-					mainConf := filepath.Join(config.NginxConfD(), site.PrimaryDomain()+".conf")
-					os.Remove(mainConf)          //nolint:errcheck
-					os.Rename(sslConf, mainConf) //nolint:errcheck
+					nginx.InstallSSLVhost(site.PrimaryDomain()) //nolint:errcheck
 				} else {
 					if err := nginx.GenerateHostProxyVhost(site); err != nil {
 						fmt.Printf("\n    WARN %s: %v", site.PrimaryDomain(), err)
@@ -551,10 +548,7 @@ func runInstall(cmd *cobra.Command, _ []string) error {
 						fmt.Printf("\n    WARN %s: %v", site.PrimaryDomain(), err)
 						continue
 					}
-					sslConf := filepath.Join(config.NginxConfD(), site.PrimaryDomain()+"-ssl.conf")
-					mainConf := filepath.Join(config.NginxConfD(), site.PrimaryDomain()+".conf")
-					os.Remove(mainConf)          //nolint:errcheck
-					os.Rename(sslConf, mainConf) //nolint:errcheck
+					nginx.InstallSSLVhost(site.PrimaryDomain()) //nolint:errcheck
 				} else {
 					if err := nginx.GenerateCustomVhost(site); err != nil {
 						fmt.Printf("\n    WARN %s: %v", site.PrimaryDomain(), err)
@@ -566,10 +560,7 @@ func runInstall(cmd *cobra.Command, _ []string) error {
 						fmt.Printf("\n    WARN %s: %v", site.PrimaryDomain(), err)
 						continue
 					}
-					sslConf := filepath.Join(config.NginxConfD(), site.PrimaryDomain()+"-ssl.conf")
-					mainConf := filepath.Join(config.NginxConfD(), site.PrimaryDomain()+".conf")
-					os.Remove(mainConf)          //nolint:errcheck
-					os.Rename(sslConf, mainConf) //nolint:errcheck
+					nginx.InstallSSLVhost(site.PrimaryDomain()) //nolint:errcheck
 				} else {
 					if err := nginx.GenerateFrankenPHPVhost(site); err != nil {
 						fmt.Printf("\n    WARN %s: %v", site.PrimaryDomain(), err)
@@ -585,10 +576,7 @@ func runInstall(cmd *cobra.Command, _ []string) error {
 						fmt.Printf("\n    WARN %s: %v", site.PrimaryDomain(), err)
 						continue
 					}
-					sslConf := filepath.Join(config.NginxConfD(), site.PrimaryDomain()+"-ssl.conf")
-					mainConf := filepath.Join(config.NginxConfD(), site.PrimaryDomain()+".conf")
-					os.Remove(mainConf)          //nolint:errcheck
-					os.Rename(sslConf, mainConf) //nolint:errcheck
+					nginx.InstallSSLVhost(site.PrimaryDomain()) //nolint:errcheck
 				} else {
 					if err := nginx.GenerateVhost(site, phpVer); err != nil {
 						fmt.Printf("\n    WARN %s: %v", site.PrimaryDomain(), err)

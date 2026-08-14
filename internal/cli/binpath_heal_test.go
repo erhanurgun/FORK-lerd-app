@@ -18,7 +18,7 @@ func TestHealShimBinaryPathsRepointsShimsAtTheLiveBinary(t *testing.T) {
 	writeShim(t, binDir, "php", "#!/bin/sh\nLERD=\""+gone+"\"\n[ -x \"$LERD\" ] || LERD=lerd\nexec \"$LERD\" php \"$@\"\n")
 	writeShim(t, binDir, "mysql", "#!/bin/sh\n# lerd client shim\nexec "+gone+" client-exec mysql \"$@\"\n")
 
-	healShimBinaryPaths(current)
+	healShimBinaryPaths(current, binaryGone)
 
 	for _, tool := range []string{"php", "mysql"} {
 		shim := readShim(t, binDir, tool)
@@ -43,7 +43,7 @@ func TestHealShimBinaryPathsLeavesWorkingShimsAlone(t *testing.T) {
 	body := "#!/bin/sh\nexec " + other + " php \"$@\"\n"
 	writeShim(t, binDir, "php", body)
 
-	healShimBinaryPaths(current)
+	healShimBinaryPaths(current, binaryGone)
 
 	if got := readShim(t, binDir, "php"); got != body {
 		t.Errorf("php shim was rewritten:\n%s", got)
@@ -58,7 +58,7 @@ func TestHealShimBinaryPathsKeepsNonBinaryPaths(t *testing.T) {
 	phar := filepath.Join(binDir, "composer.phar")
 	writeShim(t, binDir, "composer", "#!/bin/sh\nLERD=\""+gone+"\"\nexec \"$LERD\" php "+phar+" \"$@\"\n")
 
-	healShimBinaryPaths(current)
+	healShimBinaryPaths(current, binaryGone)
 
 	shim := readShim(t, binDir, "composer")
 	if !strings.Contains(shim, phar) {
@@ -76,7 +76,7 @@ func TestHealShimBinaryPathsSkipsWhenTheBinaryIsMissing(t *testing.T) {
 	body := "#!/bin/sh\nexec /gone/lerd php \"$@\"\n"
 	writeShim(t, binDir, "php", body)
 
-	healShimBinaryPaths(filepath.Join(filepath.Dir(current), "absent"))
+	healShimBinaryPaths(filepath.Join(filepath.Dir(current), "absent"), binaryGone)
 
 	if got := readShim(t, binDir, "php"); got != body {
 		t.Errorf("php shim was rewritten:\n%s", got)
@@ -102,7 +102,7 @@ func TestHealShimBinaryPathsIgnoresADirectory(t *testing.T) {
 	body := "#!/bin/sh\nexec /gone/lerd php \"$@\"\n"
 	writeShim(t, binDir, "php", body)
 
-	if healed := healShimBinaryPaths(filepath.Dir(current)); len(healed) != 0 {
+	if healed := healShimBinaryPaths(filepath.Dir(current), binaryGone); len(healed) != 0 {
 		t.Errorf("healShimBinaryPaths() = %v; want nothing repaired", healed)
 	}
 	if got := readShim(t, binDir, "php"); got != body {
