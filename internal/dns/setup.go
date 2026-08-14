@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/geodro/lerd/internal/config"
 	"github.com/geodro/lerd/internal/feedback"
@@ -434,6 +435,21 @@ func Setup() error {
 var HostOwnsResolver = func() bool {
 	_, err := os.Stat("/etc/NIXOS")
 	return err == nil
+}
+
+var noteNixOSOwnsResolverOnce sync.Once
+
+// NoteNixOSOwnsResolver prints once per process that NixOS owns the resolver
+// and that configuration.nix must route ~test to lerd-dns. Call from interactive
+// install and start only — never from ConfigureResolver, which the watcher
+// invokes whenever .test fails.
+func NoteNixOSOwnsResolver() {
+	if !HostOwnsResolver() {
+		return
+	}
+	noteNixOSOwnsResolverOnce.Do(func() {
+		feedback.Note("NixOS owns the resolver; lerd is not writing host DNS. configuration.nix must route ~test to 127.0.0.1:5300 (lerd-nixos README / getting-started/nixos block #5).")
+	})
 }
 
 // ConfigureResolver configures the system DNS resolver to forward .test to the
