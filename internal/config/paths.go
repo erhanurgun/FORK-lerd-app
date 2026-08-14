@@ -383,7 +383,13 @@ func CustomServicesDir() string {
 // for the named custom service. Each file is bind-mounted into the container
 // at its declared target path.
 func ServiceFilesDir(name string) string {
-	return filepath.Join(DataDir(), "service-files", name)
+	return filepath.Join(ServiceFilesRoot(), name)
+}
+
+// ServiceFilesRoot returns the parent of every service's rendered FileMount
+// directory, so a sweep can tell which of them no service claims any more.
+func ServiceFilesRoot() string {
+	return filepath.Join(DataDir(), "service-files")
 }
 
 // ServiceTuningFile returns the host path for a service's user-editable runtime
