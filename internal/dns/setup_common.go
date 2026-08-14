@@ -18,6 +18,15 @@ import (
 	"github.com/geodro/lerd/internal/config"
 )
 
+// HostOwnsResolver reports whether the OS, not lerd, owns systemd-resolved.
+// NixOS generates resolved.conf from configuration.nix; writing drop-ins,
+// the lerd0 dummy link, or FallbackDNS= there takes down all name resolution.
+// A func var so tests can force the non-NixOS path without touching /etc/NIXOS.
+var HostOwnsResolver = func() bool {
+	_, err := os.Stat("/etc/NIXOS")
+	return err == nil
+}
+
 // sudoersMarkerPath is a user-owned record of the sudoers drop-in lerd last
 // installed. /etc/sudoers.d is root-only (0750), so the invoking user cannot
 // read the drop-in back to compare content; without this marker InstallSudoers

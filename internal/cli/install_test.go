@@ -21,6 +21,24 @@ func TestIsShell_fish(t *testing.T) {
 	}
 }
 
+// Interactive install must explain NixOS resolver ownership around
+// ConfigureResolver. The note itself lives in dns.NoteNixOSOwnsResolver so
+// install+start in one process print once; ConfigureResolver stays silent
+// because the watcher calls it on every .test failure.
+func TestInstallNotesNixOSOwnsResolver(t *testing.T) {
+	src, err := os.ReadFile("install.go")
+	if err != nil {
+		t.Fatalf("reading install.go: %v", err)
+	}
+	body := string(src)
+	if !strings.Contains(body, "dns.NoteNixOSOwnsResolver()") {
+		t.Error("install must call NoteNixOSOwnsResolver around ConfigureResolver")
+	}
+	if strings.Count(body, "dns.NoteNixOSOwnsResolver()") < strings.Count(body, "dns.ConfigureResolver()") {
+		t.Error("every ConfigureResolver call on the install path must be paired with NoteNixOSOwnsResolver")
+	}
+}
+
 func TestIsShell_zsh(t *testing.T) {
 	if !isShell("/bin/zsh", "zsh") {
 		t.Error("expected /bin/zsh to match zsh")

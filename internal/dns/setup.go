@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/geodro/lerd/internal/config"
 	"github.com/geodro/lerd/internal/feedback"
@@ -427,6 +428,21 @@ func Setup() error {
 	return ConfigureResolver()
 }
 
+var noteNixOSOwnsResolverOnce sync.Once
+
+// NoteNixOSOwnsResolver prints once per process that NixOS owns the resolver
+// and that configuration.nix must route ~test to lerd-dns. Call from interactive
+// install and start only — never from ConfigureResolver, which the watcher
+// invokes whenever .test fails.
+func NoteNixOSOwnsResolver() {
+	if !HostOwnsResolver() {
+		return
+	}
+	noteNixOSOwnsResolverOnce.Do(func() {
+		feedback.Note("NixOS owns the resolver; lerd is not writing host DNS. configuration.nix must route ~test to 127.0.0.1:5300 (lerd-nixos README / getting-started/nixos block #5).")
+	})
+}
+
 // ConfigureResolver configures the system DNS resolver to forward .test to the
 // lerd-dns dnsmasq container on port 5300. Call this after lerd-dns is running so
 // that any immediate resolvectl changes don't break DNS before dnsmasq is up.
@@ -435,6 +451,13 @@ func ConfigureResolver() error {
 	// localhost, so carrying on here would prompt for a password and point a
 	// ~localhost route at a lerd-dns that is deliberately not running.
 	if cfg, err := config.LoadGlobal(); err == nil && cfg != nil && !cfg.DNS.Enabled {
+		return nil
+	}
+	// NixOS routes only ~test to lerd-dns from configuration.nix. The
+	// installer, lerd start, and the watcher would otherwise write
+	// lerd-fallback.conf (empty FallbackDNS) and lerd0, which on NixOS
+	// takes down every name, not just .test.
+	if HostOwnsResolver() {
 		return nil
 	}
 	if isSystemdResolvedActive() {
@@ -978,6 +1001,9 @@ func removeSudoersGrant() bool {
 // grant the passwordless DNS rules up front, letting a later unattended install
 // configure the resolver without a prompt. Idempotent.
 func WriteSudoersForUser(user string) error {
+	if HostOwnsResolver() {
+		return nil
+	}
 	if err := validSudoersUser(user); err != nil {
 		return err
 	}
@@ -1076,6 +1102,9 @@ func SudoersCurrent() bool {
 }
 
 func InstallSudoers() error {
+	if HostOwnsResolver() {
+		return nil
+	}
 	user := os.Getenv("USER")
 	if user == "" {
 		user = os.Getenv("LOGNAME")
