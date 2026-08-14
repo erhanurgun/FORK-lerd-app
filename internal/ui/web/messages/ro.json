@@ -84,7 +84,7 @@
   "dashboard_disk_cleaning": "Se recuperează…",
   "dashboard_disk_cleanup": "Curăță",
   "dashboard_disk_held": "încă {size} ocupați de containere active, eliberați la repornire",
-  "dashboard_disk_modalBody": "Aceste imagini pot fi șterse pentru a elibera aproximativ {size}:",
+  "dashboard_disk_modalBody": "Aceste elemente pot fi șterse pentru a elibera aproximativ {size}:",
   "dashboard_disk_modalConfirm": "Recuperează",
   "dashboard_disk_modalDeepNote": "Această curățare profundă șterge și imaginile fără etichetă rămase de la alte sarcini podman de pe această mașină. Nu atinge niciodată volumele de date denumite.",
   "dashboard_disk_modalTitle": "Recuperează spațiu pe disc",
