@@ -432,3 +432,45 @@ func TestRemoveScriptInstalledBinaries_neverTouchesThePackagedBinary(t *testing.
 		t.Error("the running binary is the package manager's to remove, not ours")
 	}
 }
+
+// ── removeServiceUnits ───────────────────────────────────────────────────────
+
+// unitListMgr answers the unit listings the removal walks and records nothing
+// else; the fake it embeds covers the rest of the interface.
+type unitListMgr struct {
+	*fakeServiceMgr
+	containers []string
+	services   []string
+	timers     []string
+}
+
+func (m *unitListMgr) ListContainerUnits(string) []string { return m.containers }
+func (m *unitListMgr) ListServiceUnits(string) []string   { return m.services }
+func (m *unitListMgr) ListTimerUnits(string) []string     { return m.timers }
+
+// A unit that is already failed when its file goes stays behind as failed and
+// not-found, so an uninstalled lerd went on being listed by systemctl on a
+// machine that no longer had one. The installer script has reset them all
+// along; this path deleted the files, reloaded and stopped there. It does not
+// cover a unit that fails after the uninstall has exited, which is a separate
+// problem in how long the stop waits.
+func TestRemoveServiceUnits_resetsEveryUnitItRemoved(t *testing.T) {
+	swapMgr(t, &unitListMgr{
+		fakeServiceMgr: &fakeServiceMgr{},
+		containers:     []string{"lerd-mysql", "lerd-nginx"},
+		services:       []string{"lerd-mysql", "lerd-ui"},
+		timers:         []string{"lerd-backup.timer"},
+	})
+
+	var reset []string
+	orig := resetFailedUnit
+	resetFailedUnit = func(name string) { reset = append(reset, name) }
+	t.Cleanup(func() { resetFailedUnit = orig })
+
+	removeServiceUnits()
+
+	want := []string{"lerd-mysql", "lerd-nginx", "lerd-ui", "lerd-backup"}
+	if !equalStrings(reset, want) {
+		t.Errorf("reset %v, want %v", reset, want)
+	}
+}

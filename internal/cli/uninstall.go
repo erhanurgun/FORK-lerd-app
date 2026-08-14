@@ -106,22 +106,7 @@ func runUninstall(force bool) error {
 	ok()
 
 	step("Removing service units")
-	{
-		seen := map[string]bool{}
-		for _, unit := range services.Mgr.ListContainerUnits("lerd-*") {
-			seen[unit] = true
-			_ = services.Mgr.RemoveContainerUnit(unit)
-		}
-		for _, unit := range services.Mgr.ListServiceUnits("lerd-*") {
-			if seen[unit] {
-				continue
-			}
-			_ = services.Mgr.RemoveServiceUnit(unit)
-		}
-		for _, unit := range services.Mgr.ListTimerUnits("lerd-*") {
-			_ = services.Mgr.RemoveTimerUnit(strings.TrimSuffix(unit, ".timer"))
-		}
-	}
+	removeServiceUnits()
 	ok()
 
 	step("Reloading service manager")
@@ -210,6 +195,35 @@ func runUninstall(force bool) error {
 
 	feedback.Done("lerd uninstalled")
 	return nil
+}
+
+// resetFailedUnit is podman.ResetFailedUnit, indirected so a test can watch the
+// removal reset what it removed without a systemd to reset it on.
+var resetFailedUnit = podman.ResetFailedUnit
+
+// removeServiceUnits deletes every lerd unit file and clears the failed state
+// systemd keeps for it, which the installer script has always done and this path
+// did not: a unit already failed when its file goes is listed as failed and
+// not-found for good, on a machine with no lerd left to clear it.
+func removeServiceUnits() {
+	seen := map[string]bool{}
+	for _, unit := range services.Mgr.ListContainerUnits("lerd-*") {
+		seen[unit] = true
+		_ = services.Mgr.RemoveContainerUnit(unit)
+		resetFailedUnit(unit)
+	}
+	for _, unit := range services.Mgr.ListServiceUnits("lerd-*") {
+		if seen[unit] {
+			continue
+		}
+		_ = services.Mgr.RemoveServiceUnit(unit)
+		resetFailedUnit(unit)
+	}
+	for _, unit := range services.Mgr.ListTimerUnits("lerd-*") {
+		name := strings.TrimSuffix(unit, ".timer")
+		_ = services.Mgr.RemoveTimerUnit(name)
+		resetFailedUnit(name)
+	}
 }
 
 // removeDataDir removes the lerd data directory and returns the path if it
