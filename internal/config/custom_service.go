@@ -744,8 +744,11 @@ func MaterializeServiceFilesChanged(svc *CustomService) (bool, error) {
 			}
 			content = out
 		}
-		// Skip the rewrite when content already matches; a mode-only fixup
-		// is not a content change and triggers no restart.
+		// A file whose content already matches needs no rewrite; comparing by
+		// content (not ownership) leaves a podman :U-chowned file in place and, most
+		// importantly, avoids a needless service restart when nothing changed. The
+		// mode is still enforced so a re-materialise stays idempotent on permissions,
+		// but a mode-only fixup is not a content change and triggers no restart.
 		existing, readErr := os.ReadFile(path)
 		if readErr == nil && string(existing) == content {
 			if info, statErr := os.Stat(path); statErr == nil && info.Mode().Perm() != mode.Perm() {
@@ -753,15 +756,20 @@ func MaterializeServiceFilesChanged(svc *CustomService) (bool, error) {
 					return changed, fmt.Errorf("chmod %s: %w", path, err)
 				}
 			}
-			writeContentSidecar(path, content)
+			syncContentSidecar(path, content, f.Chown)
 			continue
 		}
-		// podman :U re-owns the file so os.ReadFile EACCES; a sidecar hash
-		// (never mounted, never re-owned) lets us compare without reading it.
+		// A restrictive chown:true mount is unreadable to us once podman's :U has
+		// re-owned it, so the compare above cannot run and every pass would rewrite
+		// the file, move its mtime and earn another restart. Compare against the
+		// hash instead. The cost is that bytes tampered with in place are no longer
+		// repaired while the file stays unreadable.
 		if readErr != nil && !os.IsNotExist(readErr) && contentMatchesSidecar(path, content) {
 			continue
 		}
-		// Unlink first: podman's :U re-owns the file so a plain rewrite EACCES.
+		// Unlink first: with chown:true podman's :U flag re-owns the file to a
+		// userns-mapped uid, so a plain rewrite would EACCES. Removing the dir
+		// entry succeeds because the parent dir is owned by us.
 		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 			return changed, fmt.Errorf("removing stale %s for service %s: %w", path, svc.Name, err)
 		}
@@ -774,16 +782,23 @@ func MaterializeServiceFilesChanged(svc *CustomService) (bool, error) {
 			return changed, fmt.Errorf("chmod %s: %w", path, err)
 		}
 		changed = true
-		writeContentSidecar(path, content)
+		syncContentSidecar(path, content, f.Chown)
 	}
 	return changed, nil
 }
 
-// contentSidecarPath is a hash file beside the service file, never mounted
-// into the container so podman's :U never re-owns it.
+// contentSidecarPath is the hash file recording what was last materialised into
+// path. It is never mounted, so podman's :U never re-owns it and it stays
+// readable when the file it describes does not.
 func contentSidecarPath(path string) string { return path + ".sha256" }
 
-func writeContentSidecar(path, content string) {
+// syncContentSidecar records the hash for the mounts that can become unreadable,
+// so only those carry the extra file. A failed write costs one more rewrite on
+// the next pass, which is not worth failing a materialise over.
+func syncContentSidecar(path, content string, chown bool) {
+	if !chown || contentMatchesSidecar(path, content) {
+		return
+	}
 	sum := sha256.Sum256([]byte(content))
 	_ = os.WriteFile(contentSidecarPath(path), []byte(hex.EncodeToString(sum[:])), 0644)
 }

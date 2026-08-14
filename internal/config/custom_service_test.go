@@ -235,6 +235,42 @@ func TestMaterializeServiceFilesChanged_UnreadableFileUsesSidecar(t *testing.T) 
 	_ = os.Chmod(path, 0o600)
 }
 
+// The other half of the sidecar: a shipped preset change must still reach an
+// unreadable file, or the hash would hide the drift it exists to detect.
+func TestMaterializeServiceFilesChanged_DriftReachesAnUnreadableFile(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", tmp)
+	svc := &CustomService{Name: "pgadmin", Image: "docker.io/dpage/pgadmin4:latest", Preset: "pgadmin"}
+
+	if _, err := MaterializeServiceFilesChanged(svc); err != nil {
+		t.Fatalf("first materialize: %v", err)
+	}
+	path := ServiceFilePath(svc.Name, "/pgpass")
+	if err := os.Chmod(path, 0o000); err != nil {
+		t.Fatalf("chmod 000: %v", err)
+	}
+
+	const updated = "lerd-postgres-18:5432:*:postgres:lerd\n"
+	prev := presetFileGenerators["pgadmin_pgpass"]
+	t.Cleanup(func() { presetFileGenerators["pgadmin_pgpass"] = prev })
+	presetFileGenerators["pgadmin_pgpass"] = func(*CustomService) (string, error) { return updated, nil }
+
+	changed, err := MaterializeServiceFilesChanged(svc)
+	if err != nil {
+		t.Fatalf("materialize after the rendering changed: %v", err)
+	}
+	if !changed {
+		t.Fatal("a new rendering must be written even when the old file cannot be read")
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if string(got) != updated {
+		t.Errorf("content = %q, want %q", got, updated)
+	}
+}
+
 func TestValidateCustomService_rejectsEnvInjection(t *testing.T) {
 	svc := &CustomService{Name: "evil", Image: "alpine",
 		Environment: map[string]string{"X": "ok\nPodmanArgs=--privileged"}}
