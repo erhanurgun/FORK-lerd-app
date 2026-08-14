@@ -844,6 +844,37 @@ func TestConfigureResolver_doesNothingWhenDNSIsDisabled(t *testing.T) {
 	if strings.Index(fn, "!cfg.DNS.Enabled") > strings.Index(fn, "isSystemdResolvedActive()") {
 		t.Error("the disabled check must come before any resolver path runs")
 	}
+	assertContains(t, fn, "HostOwnsResolver()")
+	if strings.Index(fn, "HostOwnsResolver()") > strings.Index(fn, "isSystemdResolvedActive()") {
+		t.Error("the NixOS host-owns-resolver check must come before any resolver path runs")
+	}
+}
+
+func TestConfigureResolver_doesNothingWhenHostOwnsResolver(t *testing.T) {
+	orig := HostOwnsResolver
+	t.Cleanup(func() { HostOwnsResolver = orig })
+	HostOwnsResolver = func() bool { return true }
+	if err := ConfigureResolver(); err != nil {
+		t.Fatalf("ConfigureResolver: %v", err)
+	}
+}
+
+func TestWriteSudoersForUser_skipsWhenHostOwnsResolver(t *testing.T) {
+	orig := HostOwnsResolver
+	t.Cleanup(func() { HostOwnsResolver = orig })
+	HostOwnsResolver = func() bool { return true }
+	if err := WriteSudoersForUser("not a valid user"); err != nil {
+		t.Fatalf("WriteSudoersForUser: %v", err)
+	}
+}
+
+func TestInstallSudoers_skipsWhenHostOwnsResolver(t *testing.T) {
+	orig := HostOwnsResolver
+	t.Cleanup(func() { HostOwnsResolver = orig })
+	HostOwnsResolver = func() bool { return true }
+	if err := InstallSudoers(); err != nil {
+		t.Fatalf("InstallSudoers: %v", err)
+	}
 }
 
 // section returns the source between two markers, failing the test if either is
@@ -921,4 +952,9 @@ func TestLinuxSudoers_grantsEveryPrivilegedCommandTheCodeRuns(t *testing.T) {
 			t.Errorf("missing NOPASSWD grant, headless watcher would prompt: %s", want)
 		}
 	}
+}
+
+func TestMain(m *testing.M) {
+	HostOwnsResolver = func() bool { return false }
+	os.Exit(m.Run())
 }
