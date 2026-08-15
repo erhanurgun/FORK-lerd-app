@@ -64,6 +64,10 @@ const (
 	// into the env file its framework declares, which is what `lerd env` does
 	// and what resolves a service picked but not wired.
 	FixEnvSync = "env_sync"
+	// FixCreateDatabase creates the databases a site points at that its engine
+	// does not hold, a host action like the service fixes since a site cannot
+	// create its own schema from inside its container.
+	FixCreateDatabase = "database_create"
 )
 
 // DoctorFixCommands maps each universal fix key to the shell command run in the
@@ -206,7 +210,7 @@ func Run(ctx context.Context, path string, fw *config.Framework) Response {
 	}
 	// Whether the site's database exists is answered through the framework
 	// declaration, so it is asked of every format, not only dotenv.
-	if c, ok := checkServerDatabase(path, fw); ok {
+	if c, ok := checkServerDatabase(path); ok {
 		resp.add(c)
 		dbBroken = dbBroken || c.Status == StatusFail
 	}

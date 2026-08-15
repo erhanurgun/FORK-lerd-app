@@ -92,9 +92,28 @@ func readyDeclaredServices(path string, fw *config.Framework, quiet bool) (bool,
 	return changed, nil
 }
 
+// createMissingDatabases creates the databases the project points at that their
+// engine does not hold, which is what a missing schema needs before migrations
+// have anywhere to run. It reports whether anything was created and stops at the
+// first failure rather than working through an engine that just refused.
+func createMissingDatabases(path string, quiet bool) (bool, error) {
+	created := false
+	for _, t := range sitedoctor.MissingDatabases(path) {
+		if _, err := serviceops.CreateDatabase(t.Service, t.Database); err != nil {
+			return created, fmt.Errorf("creating %s on %s: %w", t.Database, t.Service, err)
+		}
+		created = true
+		if !quiet {
+			fmt.Printf("  %s\n\n", feedback.Dim("created the "+t.Database+" database on "+t.Service))
+		}
+	}
+	return created, nil
+}
+
 // applySiteDoctorFixes resolves the findings lerd can act on by itself and
-// returns a fresh report: a drifted vhost is rewritten, and a service picked but
-// not wired has its connection written. The composer and npm ones are left out;
+// returns a fresh report: a drifted vhost is rewritten, a database the engine
+// does not hold is created, and a service picked but not wired has its
+// connection written. The composer and npm ones are left out;
 // they run in the site's container behind a run lock and stream their output,
 // which belongs to the surfaces that can show it.
 func applySiteDoctorFixes(path, fwName string, resp sitedoctor.Response, quiet bool) sitedoctor.Response {
@@ -117,6 +136,14 @@ func applySiteDoctorFixes(path, fwName string, resp sitedoctor.Response, quiet b
 				feedback.Warn("%v", err)
 			}
 			if ready {
+				fixed = true
+			}
+		case sitedoctor.FixCreateDatabase:
+			created, err := createMissingDatabases(path, quiet)
+			if err != nil {
+				feedback.Warn("%v", err)
+			}
+			if created {
 				fixed = true
 			}
 		case sitedoctor.FixEnvSync:
