@@ -34,7 +34,9 @@ onMounted(() => {
   document.documentElement.style.scrollBehavior = 'smooth'
 
   /* ---------- Glyph injection ---------- */
-  $$('[data-logo]').forEach((n) => { n.innerHTML = D.glyph(n.dataset.logo) })
+  $$('[data-logo]').forEach((n) => {
+    n.innerHTML = D.glyph(n.dataset.logo, undefined, { bare: n.hasAttribute('data-bare') })
+  })
 
   /* ---------- Nav: sticky shadow ---------- */
   const nav = $('#nav')
@@ -184,8 +186,8 @@ onMounted(() => {
   /* ---------- Services showcase ---------- */
   $('#svc-cards').innerHTML = D.SVC_SHOW.map((s) => `
     <div class="card svc-card reveal">
-      <span class="gl" style="display:block">${D.glyph(s.logo)}</span>
-      <b>${s.name}</b><span>${s.port}</span>
+      <span class="gl">${D.glyph(s.logo)}</span>
+      <span class="svc-t"><b>${s.name}</b><span>${s.port}</span></span>
     </div>`).join('')
   $$('#svc-cards .reveal').forEach(observeReveal)
 
@@ -344,15 +346,15 @@ onBeforeUnmount(() => {
         <div class="wrap strip-inner">
           <span class="strip-label">Auto-detected on lerd link</span>
           <div class="strip-items">
-            <span class="strip-item"><span class="gl" data-logo="laravel"></span> Laravel</span>
-            <span class="strip-item"><span class="gl" data-logo="symfony"></span> Symfony</span>
-            <span class="strip-item"><span class="gl" data-logo="wordpress"></span> WordPress</span>
-            <span class="strip-item"><span class="gl" data-logo="drupal"></span> Drupal</span>
-            <span class="strip-item"><span class="gl" data-logo="magento"></span> Magento</span>
-            <span class="strip-item"><span class="gl" data-logo="cake"></span> CakePHP</span>
-            <span class="strip-item"><span class="gl" data-logo="statamic"></span> Statamic</span>
-            <span class="strip-item"><span class="gl" data-logo="codeigniter"></span> CodeIgniter</span>
-            <span class="strip-item"><span class="gl" data-logo="tempest"></span> Tempest</span>
+            <a class="strip-item" :href="withBase('/getting-started/laravel')"><span class="gl" data-bare data-logo="laravel"></span> Laravel</a>
+            <a class="strip-item" :href="withBase('/getting-started/symfony')"><span class="gl" data-bare data-logo="symfony"></span> Symfony</a>
+            <a class="strip-item" :href="withBase('/getting-started/wordpress')"><span class="gl" data-bare data-logo="wordpress"></span> WordPress</a>
+            <a class="strip-item" :href="withBase('/getting-started/drupal')"><span class="gl" data-bare data-logo="drupal"></span> Drupal</a>
+            <a class="strip-item" :href="withBase('/getting-started/magento')"><span class="gl" data-bare data-logo="magento"></span> Magento</a>
+            <a class="strip-item" :href="withBase('/getting-started/cakephp')"><span class="gl" data-bare data-logo="cake"></span> CakePHP</a>
+            <a class="strip-item" :href="withBase('/getting-started/statamic')"><span class="gl" data-bare data-logo="statamic"></span> Statamic</a>
+            <a class="strip-item" :href="withBase('/getting-started/codeigniter')"><span class="gl" data-bare data-logo="codeigniter"></span> CodeIgniter</a>
+            <a class="strip-item" :href="withBase('/getting-started/tempest')"><span class="gl" data-bare data-logo="tempest"></span> Tempest</a>
           </div>
         </div>
       </div>
@@ -502,6 +504,7 @@ onBeforeUnmount(() => {
           <div class="svc-grid" id="svc-cards"></div>
         </div>
       </section>
+
 
       <!-- ============ QUICK START ============ -->
       <section id="start">

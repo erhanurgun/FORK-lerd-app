@@ -110,6 +110,17 @@ func serviceRows(snap *Snapshot) []row {
 	return rows
 }
 
+// serviceSection returns the rows the Services section should show and whether
+// it should be touched at all. A poll whose services call did not come back has
+// read nothing, and drawing that as an empty section takes the whole submenu
+// off the menu until the next poll.
+func serviceSection(snap *Snapshot) ([]row, bool) {
+	if !snap.ServicesKnown {
+		return nil, false
+	}
+	return serviceRows(snap), true
+}
+
 // phpRows renders the installed PHP versions, ticking the current default.
 func phpRows(snap *Snapshot) []row {
 	rows := make([]row, 0, len(snap.PHPVersions))
@@ -219,18 +230,24 @@ func (m *menuState) apply(snap *Snapshot) {
 		m.mDNS.SetTitle(fmt.Sprintf("  %s dns", statusDot(snap.DNSOK)))
 	}
 
-	if title, show := workersTitle(snap); show {
-		m.mWorkers.SetTitle(title)
-		m.mWorkers.Show()
-	} else {
-		m.mWorkers.Hide()
+	// The worker count comes from the services call too, so both lines wait for
+	// a poll that actually read it rather than redrawing from a blank.
+	if snap.ServicesKnown {
+		if title, show := workersTitle(snap); show {
+			m.mWorkers.SetTitle(title)
+			m.mWorkers.Show()
+		} else {
+			m.mWorkers.Hide()
+		}
 	}
 
-	if m.svcs.set(serviceRows(snap)) == 0 {
-		m.mSvcs.Hide()
-	} else {
-		m.mSvcs.SetTitle(servicesTitle(snap))
-		m.mSvcs.Show()
+	if rows, redraw := serviceSection(snap); redraw {
+		if m.svcs.set(rows) == 0 {
+			m.mSvcs.Hide()
+		} else {
+			m.mSvcs.SetTitle(servicesTitle(snap))
+			m.mSvcs.Show()
+		}
 	}
 
 	if m.php.set(phpRows(snap)) == 0 {
