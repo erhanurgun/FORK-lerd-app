@@ -99,6 +99,7 @@ nav:
       - Dump viewer: features/dumps.md
       - Query viewer: features/queries.md
       - System Tray: features/system-tray.md
+      - Omarchy bar widget: features/omarchy-glance.md
       - HTTPS / TLS: features/https.md
       - DNS: features/dns.md
       - Git Worktrees: features/git-worktrees.md
