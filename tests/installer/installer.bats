@@ -7,8 +7,11 @@ INSTALLER="$BATS_TEST_DIRNAME/../../install.sh"
 # Source the installer so we can call its functions directly.
 # The guard at the bottom prevents main() from running when sourced.
 setup() {
-  # Isolate HOME so the installer never touches the real shell rc files.
+  # Isolate HOME so the installer never touches the real shell rc files. The
+  # XDG variables go with it: LERD_DATA_DIR falls back to $HOME only when they
+  # are unset, so leaving them would point the data directory at the real one.
   export HOME="$BATS_TMPDIR/home-$$"
+  unset XDG_DATA_HOME XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME
   mkdir -p "$HOME"
 
   # Source the script to load all function definitions.
@@ -18,6 +21,15 @@ setup() {
 
 teardown() {
   rm -rf "$BATS_TMPDIR/home-$$"
+}
+
+# Pins the isolation the whole file rests on: whatever the environment running
+# the suite looks like, the directories the uninstall removes must sit inside
+# the throwaway HOME and never in the real one.
+@test "the harness keeps the config and data directories inside the test HOME" {
+  [[ "$HOME" == "$BATS_TMPDIR/"* ]]
+  [[ "$LERD_CONFIG_DIR" == "$HOME/"* ]]
+  [[ "$LERD_DATA_DIR" == "$HOME/"* ]]
 }
 
 # ── detect_arch ───────────────────────────────────────────────────────────────
@@ -640,6 +652,102 @@ _stub_dns_files() {
   [ -n "$dns_at" ]
   [ -n "$bin_at" ]
   [ "$dns_at" -lt "$bin_at" ]
+}
+
+# ── remove_lerd_dir ───────────────────────────────────────────────────────────
+
+# A service tree written as a subuid looks exactly like this to the uninstall:
+# a directory whose contents rm cannot touch. Everything here stays under the
+# isolated HOME the setup exports.
+_undeletable_dir() {
+  local dir="$HOME/share/lerd"
+  mkdir -p "$dir/redis"
+  : > "$dir/redis/dump.rdb"
+  chmod 500 "$dir/redis"
+  echo "$dir"
+}
+
+@test "remove_lerd_dir removes an ordinary directory" {
+  local dir="$HOME/config/lerd"
+  mkdir -p "$dir/certs"
+  run remove_lerd_dir "$dir"
+  [ "$status" -eq 0 ]
+  [ ! -e "$dir" ]
+}
+
+@test "remove_lerd_dir is a no-op when the directory was never there" {
+  run remove_lerd_dir "$HOME/nothing-here"
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+}
+
+@test "remove_lerd_dir falls back to podman unshare on a subuid-owned tree" {
+  [ "$(id -u)" -eq 0 ] && skip "root removes the tree without the fallback"
+  local dir; dir="$(_undeletable_dir)"
+  podman() { chmod -R u+w "$4"; command rm -rf "$4"; }
+  run remove_lerd_dir "$dir"
+  [ "$status" -eq 0 ]
+  [ ! -e "$dir" ]
+}
+
+@test "remove_lerd_dir reports the directory when the fallback fails too" {
+  [ "$(id -u)" -eq 0 ] && skip "root removes the tree without the fallback"
+  local dir; dir="$(_undeletable_dir)"
+  podman() { return 1; }
+  run remove_lerd_dir "$dir"
+  chmod -R u+w "$dir"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Could not remove $dir"* ]]
+  [[ "$output" == *"podman unshare rm -rf $dir"* ]]
+}
+
+@test "both uninstall paths route the data removal through remove_lerd_dir" {
+  for fn in cmd_uninstall_linux cmd_uninstall_macos; do
+    local body; body="$(declare -f "$fn")"
+    [[ "$body" == *'remove_lerd_dir "$LERD_DATA_DIR"'* ]]
+    [[ "$body" == *'remove_lerd_dir "$LERD_CONFIG_DIR"'* ]]
+    [[ "$body" != *'rm -rf "$LERD_DATA_DIR"'* ]]
+  done
+}
+
+# The cache is written without ceremony and nothing in it is state a user would
+# miss, which is exactly why an uninstall that leaves it behind reads as one
+# that did not finish.
+@test "both uninstall paths remove the cache directory too" {
+  for fn in cmd_uninstall_linux cmd_uninstall_macos; do
+    local body; body="$(declare -f "$fn")"
+    [[ "$body" == *'remove_lerd_dir "$LERD_CACHE_DIR"'* ]]
+  done
+}
+
+# The tray ships beside the binary, so removing one and not the other leaves a
+# tray on PATH polling an API that is gone.
+@test "the linux uninstall removes the tray binary and its unit" {
+  local body; body="$(declare -f cmd_uninstall_linux)"
+  [[ "$body" == *"lerd-tray"* ]]
+  [[ "$body" == *"reset-failed"* ]]
+}
+
+@test "remove_from_path removes the unmarked lerd bin entry" {
+  export SHELL="/bin/bash"
+  _force_linux_os
+  printf 'export PATH="%s/bin:$PATH"\n' "$LERD_DATA_DIR" > "$HOME/.bashrc"
+
+  remove_from_path
+
+  run grep "$LERD_DATA_DIR/bin" "$HOME/.bashrc"
+  [ "$status" -ne 0 ]
+}
+
+@test "remove_from_path leaves an unrelated PATH entry alone" {
+  export SHELL="/bin/bash"
+  _force_linux_os
+  echo 'export PATH="$HOME/other/bin:$PATH"' > "$HOME/.bashrc"
+
+  remove_from_path
+
+  run grep -c "other/bin" "$HOME/.bashrc"
+  [ "$output" = "1" ]
 }
 
 # ── controlling terminal detection ────────────────────────────────────────────

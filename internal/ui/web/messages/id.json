@@ -84,7 +84,7 @@
   "dashboard_disk_cleaning": "Mereklamasi…",
   "dashboard_disk_cleanup": "Bersihkan",
   "dashboard_disk_held": "{size} lagi ditahan oleh kontainer yang berjalan, dibebaskan saat mulai ulang",
-  "dashboard_disk_modalBody": "Image ini dapat dihapus untuk membebaskan sekitar {size}:",
+  "dashboard_disk_modalBody": "Item ini dapat dihapus untuk membebaskan sekitar {size}:",
   "dashboard_disk_modalConfirm": "Reklamasi",
   "dashboard_disk_modalDeepNote": "Pembersihan mendalam ini juga menghapus image menggantung tanpa tag milik beban kerja podman lain di mesin ini. Volume data bernama tidak pernah disentuh.",
   "dashboard_disk_modalTitle": "Reklamasi disk",

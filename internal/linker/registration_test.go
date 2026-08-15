@@ -80,6 +80,18 @@ func TestPlanMatchesRegistration_ignoresOperationalState(t *testing.T) {
 	}
 }
 
+// Unlinking a site under a parked directory keeps its entry and marks it
+// ignored, which hides it from every list and stops its workers. Re-linking must
+// see work to do, or the link reports "already linked" and the site stays gone.
+func TestPlanMatchesRegistration_ignoredEntryIsNotSettled(t *testing.T) {
+	existing := registered()
+	existing.Ignored = true
+
+	if planFor(registered()).MatchesRegistration(existing) {
+		t.Error("an unlinked parked site reported as already registered")
+	}
+}
+
 // A plan that registers nothing (a worktree, or a directory the policy skips)
 // never matches: there is no registration in it to compare.
 func TestPlanMatchesRegistration_skippedPlanNeverMatches(t *testing.T) {

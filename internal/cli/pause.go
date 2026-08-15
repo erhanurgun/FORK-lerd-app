@@ -211,10 +211,7 @@ func UnpauseSite(name string) error {
 			if err := nginx.GenerateCustomSSLVhost(*site); err != nil {
 				return fmt.Errorf("generating custom SSL vhost: %w", err)
 			}
-			sslConf := filepath.Join(config.NginxConfD(), site.PrimaryDomain()+"-ssl.conf")
-			mainConf := filepath.Join(config.NginxConfD(), site.PrimaryDomain()+".conf")
-			_ = os.Remove(mainConf)
-			if err := os.Rename(sslConf, mainConf); err != nil {
+			if err := nginx.InstallSSLVhost(site.PrimaryDomain()); err != nil {
 				return fmt.Errorf("installing SSL vhost: %w", err)
 			}
 		} else {
@@ -229,10 +226,7 @@ func UnpauseSite(name string) error {
 			if err := nginx.GenerateHostProxySSLVhost(*site); err != nil {
 				return fmt.Errorf("generating host-proxy SSL vhost: %w", err)
 			}
-			sslConf := filepath.Join(config.NginxConfD(), site.PrimaryDomain()+"-ssl.conf")
-			mainConf := filepath.Join(config.NginxConfD(), site.PrimaryDomain()+".conf")
-			_ = os.Remove(mainConf)
-			if err := os.Rename(sslConf, mainConf); err != nil {
+			if err := nginx.InstallSSLVhost(site.PrimaryDomain()); err != nil {
 				return fmt.Errorf("installing host-proxy SSL vhost: %w", err)
 			}
 		} else {
@@ -250,10 +244,7 @@ func UnpauseSite(name string) error {
 			if err := nginx.GenerateFrankenPHPSSLVhost(*site); err != nil {
 				return fmt.Errorf("generating FrankenPHP SSL vhost: %w", err)
 			}
-			sslConf := filepath.Join(config.NginxConfD(), site.PrimaryDomain()+"-ssl.conf")
-			mainConf := filepath.Join(config.NginxConfD(), site.PrimaryDomain()+".conf")
-			_ = os.Remove(mainConf)
-			if err := os.Rename(sslConf, mainConf); err != nil {
+			if err := nginx.InstallSSLVhost(site.PrimaryDomain()); err != nil {
 				return fmt.Errorf("installing SSL vhost: %w", err)
 			}
 		} else {
@@ -279,10 +270,7 @@ func UnpauseSite(name string) error {
 			if err := nginx.GenerateSSLVhost(*site, phpVersion); err != nil {
 				return fmt.Errorf("generating SSL vhost: %w", err)
 			}
-			sslConf := filepath.Join(config.NginxConfD(), site.PrimaryDomain()+"-ssl.conf")
-			mainConf := filepath.Join(config.NginxConfD(), site.PrimaryDomain()+".conf")
-			_ = os.Remove(mainConf)
-			if err := os.Rename(sslConf, mainConf); err != nil {
+			if err := nginx.InstallSSLVhost(site.PrimaryDomain()); err != nil {
 				return fmt.Errorf("installing SSL vhost: %w", err)
 			}
 		} else {

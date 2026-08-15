@@ -555,6 +555,14 @@ func TestIsLerdBuiltImage_matchers(t *testing.T) {
 		{"lerd-php83-fpm:local", true},
 		{"lerd-custom-my-app:local", true},
 		{"lerd-dnsmasq:local", true},
+		// What podman actually prints for a local build, which is the only
+		// spelling the purge ever sees.
+		{"localhost/lerd-php85-fpm:local", true},
+		{"localhost/lerd-custom-my-app:local", true},
+		{"localhost/lerd-dnsmasq:local", true},
+		// Pulled, not built here: the base image lerd's own FPM image is built
+		// from is not lerd's to delete.
+		{"ghcr.io/lerd-env/lerd-php85-fpm-base:2f38fdd78a9f", false},
 		{"docker.io/library/mysql:8.0", false},
 		{"docker.io/dunglas/frankenphp:php8.4-alpine", false},
 		{"lerd-nginx:alpine", false},

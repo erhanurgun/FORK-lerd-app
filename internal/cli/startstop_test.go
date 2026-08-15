@@ -238,3 +238,20 @@ func TestRunStart_skipsSudoersRefreshWhenDNSDisabled(t *testing.T) {
 		t.Error("the sudoers refresh must be gated on dnsEnabled(), or a disabled-DNS host still installs DNS grants on start")
 	}
 }
+
+// Interactive start must explain NixOS resolver ownership around
+// ConfigureResolver. The helper is once-per-process so install+start in one
+// process do not spam; ConfigureResolver itself stays silent.
+func TestRunStart_notesNixOSOwnsResolver(t *testing.T) {
+	src, err := os.ReadFile("startstop.go")
+	if err != nil {
+		t.Fatalf("reading startstop.go: %v", err)
+	}
+	body := string(src)
+	if !strings.Contains(body, "dns.NoteNixOSOwnsResolver()") {
+		t.Error("start must call NoteNixOSOwnsResolver around ConfigureResolver")
+	}
+	if strings.Count(body, "dns.NoteNixOSOwnsResolver()") < strings.Count(body, "dns.ConfigureResolver()") {
+		t.Error("every ConfigureResolver call on the start path must be paired with NoteNixOSOwnsResolver")
+	}
+}
