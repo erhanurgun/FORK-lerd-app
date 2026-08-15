@@ -79,6 +79,8 @@ Lerd is built for PHP developers on Linux who want frictionless local developmen
 
 - 💻 **Terminal dashboard** (`lerd tui`). A btop-style TUI with live status, site detail pane, inline domain and version editing, shell drop-in, log tailing, and filter/sort, the same operations surface as the web UI, for tmux and SSH workflows.
 
+- 🪟 **Omarchy bar widget.** [lerd Glance](https://github.com/lerd-env/lerd-omarchy-glance) puts sites, services, workers and container CPU and memory in the Omarchy Quattro bar, quiet until something breaks, so you can see the state of the environment without opening a tab.
+
 - ✏️ **Edit config in the browser.** Per-site and global nginx, `php.ini` with the version's own file and the shared scope side by side, `.env` files, and database/service runtime tuning, each validated (`nginx -t` where it applies), with timestamped backups and one-click restore.
 
 - 📋 **Live logs** for PHP-FPM, Queue, Schedule and Reverb, per site, rendered in the colour the tool actually emits (artisan, composer, vite, pest) and with a button that hands any log to a real terminal so a long tail survives closing the tab.
