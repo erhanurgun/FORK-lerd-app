@@ -43,14 +43,13 @@ func TestCheckServerDatabase_readsAPHPSettingsFile(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "web/sites/default/settings.php"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	fw, ok := config.GetFrameworkForDir("drupalish", dir)
-	if !ok {
+	if _, ok := config.GetFrameworkForDir("drupalish", dir); !ok {
 		t.Fatal("the test definition did not resolve")
 	}
 
 	restore := stubDatabaseLister(func(string) ([]string, error) { return []string{"other"}, nil })
 	defer restore()
-	c, produced := checkServerDatabase(dir, fw)
+	c, produced := checkServerDatabase(dir)
 	if !produced || c.Status != StatusFail {
 		t.Fatalf("check = %+v (produced=%v), want a failure for the missing schema", c, produced)
 	}
@@ -58,7 +57,7 @@ func TestCheckServerDatabase_readsAPHPSettingsFile(t *testing.T) {
 	restore()
 	restore2 := stubDatabaseLister(func(string) ([]string, error) { return []string{"shop"}, nil })
 	defer restore2()
-	if c, _ := checkServerDatabase(dir, fw); c.Status != StatusOK {
+	if c, _ := checkServerDatabase(dir); c.Status != StatusOK {
 		t.Errorf("check = %+v, want ok once the database exists", c)
 	}
 }

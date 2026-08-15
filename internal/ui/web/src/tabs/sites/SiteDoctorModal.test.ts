@@ -77,6 +77,26 @@ describe('SiteDoctorModal', () => {
     expect(runSettled).toHaveBeenCalled();
   });
 
+  // A schema the engine does not hold is created through the doctor fix
+  // endpoint: no framework command can make it, and migrations fail without it.
+  it('creates a missing database through the fix endpoint', async () => {
+    loadDoctor.mockResolvedValue({
+      checks: [
+        { name: 'server_database', label: 'Database', status: 'fail', detail: 'Database "shop" on mysql does not exist.', fix: 'database_create' }
+      ],
+      failures: 1,
+      warnings: 0
+    });
+    loadCommands.mockResolvedValue([]);
+
+    render(SiteDoctorModal, { props: { open: true, site: site(), branch: '', onclose: () => {} } });
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Fix' }));
+
+    expect(executeDoctorFix).toHaveBeenCalledWith('acme.test', 'database_create', 'Create the missing database', '');
+    expect(launchCommand).not.toHaveBeenCalled();
+  });
+
   it('omits the Fix button when no matching command is available', async () => {
     loadDoctor.mockResolvedValue({
       checks: [{ name: 'storage_link', status: 'warn', detail: 'symlink missing', fix: 'storage:link' }],
