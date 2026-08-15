@@ -170,6 +170,14 @@ func RemoveService(name string, opts RemoveOptions, emit func(PhaseEvent)) error
 		return fmt.Errorf("remove service config: %w", err)
 	}
 
+	// The rendered preset files are derived from the definition just deleted, not
+	// user state like the data dir or the tuning override, so they leave with it.
+	// Kept, they hand the next install a stale rendering, and a chown:true mount
+	// among them is one podman has re-owned beyond this user's reach.
+	if err := os.RemoveAll(config.ServiceFilesDir(name)); err != nil {
+		return fmt.Errorf("remove rendered files for %s: %w", name, err)
+	}
+
 	// Prune the cached store preset once no installed service still references it,
 	// so a removed add-on reverts from "local" back to "store" and a reinstall
 	// fetches a fresh definition. Never touches embedded presets. Best-effort: a

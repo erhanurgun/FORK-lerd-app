@@ -138,7 +138,7 @@ lerd install
 
 Unlike on macOS, Podman is not pulled in as a Homebrew dependency: lerd integrates with the distribution's own Podman, so install that with your package manager first. Homebrew itself needs its usual Linux prerequisites, notably a C compiler such as gcc, even though the formula only unpacks a prebuilt binary. If Homebrew refuses the tap as untrusted, run `brew trust lerd-env/lerd` once.
 
-Update with `brew upgrade lerd`. Homebrew installs every version into its own directory, so an upgrade moves the binary; the next `lerd start` repoints the user services and the shims at the new location and says which ones it moved.
+Update with `brew upgrade lerd`. Homebrew installs every version into its own directory, so an upgrade moves the binary; the formula repoints the user services and the shims at the new location as part of the upgrade and restarts the daemons, so an unattended upgrade leaves nothing broken behind it. The rest of the environment is reapplied by the first lerd command you run at a terminal afterwards.
 
 ---
 

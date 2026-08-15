@@ -40,6 +40,17 @@ func DataDir() string {
 	return filepath.Join(xdgDataHome(), "lerd")
 }
 
+// CacheDir returns ~/.cache/lerd/ (or $XDG_CACHE_HOME/lerd/). Nothing in here
+// is state a user would miss, which is why it is written without ceremony and
+// why the uninstall takes it along with the rest.
+func CacheDir() string {
+	if v := os.Getenv("XDG_CACHE_HOME"); v != "" {
+		return filepath.Join(v, "lerd")
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".cache", "lerd")
+}
+
 // BinDir returns the lerd bin directory.
 func BinDir() string {
 	return filepath.Join(DataDir(), "bin")
@@ -383,7 +394,13 @@ func CustomServicesDir() string {
 // for the named custom service. Each file is bind-mounted into the container
 // at its declared target path.
 func ServiceFilesDir(name string) string {
-	return filepath.Join(DataDir(), "service-files", name)
+	return filepath.Join(ServiceFilesRoot(), name)
+}
+
+// ServiceFilesRoot returns the parent of every service's rendered FileMount
+// directory, so a sweep can tell which of them no service claims any more.
+func ServiceFilesRoot() string {
+	return filepath.Join(DataDir(), "service-files")
 }
 
 // ServiceTuningFile returns the host path for a service's user-editable runtime

@@ -84,7 +84,7 @@
   "dashboard_disk_cleaning": "Geri kazanılıyor…",
   "dashboard_disk_cleanup": "Temizle",
   "dashboard_disk_held": "Çalışan kapsayıcılar {size} daha tutuyor, yeniden başlatınca boşalır",
-  "dashboard_disk_modalBody": "Bu görüntüler yaklaşık {size} boşaltmak için kaldırılabilir:",
+  "dashboard_disk_modalBody": "Bu öğeler yaklaşık {size} boşaltmak için kaldırılabilir:",
   "dashboard_disk_modalConfirm": "Geri kazan",
   "dashboard_disk_modalDeepNote": "Bu derin temizlik, bu makinedeki diğer podman iş yüklerinden kalan etiketsiz sarkan görüntüleri de kaldırır. Adlandırılmış veri birimlerine asla dokunmaz.",
   "dashboard_disk_modalTitle": "Disk alanı geri kazan",

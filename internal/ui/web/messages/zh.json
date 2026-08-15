@@ -84,7 +84,7 @@
   "dashboard_disk_cleaning": "正在回收…",
   "dashboard_disk_cleanup": "清理",
   "dashboard_disk_held": "运行中的容器还占用 {size}，重启后释放",
-  "dashboard_disk_modalBody": "删除这些镜像可释放约 {size}：",
+  "dashboard_disk_modalBody": "删除这些项目可释放约 {size}：",
   "dashboard_disk_modalConfirm": "回收",
   "dashboard_disk_modalDeepNote": "此深度清理还会删除本机上其他 podman 工作负载遗留的未标记悬空镜像。它绝不会触及命名数据卷。",
   "dashboard_disk_modalTitle": "回收磁盘空间",

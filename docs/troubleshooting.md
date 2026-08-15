@@ -344,6 +344,20 @@ The exact command lerd suggests in `lerd doctor` and `lerd start` output is alre
 `lerd doctor` also checks for port conflicts as part of its full diagnostic, and adds a dedicated **[Stopped service ports]** section that flags installed services whose host port is already bound by another process. The same warning is shown next to the inactive status pill in the web UI, so you can spot the conflict without running anything: most often this is a system-installed service (Postgres, MySQL, Redis) listening on the default port. Stop the conflicting process and the warning clears on the next snapshot refresh.
 :::
 
+::: details Uninstall leaves the data directory behind
+Services write their files as a subuid inside the rootless user namespace, so MySQL, Postgres, MongoDB, Redis and RabbitMQ all leave trees under `~/.local/share/lerd` that your own user cannot delete. Both `lerd uninstall` and the installer's `--uninstall` remove them through `podman unshare`, which enters that namespace, so this normally happens without you noticing.
+
+If podman is already gone by then, the uninstall finishes and tells you what survived. Remove it yourself with:
+
+```bash
+podman unshare rm -rf ~/.local/share/lerd
+```
+
+If podman is no longer installed either, `sudo rm -rf ~/.local/share/lerd` is the last resort.
+
+An uninstall also takes `~/.cache/lerd`, the `lerd-tray` binary alongside `lerd`, both PATH entries lerd ever wrote into your shell rc, and the images it built itself (`lerd-php*-fpm`, `lerd-custom-*`, `lerd-dnsmasq`) when you accept the purge. Images it only pulled, your databases and your project files are never touched.
+:::
+
 ::: details Workers missing after reinstall
 If you ran `lerd uninstall` and then reinstalled, worker units and service quadlets are deleted during uninstall. Running `lerd start` after reinstalling automatically restores them from the `workers` list saved in each site's `.lerd.yaml`. If `.lerd.yaml` does not exist or was not committed, you will need to start workers again manually (`lerd queue:start`, etc.).
 

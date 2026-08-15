@@ -47,13 +47,8 @@ func SecureSite(site config.Site) error {
 		return fmt.Errorf("generating SSL vhost: %w", err)
 	}
 
-	sslConf := filepath.Join(config.NginxConfD(), site.PrimaryDomain()+"-ssl.conf")
-	mainConf := filepath.Join(config.NginxConfD(), site.PrimaryDomain()+".conf")
-	if err := os.Remove(mainConf); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("removing HTTP vhost: %w", err)
-	}
-	if err := os.Rename(sslConf, mainConf); err != nil {
-		return fmt.Errorf("renaming SSL config: %w", err)
+	if err := nginx.InstallSSLVhost(site.PrimaryDomain()); err != nil {
+		return fmt.Errorf("installing SSL vhost: %w", err)
 	}
 
 	// Regenerate SSL vhosts and sync APP_URL + VITE_REVERB_* for worktrees.

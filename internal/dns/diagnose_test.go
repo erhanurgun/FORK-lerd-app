@@ -28,6 +28,70 @@ func fakeProbes() probeFns {
 		vpnActive:          func() bool { return false },
 		lanExposedIP:       func() string { return "" },
 		hostDnsmasqPresent: func() bool { return true },
+		hostOwnsResolver:   func() bool { return false },
+	}
+}
+
+// nixosProbes is a NixOS host: no lerd hookup file, because lerd deliberately
+// writes none there, with .test still resolving through the ~test route the
+// user's configuration.nix installs.
+func nixosProbes() probeFns {
+	p := fakeProbes()
+	p.hostOwnsResolver = func() bool { return true }
+	p.resolverHookup = func() (string, bool, string) { return "", false, "" }
+	return p
+}
+
+func TestDiagnose_nixosHookupIsNotAFailure(t *testing.T) {
+	d := diagnose("test", nixosProbes())
+	if d.FirstFailure != -1 {
+		t.Errorf("FirstFailure = %d, want -1: a missing hookup is expected on NixOS", d.FirstFailure)
+	}
+	hookup := findStep(d, "resolver hookup")
+	if hookup == nil || hookup.Status != StepSkip {
+		t.Fatalf("resolver hookup = %+v, want a skip", hookup)
+	}
+	if !strings.Contains(hookup.Detail, "NixOS") {
+		t.Errorf("detail = %q, want it to name NixOS", hookup.Detail)
+	}
+	if findStep(d, "system DNS lookup") == nil {
+		t.Error("the chain must go on to the system lookup, which is the real proof on NixOS")
+	}
+}
+
+// The interface and lerd0 rungs probe files lerd no longer writes on NixOS, so
+// running them there reports a broken machine that resolves .test perfectly.
+func TestDiagnose_nixosSkipsLerdOwnedRungs(t *testing.T) {
+	p := nixosProbes()
+	p.interfaceRouting = func(string) (string, bool, bool, error) { return "eth0", false, false, nil }
+	p.dummyLinkRouting = func(string) (bool, bool) { return false, false }
+
+	d := diagnose("test", p)
+	if d.FirstFailure != -1 {
+		t.Errorf("FirstFailure = %d, want -1", d.FirstFailure)
+	}
+	if s := findStep(d, "interface routes"); s != nil {
+		t.Errorf("interface rung ran on NixOS: %+v", s)
+	}
+	if s := findStep(d, "offline ."); s != nil {
+		t.Errorf("offline route rung ran on NixOS: %+v", s)
+	}
+}
+
+// A NixOS user who never added the ~test route gets the failure at the system
+// lookup, where the hint has to point at configuration.nix rather than at the
+// `lerd install` that will now deliberately do nothing.
+func TestDiagnose_nixosLookupFailureHintsAtConfigurationNix(t *testing.T) {
+	p := nixosProbes()
+	p.systemLookup = func(string) ([]string, error) { return nil, errors.New("no such host") }
+
+	d := diagnose("test", p)
+	s := findStep(d, "system DNS lookup")
+	if s == nil || s.Status != StepFail {
+		t.Fatalf("system DNS lookup = %+v, want a failure", s)
+	}
+	if !strings.Contains(s.Hint, "configuration.nix") {
+		t.Errorf("hint = %q, want it to point at configuration.nix", s.Hint)
 	}
 }
 

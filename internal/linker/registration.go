@@ -21,6 +21,12 @@ func (p *Plan) MatchesRegistration(existing config.Site) bool {
 	if !p.Registered() {
 		return false
 	}
+	// An ignored entry is a parked site that was unlinked: it survives only to
+	// keep the watcher from re-adding it, and it is hidden from every list and
+	// serves nothing. Re-linking has all its work still to do.
+	if existing.Ignored {
+		return false
+	}
 	s := p.Site
 	return s.Name == existing.Name &&
 		config.SamePath(s.Path, existing.Path) &&

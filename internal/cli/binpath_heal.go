@@ -24,7 +24,31 @@ var daemonUnits = []string{"lerd-ui", "lerd-watcher", "lerd-tray", "lerd-autosta
 // surfaces as daemons failing with a bare exit status 203 and `php` reporting
 // no such file (#1432).
 func healLerdBinaryMove() (units, shims []string) {
-	return healDaemonUnits(), healShimBinaryPaths(config.LerdBinary())
+	return healLerdBinaryPaths(binaryGone)
+}
+
+// healLerdBinaryUpgrade is the same repair from the package-manager hook, which
+// runs from the install that has just landed. It also repoints an older keg of
+// the same formula while brew still has it on disk: the cleanup that deletes it
+// comes later, and by then there is nobody at the terminal to notice.
+func healLerdBinaryUpgrade() (units, shims []string) {
+	return healLerdBinaryPaths(binarySuperseded)
+}
+
+func healLerdBinaryPaths(superseded func(string) bool) (units, shims []string) {
+	return healDaemonUnits(superseded), healShimBinaryPaths(config.LerdBinary(), superseded)
+}
+
+// binaryGone is the rule the start repairs by: only a path that is not there is
+// rewritten, so starting a build from a checkout cannot take the login daemons
+// of a working install with it.
+func binaryGone(path string) bool {
+	_, err := os.Stat(path)
+	return err != nil
+}
+
+func binarySuperseded(path string) bool {
+	return config.SupersededBinary(path, config.LerdBinary())
 }
 
 // repairSummary is the line the start prints once a move has been repaired, so
@@ -40,18 +64,14 @@ func repairSummary(units, shims []string) string {
 	return "Repointed " + strings.Join(parts, " and ") + " at " + config.LerdBinary()
 }
 
-// healDaemonUnits rewrites daemon units whose ExecStart names a binary that is
-// no longer on disk, so they run the lerd that is installed now. A unit that
-// still resolves is left alone, which keeps a start from a checkout build from
-// quietly taking the login daemons with it.
-func healDaemonUnits() []string {
+// healDaemonUnits rewrites daemon units whose ExecStart names a binary the
+// caller's rule counts as superseded, so they run the lerd that is installed
+// now. A unit the rule leaves alone is left exactly as installed.
+func healDaemonUnits(superseded func(string) bool) []string {
 	var healed []string
 	for _, name := range daemonUnits {
 		installed := services.InstalledUnitBinary(name)
-		if installed == "" {
-			continue
-		}
-		if _, err := os.Stat(installed); err == nil {
+		if installed == "" || !superseded(installed) {
 			continue
 		}
 		content, err := lerdSystemd.GetUnit(name)
@@ -73,10 +93,10 @@ func healDaemonUnits() []string {
 }
 
 // healShimBinaryPaths repoints shims in lerd's bin dir that run a lerd binary
-// which is no longer on disk. Only a dead path is rewritten: a shim that still
-// resolves is left exactly as installed, so starting a build from a checkout
-// never takes the user's shims with it.
-func healShimBinaryPaths(lerdBin string) []string {
+// the caller's rule counts as superseded. Everything else is left exactly as
+// installed, so starting a build from a checkout never takes the user's shims
+// with it.
+func healShimBinaryPaths(lerdBin string, superseded func(string) bool) []string {
 	if info, err := os.Stat(lerdBin); err != nil || info.IsDir() {
 		return nil
 	}
@@ -95,7 +115,7 @@ func healShimBinaryPaths(lerdBin string) []string {
 		if err != nil || !strings.HasPrefix(string(data), "#!") {
 			continue
 		}
-		repaired, changed := healedShim(string(data), lerdBin)
+		repaired, changed := healedShim(string(data), lerdBin, superseded)
 		if !changed {
 			continue
 		}
@@ -108,16 +128,16 @@ func healShimBinaryPaths(lerdBin string) []string {
 	return healed
 }
 
-// healedShim swaps every absolute path to a lerd binary that is not there any
-// more for lerdBin. Anything else the shim runs (composer.phar, a version
-// manager, the tool itself) is left alone.
-func healedShim(content, lerdBin string) (string, bool) {
+// healedShim swaps every absolute path to a superseded lerd binary for lerdBin.
+// Anything else the shim runs (composer.phar, a version manager, the tool
+// itself) is left alone.
+func healedShim(content, lerdBin string, superseded func(string) bool) (string, bool) {
 	changed := false
 	for _, token := range shimTokens(content) {
 		if token == lerdBin || !filepath.IsAbs(token) || filepath.Base(token) != "lerd" {
 			continue
 		}
-		if _, err := os.Stat(token); err == nil {
+		if !superseded(token) {
 			continue
 		}
 		content = strings.ReplaceAll(content, token, lerdBin)
