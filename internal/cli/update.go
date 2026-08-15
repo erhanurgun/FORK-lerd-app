@@ -83,8 +83,9 @@ func runUpdate(currentVersion string, beta bool) error {
 	// Show what's new between the current and latest version.
 	feedback.Line("what's new")
 	changelog, _ := lerdUpdate.FetchChangelog(cur, lat)
-	if changelog != "" {
-		for _, line := range strings.Split(changelog, "\n") {
+	summary := lerdUpdate.SummarizeChangelog(changelog)
+	if summary != "" {
+		for _, line := range strings.Split(summary, "\n") {
 			fmt.Println("  " + line)
 		}
 	} else {
@@ -189,10 +190,14 @@ func runUpdate(currentVersion string, beta bool) error {
 
 	restartLerdUserServices()
 
-	if feedback.Interactive() && changelog != "" {
+	if feedback.Interactive() {
 		fmt.Printf("\nWhat's new in v%s (you had v%s):\n\n", lat, cur)
-		for _, line := range strings.Split(changelog, "\n") {
-			fmt.Println(line)
+		if summary != "" {
+			for _, line := range strings.Split(summary, "\n") {
+				fmt.Println(line)
+			}
+		} else {
+			fmt.Printf("  %s/tag/v%s\n", origin.ReleaseBaseURLs()[0], lat)
 		}
 	}
 
