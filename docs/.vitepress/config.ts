@@ -124,17 +124,30 @@ export default defineConfig({
     sidebar: {
       '/getting-started/': [
         {
-          text: 'Getting Started',
+          text: 'Start here',
           items: [
             { text: 'Requirements', link: '/getting-started/requirements' },
             { text: 'Installation', link: '/getting-started/installation' },
-            { text: 'Updating from before 1.26', link: '/getting-started/updating-from-pre-1.26' },
-            { text: 'Windows (WSL2, beta)', link: '/getting-started/wsl2' },
-            { text: 'NixOS', link: '/getting-started/nixos' },
             { text: 'Quick Start', link: '/getting-started/quick-start' },
+            { text: 'Updating from before 1.26', link: '/getting-started/updating-from-pre-1.26' },
+          ],
+        },
+        {
+          text: 'Platform guides',
+          items: [
+            { text: 'Omarchy', link: '/getting-started/omarchy' },
+            { text: 'NixOS', link: '/getting-started/nixos' },
+            { text: 'Windows (WSL2, beta)', link: '/getting-started/wsl2' },
+          ],
+        },
+        {
+          text: 'Coming from another tool',
+          items: [
             { text: 'Comparison', link: '/getting-started/comparison' },
             { text: 'Laravel Herd for Linux', link: '/getting-started/herd-linux' },
             { text: 'Laragon for Linux', link: '/getting-started/laragon-linux' },
+            { text: 'Laradock alternative', link: '/getting-started/laradock' },
+            { text: 'Laravel Sail alternative', link: '/getting-started/sail' },
           ],
         },
         {
