@@ -76,6 +76,19 @@ lerd rector process
 
 These run inside the project's PHP-FPM container with the project's working directory mounted, so configuration files (`pest.xml`, `pint.json`, `phpstan.neon`, etc.) are picked up automatically. Real lerd commands always take precedence; if you have a `vendor/bin/composer`, `lerd composer` still resolves to the built-in command.
 
+### Running a package you have not installed
+
+[cpx](https://cpx.dev) is to Composer what npx is to npm: it runs a command from any Composer package without adding it to the project. Require it once, and `lerd cpx` runs it inside the project's container:
+
+```bash
+lerd composer global require cpx/cpx
+lerd cpx phpstan/phpstan analyse
+```
+
+The package runs on the PHP version the site is registered on rather than whatever PHP is on the host, which is the whole reason to route it through lerd. Fetched packages are cached under `~/.cpx` on the host, so they survive a container restart and are shared with any cpx you run outside lerd.
+
+Requiring it globally also puts a `cpx` shim on your PATH, so bare `cpx` works too and runs through the same container. `lerd cpx` is the explicit form, and the one that tells you what to install when cpx is missing.
+
 The MCP integration exposes the same surface through two tools, `vendor_bins` (list available binaries) and `vendor_run` (execute one), so AI assistants can discover and run project tooling without per-project configuration.
 
 ### IDE quality tools
