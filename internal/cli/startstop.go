@@ -238,17 +238,7 @@ func CollectPortChecks(units []string) []PortCheck {
 
 	// Nginx ports (configurable).
 	if unitSet["lerd-nginx"] {
-		cfg, err := config.LoadGlobal()
-		httpPort := 80
-		httpsPort := 443
-		if err == nil {
-			if cfg.Nginx.HTTPPort > 0 {
-				httpPort = cfg.Nginx.HTTPPort
-			}
-			if cfg.Nginx.HTTPSPort > 0 {
-				httpsPort = cfg.Nginx.HTTPSPort
-			}
-		}
+		httpPort, httpsPort := config.NginxPorts()
 		checks = append(checks,
 			PortCheck{strconv.Itoa(httpPort), "nginx HTTP", "lerd-nginx"},
 			PortCheck{strconv.Itoa(httpsPort), "nginx HTTPS", "lerd-nginx"},
