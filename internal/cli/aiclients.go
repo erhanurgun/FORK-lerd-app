@@ -25,6 +25,7 @@ const (
 	fmtJSONMcpServers mcpFormat = iota // {"mcpServers": {...}} — Claude, Cursor, Junie, Windsurf, Gemini
 	fmtJSONServers                     // {"servers": {...}} with "type":"stdio" — VS Code / Copilot
 	fmtTOMLCodex                       // [mcp_servers.lerd] in ~/.codex/config.toml
+	fmtJSONOpenCode                    // {"mcp": {...}} with "type":"local" — OpenCode
 )
 
 // ctxFormat selects how a client's context/instructions doc is written.
@@ -163,6 +164,20 @@ var aiClients = []aiClient{
 		MCPFormat: fmtJSONMcpServers,
 		ServerKey: "mcpServers",
 	},
+	{
+		Name:       "opencode",
+		ProjectMCP: "opencode.json",
+		GlobalMCP:  filepath.Join(".config", "opencode", "opencode.json"),
+		MCPFormat:  fmtJSONOpenCode,
+		ServerKey:  "mcp",
+		Contexts: []ctxFile{{
+			// OpenCode reads AGENTS.md from the project root, which the codex
+			// entry already writes; only its own global copy is unclaimed.
+			Global:  filepath.Join(".config", "opencode", "AGENTS.md"),
+			Format:  ctxSentinel,
+			Content: func() string { return lerdReference },
+		}},
+	},
 }
 
 // lerdJSONEntry builds the JSON MCP server entry. The entry is identical at
@@ -170,9 +185,18 @@ var aiClients = []aiClient{
 // site from the directory the assistant is opened in (cwd) at runtime. Project
 // entries deliberately omit LERD_SITE_PATH so a committed .mcp.json / .ai config
 // stays portable across every teammate's checkout.
-func lerdJSONEntry(needsType bool) map[string]any {
+func lerdJSONEntry(c aiClient) map[string]any {
+	// OpenCode folds the whole invocation into one array, names the transport
+	// "local" rather than "stdio", and wants the entry enabled explicitly.
+	if c.MCPFormat == fmtJSONOpenCode {
+		return map[string]any{
+			"type":    "local",
+			"command": []string{"lerd", "mcp"},
+			"enabled": true,
+		}
+	}
 	entry := map[string]any{"command": "lerd", "args": []string{"mcp"}}
-	if needsType {
+	if c.NeedsType {
 		entry["type"] = "stdio"
 	}
 	return entry
@@ -187,7 +211,7 @@ func writeClientMCP(path string, c aiClient) error {
 	if c.MCPFormat == fmtTOMLCodex {
 		return mergeCodexTOML(path)
 	}
-	return mergeServerJSON(path, c.ServerKey, lerdJSONEntry(c.NeedsType))
+	return mergeServerJSON(path, c.ServerKey, lerdJSONEntry(c))
 }
 
 // writeClientContext writes a context/instructions doc per its format.

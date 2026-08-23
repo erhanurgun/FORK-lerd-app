@@ -2,7 +2,7 @@
 
 Lerd ships a [Model Context Protocol](https://modelcontextprotocol.io/) server, letting AI assistants manage your dev environment directly: run migrations, start services, toggle queue workers, and inspect logs without leaving the chat.
 
-Supported assistants: **Claude Code, Cursor, JetBrains Junie, Codex CLI, Gemini CLI, GitHub Copilot (VS Code), Google Antigravity, Windsurf**, and any other MCP-compatible tool.
+Supported assistants: **Claude Code, Cursor, JetBrains Junie, Codex CLI, Gemini CLI, GitHub Copilot (VS Code), Google Antigravity, OpenCode, Windsurf**, and any other MCP-compatible tool.
 
 ---
 
@@ -32,6 +32,7 @@ MCP server registration:
 | Codex CLI | `~/.codex/config.toml` |
 | GitHub Copilot (VS Code) | `~/.config/Code/User/mcp.json` |
 | Google Antigravity | `~/.gemini/config/mcp_config.json` |
+| OpenCode | `~/.config/opencode/opencode.json` |
 
 Context / instructions files:
 
@@ -42,6 +43,7 @@ Context / instructions files:
 | `~/.junie/guidelines.md` | JetBrains Junie user-scope guidelines (merged, not overwritten) |
 | `~/.gemini/GEMINI.md` | Gemini CLI user-scope context (merged) |
 | `~/.codex/AGENTS.md` | Codex CLI user-scope context (merged) |
+| `~/.config/opencode/AGENTS.md` | OpenCode user-scope context (merged) |
 
 All clients share a single canonical tool reference, so the guidance never drifts between assistants. When running globally, the server uses the **directory the assistant is opened in** as the site context: no further configuration is needed.
 
@@ -50,6 +52,8 @@ All clients share a single canonical tool reference, so the guidance never drift
 > **GitHub Copilot** uses VS Code's `servers` key (each entry typed `stdio`), which differs from the `mcpServers` key the other clients use. Its instructions file (`.github/copilot-instructions.md`) is project-scoped only.
 
 > **Google Antigravity** registers at `~/.gemini/config/mcp_config.json` (its project-scoped MCP config is not honoured, so it is global only). It auto-loads `GEMINI.md` and `AGENTS.md`, which the Gemini and Codex entries already write, so no separate Antigravity context file is needed.
+
+> **OpenCode** uses neither of the other two shapes: its entry sits under an `mcp` key, is typed `local` rather than `stdio`, and takes the whole invocation as a single `command` array. It reads `AGENTS.md` from the project root, which the Codex entry already writes, so only its own `~/.config/opencode/AGENTS.md` is written separately.
 
 > **During `lerd install`:** If Claude Code is detected, you'll be prompted to run this automatically.
 
@@ -78,7 +82,8 @@ This writes MCP config and context files for every supported client into the pro
 | `GEMINI.md` | Gemini CLI context (merged) |
 | `.vscode/mcp.json` | GitHub Copilot (VS Code) MCP config |
 | `.github/copilot-instructions.md` | GitHub Copilot instructions (merged) |
-| `AGENTS.md` | Codex CLI context (merged) |
+| `AGENTS.md` | Codex CLI context, also read by OpenCode (merged) |
+| `opencode.json` | OpenCode MCP config |
 
 The written entries carry no machine-specific data: the server resolves the site from the directory the assistant is opened in, exactly like a global registration. A committed `.mcp.json` therefore stays identical across every teammate's checkout, with no absolute path to drift or break on another machine. (An older lerd wrote a `LERD_SITE_PATH` absolute path into these files; it is still honoured if you set it by hand, but no longer written.)
 
