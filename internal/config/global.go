@@ -197,6 +197,11 @@ type GlobalConfig struct {
 		// every existing install — users who never touch the toggle
 		// see no change.
 		Disabled bool `yaml:"disabled,omitempty" mapstructure:"disabled"`
+		// OnDashboardOpen brings the stack up when the dashboard is opened on a
+		// stopped lerd, so a browser or the desktop app is enough to start it
+		// and no terminal is needed. Opt-in: the zero value leaves the start to
+		// the button on the dashboard's own "core services down" banner.
+		OnDashboardOpen bool `yaml:"on_dashboard_open,omitempty" mapstructure:"on_dashboard_open"`
 	} `yaml:"autostart,omitempty" mapstructure:"autostart"`
 	Shims struct {
 		// PathDisabled stops lerd from writing its bin dir (the php/composer/

@@ -299,6 +299,7 @@ func Start(currentVersion string) error {
 	mux.HandleFunc("/api/watcher/start", withCORS(handleWatcherStart))
 	mux.HandleFunc("/api/settings", withCORS(handleSettings))
 	mux.HandleFunc("/api/settings/autostart", withCORS(handleSettingsAutostart))
+	mux.HandleFunc("/api/settings/start-on-open", withCORS(handleSettingsStartOnOpen))
 	mux.HandleFunc("/api/settings/worker-mode", withCORS(handleSettingsWorkerMode))
 	mux.HandleFunc("/api/settings/idle-suspend", withCORS(publishAfter(handleSettingsIdleSuspend, eventbus.KindSites)))
 	mux.HandleFunc("/api/settings/dns-upstream", withCORS(handleSettingsDNSUpstream))
@@ -5202,6 +5203,7 @@ var allowedQueueUnit = regexp.MustCompile(`^[a-z0-9-]+$`)
 // SettingsResponse is the response for GET /api/settings.
 type SettingsResponse struct {
 	AutostartOnLogin          bool     `json:"autostart_on_login"`
+	StartOnDashboardOpen      bool     `json:"start_on_dashboard_open"`
 	WorkerExecMode            string   `json:"worker_exec_mode"`
 	WorkerModeApplies         bool     `json:"worker_mode_applies"` // true on macOS only
 	IdleSuspendEnabled        bool     `json:"idle_suspend_enabled"`
@@ -5217,6 +5219,7 @@ func handleSettings(w http.ResponseWriter, _ *http.Request) {
 	idleEnabled := false
 	idleMinutes := int(config.DefaultIdleSuspendTimeout / time.Minute)
 	dnsEnabled := true
+	startOnOpen := false
 	var dnsUpstream []string
 	if cfg != nil {
 		mode = cfg.WorkerExecMode()
@@ -5224,9 +5227,11 @@ func handleSettings(w http.ResponseWriter, _ *http.Request) {
 		idleMinutes = int(cfg.IdleSuspendTimeout() / time.Minute)
 		dnsEnabled = cfg.DNSManaged()
 		dnsUpstream = cfg.DNS.Upstream
+		startOnOpen = cfg.Autostart.OnDashboardOpen
 	}
 	writeJSON(w, SettingsResponse{
 		AutostartOnLogin:          lerdSystemd.IsAutostartEnabled(),
+		StartOnDashboardOpen:      startOnOpen,
 		WorkerExecMode:            mode,
 		WorkerModeApplies:         runtime.GOOS == "darwin",
 		IdleSuspendEnabled:        idleEnabled,
@@ -5411,16 +5416,56 @@ func handleSettingsAutostart(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"ok": true, "autostart_on_login": body.Enabled})
 }
 
+// handleSettingsStartOnOpen records whether opening the dashboard on a stopped
+// lerd should start it. Config only: the dashboard is what acts on the flag.
+func handleSettingsStartOnOpen(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+	cfg, err := config.LoadGlobal()
+	if err != nil || cfg == nil {
+		writeJSON(w, map[string]any{"ok": false, "error": "loading config"})
+		return
+	}
+	cfg.Autostart.OnDashboardOpen = body.Enabled
+	if err := config.SaveGlobal(cfg); err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true, "start_on_dashboard_open": body.Enabled})
+}
+
+// uiUnit is the unit this process runs as, and runStart is cli.RunStart
+// indirected so a test can assert the dashboard never asks the start to restart
+// it: that boots this process out of launchd half way through the sequence.
+const uiUnit = "lerd-ui"
+
+var runStart = cli.RunStart
+
+// handleLerdStart runs the same start as the CLI and streams its progress, so
+// the dashboard's start button reports each stage and unit rather than hanging
+// on a request that can take minutes.
+//
+// lerd-ui is skipped: starting a unit boots it out of launchd first, which is a
+// SIGTERM to this very process, so asking for our own unit would kill the start
+// half way and leave the dashboard down behind a 502.
 func handleLerdStart(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if err := cli.RunStart(); err != nil {
-		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
-		return
+	writeLine, _ := startNDJSONStream(w, r)
+	if err := runStart(func(evt cli.StartEvent) { writeLine(evt) }, uiUnit); err != nil {
+		writeLine(cli.StartEvent{Phase: "failed", Error: err.Error()})
 	}
-	writeJSON(w, map[string]any{"ok": true})
 }
 
 func handleLerdStop(w http.ResponseWriter, r *http.Request) {

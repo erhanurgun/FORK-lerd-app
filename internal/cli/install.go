@@ -13,6 +13,7 @@ import (
 
 	"github.com/geodro/lerd/internal/certs"
 	"github.com/geodro/lerd/internal/config"
+	"github.com/geodro/lerd/internal/desktopapp"
 	"github.com/geodro/lerd/internal/dns"
 	"github.com/geodro/lerd/internal/feedback"
 	"github.com/geodro/lerd/internal/lifecycle"
@@ -953,6 +954,16 @@ func runInstall(cmd *cobra.Command, _ []string) error {
 		}
 	}
 	ok()
+
+	// macOS only: the clickable launcher in ~/Applications, so starting lerd and
+	// opening the dashboard needs neither a terminal nor the menu bar.
+	if desktopapp.Path() != "" {
+		step("Writing the " + desktopapp.Name + " launcher")
+		if _, err := desktopapp.Install(); err != nil {
+			fmt.Printf("    WARN: %v\n", err)
+		}
+		ok()
+	}
 
 	// Restore worker / queue / schedule unit FILES from .lerd.yaml so the
 	// systemd state is repaired regardless of the autostart setting — the
