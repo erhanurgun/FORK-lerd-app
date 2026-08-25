@@ -261,7 +261,15 @@ func TestPestBrowserShim_WrapperPicksModeAtRuntime(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	gen := exec.Command("sh", "-c", pestBrowserShim)
+	// bash, not sh: the rewrite loop reads NUL-delimited paths with `read -d`,
+	// which the container's busybox ash supports and a host /bin/sh may not.
+	// Under a shell that lacks it the loop silently rewrites nothing while the
+	// count guard still passes, so the wrapper check below is what catches it.
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash not available to run the generator")
+	}
+	gen := exec.Command(bash, "-c", pestBrowserShim)
 	gen.Env = append(os.Environ(), "PLAYWRIGHT_BROWSERS_PATH="+cache)
 	if out, err := gen.CombinedOutput(); err != nil {
 		t.Fatalf("generating the shim failed: %v\n%s", err, out)
@@ -272,6 +280,9 @@ func TestPestBrowserShim_WrapperPicksModeAtRuntime(t *testing.T) {
 	wrapper, err := os.ReadFile(browser)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !strings.HasPrefix(string(wrapper), "#!/bin/sh") {
+		t.Fatalf("the browser binary was not rewritten to a wrapper:\n%s", wrapper)
 	}
 	stub := filepath.Join(cache, "fake-chromium")
 	if err := os.WriteFile(stub, []byte("#!/bin/sh\necho \"chromium $*\"\n"), 0o755); err != nil {
