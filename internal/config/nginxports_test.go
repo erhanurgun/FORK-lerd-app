@@ -3,7 +3,11 @@ package config
 import "testing"
 
 func TestNginxPorts(t *testing.T) {
+	// HOME alone does not move the config dir where XDG_CONFIG_HOME is already
+	// set, which is how CI runs, and the write lands on the real config.
 	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
 	t.Run("an install with no config gets the defaults", func(t *testing.T) {
 		http, https := NginxPorts()
