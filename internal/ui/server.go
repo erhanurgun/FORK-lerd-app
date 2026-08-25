@@ -547,6 +547,12 @@ func terminalDirCandidates(dir string) []terminalCmd {
 		candidates = append(candidates, terminalCmd{t, []string{}})
 	}
 
+	// A terminal the user picked in System Settings outranks one that merely
+	// happens to be on PATH, so it goes ahead of the list rather than after it.
+	if bundle := macDefaultTerminal(); bundle != "" {
+		candidates = append(candidates, terminalCmd{"open", []string{"-b", bundle, dir}})
+	}
+
 	candidates = append(candidates,
 		terminalCmd{"kitty", []string{"--directory", dir}},
 		terminalCmd{"foot", []string{"--working-directory", dir}},
@@ -568,6 +574,11 @@ func terminalDirCandidates(dir string) []terminalCmd {
 		// `open -a Terminal dir` opens a new window at dir without echoing any
 		// command — cleaner than `do script "cd ... && exec $SHELL"` which types
 		// the command visibly into the shell. iTerm2 supports the same via open.
+		// Warp registers public.folder, so it takes the directory the same way
+		// the other two do and needs none of its warp:// URI scheme.
+		if _, err := os.Stat("/Applications/Warp.app"); err == nil {
+			candidates = append(candidates, terminalCmd{"open", []string{"-a", "Warp", dir}})
+		}
 		if _, err := os.Stat("/Applications/iTerm.app"); err == nil {
 			candidates = append(candidates, terminalCmd{"open", []string{"-a", "iTerm", dir}})
 		}
