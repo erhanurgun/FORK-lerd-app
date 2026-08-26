@@ -365,9 +365,19 @@ func runDoctorInto(w io.Writer, useColor bool) (DoctorReport, error) {
 	fmt.Fprintln(w, "\n[DNS]")
 
 	dnsManaged := cfg == nil || cfg.DNS.Enabled
-	tld := "test"
-	if cfg != nil && cfg.DNS.TLD != "" {
-		tld = cfg.DNS.TLD
+
+	tld := dns.ConfiguredTLD()
+	rawTLD := ""
+	if cfg != nil {
+		rawTLD = cfg.DNS.TLD
+	}
+	tldRejected := rawTLD != "" && !dns.ValidTLD(rawTLD)
+
+	if tldRejected {
+		// Say so once here rather than in every rung below.
+		fail(fmt.Sprintf("DNS TLD (.%s)", rawTLD),
+			fmt.Sprintf("not a usable DNS suffix; serving .%s instead", tld),
+			"set dns.tld in "+cfgFile+" to dot-separated DNS labels (letters, digits, hyphens), e.g. test or internal.example.com")
 	}
 
 	if !dnsManaged {
@@ -375,7 +385,9 @@ func runDoctorInto(w io.Writer, useColor bool) (DoctorReport, error) {
 	} else if tld == "" {
 		fail("DNS TLD configured", "empty TLD in config", "set dns.tld in "+cfgFile)
 	} else {
-		ok(fmt.Sprintf("DNS TLD (.%s)", tld))
+		if !tldRejected {
+			ok(fmt.Sprintf("DNS TLD (.%s)", tld))
+		}
 		// Layered diagnostic: walk the chain (container, config, port,
 		// dig at 5300, resolver hookup, interface routing, system
 		// lookup) so a one-line failure points at exactly which rung
