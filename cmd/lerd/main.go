@@ -345,12 +345,13 @@ func newDNSCheckCmd() *cobra.Command {
 				return err
 			}
 
+			tld := dns.ConfiguredTLD()
 			if !cfg.DNS.Enabled {
-				fmt.Printf("DNS managed externally: lerd-dns is disabled, sites use *.%s.\n", cfg.DNS.TLD)
+				fmt.Printf("DNS managed externally: lerd-dns is disabled, sites use *.%s.\n", tld)
 				return nil
 			}
 
-			diag := dns.Diagnose(cfg.DNS.TLD)
+			diag := dns.Diagnose(tld)
 			printDNSDiagnostic(os.Stdout, diag)
 			if diag.FirstFailure >= 0 {
 				os.Exit(1)

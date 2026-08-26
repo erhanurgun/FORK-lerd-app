@@ -690,10 +690,9 @@ func handleStatus(w http.ResponseWriter, _ *http.Request) {
 
 func buildStatus() StatusResponse {
 	cfg, _ := config.LoadGlobal()
-	tld := "test"
+	tld := dns.ConfiguredTLD()
 	dnsEnabled := true
 	if cfg != nil {
-		tld = cfg.DNS.TLD
 		dnsEnabled = cfg.DNS.Enabled
 	}
 
