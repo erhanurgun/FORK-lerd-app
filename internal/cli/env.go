@@ -529,6 +529,13 @@ var serviceDetectors = map[string]func(map[string]string) bool{
 	},
 }
 
+// appWritesEnvFile reports whether the env file lerd would write is the one the
+// application writes itself during its own install, which lerd must never create
+// empty on its behalf.
+func appWritesEnvFile(fw *config.Framework, envRelPath string) bool {
+	return fw != nil && fw.Env.AppFile != "" && envRelPath == fw.Env.AppFile
+}
+
 func runEnv(_ *cobra.Command, _ []string) error {
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -580,6 +587,14 @@ func runEnv(_ *cobra.Command, _ []string) error {
 			if err := copyEnvFile(examplePath, envPath); err != nil {
 				return fmt.Errorf("copying %s: %w", exampleRelPath, err)
 			}
+		} else if appWritesEnvFile(fw, envRelPath) {
+			// The application writes this file itself during its own install, and
+			// an empty one is not a blank slate to it but a claim that it is
+			// already configured: TYPO3 serves its installer while the file is
+			// absent and fails outright once an empty one exists (#1563). Leave it
+			// to the installer and say so, rather than creating the breakage.
+			envInfo("Skipping %s — the application writes it during its own install.\n", envRelPath)
+			return nil
 		} else if len(fw.Env.Services) > 0 {
 			// No env or example file, but framework defines services — create an
 			// empty env file so service detection can populate it. A PHP format
