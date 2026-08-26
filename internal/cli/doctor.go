@@ -437,6 +437,17 @@ func runDoctorInto(w io.Writer, useColor bool) (DoctorReport, error) {
 		}
 	}
 
+	// Xdebug connects back to the IDE on this port, so a lerd container that
+	// publishes it answers the debugger itself and the IDE never sees a session.
+	// The connection succeeds, which is why nothing else reports it (#1555).
+	if owner, taken := podman.PublishedPortOwner(config.XdebugClientPort); taken {
+		warn(fmt.Sprintf("xdebug port %d", config.XdebugClientPort),
+			fmt.Sprintf("published by %s, so breakpoints never reach your IDE (move it: lerd service port %s %d --container %d)",
+				owner.Unit, owner.Service, config.XdebugClientPort+1, owner.ContainerPort))
+	} else {
+		ok(fmt.Sprintf("port %d (free for xdebug)", config.XdebugClientPort))
+	}
+
 	// ── Stopped service ports ────────────────────────────────────────────────
 	// Surfaces the same diagnosis the UI shows on inactive service cards: if
 	// a service unit is installed but stopped and its host port is already
