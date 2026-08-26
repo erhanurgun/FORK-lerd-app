@@ -183,6 +183,12 @@ Xdebug is configured with:
 
 Set your IDE to listen on port `9003`. In VS Code, the default PHP Debug configuration works without changes. In PhpStorm, set **Settings > PHP > Debug > Debug port** to `9003`.
 
+Port `9003` is reserved: no lerd service is ever published on it, because a container that held it would answer Xdebug's connect-back itself and your IDE would simply never see a session. An install that already shifted a service onto it before this was reserved keeps it, so `lerd doctor` names the service and the command that moves it:
+
+```bash
+lerd service port rustfs 9004 --container 9001
+```
+
 `host.containers.internal` is resolved via a real reachability probe: when lerd writes the shared hosts file it tries each candidate IP (netavark's `host.containers.internal` entry, the host's primary LAN IP, slirp4netns's `10.0.2.2`) by opening a TCP connection to lerd-ui on port 7073 from inside lerd-nginx, and writes the first one that succeeds. If none succeed, `lerd doctor` reports the failure so you get a real diagnosis instead of Xdebug silently timing out with `Time-out connecting to debugging client`.
 :::
 
