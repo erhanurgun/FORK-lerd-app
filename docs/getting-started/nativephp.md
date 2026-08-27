@@ -103,7 +103,7 @@ The iOS one catches people out. Xcode ships an SDK but not necessarily the match
 xcodebuild -downloadPlatform iOS
 ```
 
-It is a multi-gigabyte download, which is why lerd reports the gap rather than filling it.
+It is a multi-gigabyte download, which is why lerd reports the gap rather than filling it. Apple's asset service sometimes drops the transfer partway with `Download was cancelled`; re-running the command picks it back up.
 
 ---
 
