@@ -341,7 +341,7 @@ func indentBlock(s, indent string) string {
 // resolveRequestTimeout returns the effective request timeout in seconds for
 // the site at sitePath: project .lerd.yaml wins, then global config, then 60s.
 // An empty sitePath skips the project lookup (site-less proxy vhosts).
-func resolveRequestTimeout(sitePath string) int {
+func resolveRequestTimeout(sitePath, phpVersion string) int {
 	if sitePath != "" {
 		if pc, err := config.LoadProjectConfig(sitePath); err == nil && pc.RequestTimeout > 0 {
 			return pc.RequestTimeout
@@ -351,7 +351,30 @@ func resolveRequestTimeout(sitePath string) int {
 	if err != nil {
 		return config.DefaultRequestTimeout
 	}
-	return gc.RequestTimeoutSeconds()
+	if gc.Nginx.RequestTimeout > 0 {
+		return gc.Nginx.RequestTimeout
+	}
+	if xdebugDebugs(gc.GetXdebugMode(phpVersion)) {
+		return xdebugDebugRequestTimeout
+	}
+	return config.DefaultRequestTimeout
+}
+
+// xdebugDebugRequestTimeout is what a site gets while its PHP version runs
+// Xdebug in debug mode. A request stopped at a breakpoint sends nginx nothing,
+// so the 60s default answers 504 over a session that is still perfectly alive,
+// and the gateway error is what the user sees instead of their breakpoint.
+const xdebugDebugRequestTimeout = 3600
+
+// xdebugDebugs reports whether an xdebug.mode value turns on step debugging.
+// The value is a comma-separated set, so "develop,debug" debugs as well.
+func xdebugDebugs(mode string) bool {
+	for _, m := range strings.Split(mode, ",") {
+		if strings.TrimSpace(m) == "debug" {
+			return true
+		}
+	}
+	return false
 }
 
 // phpShort converts "8.4" → "84".
@@ -431,7 +454,7 @@ func renderFPMVhost(site config.Site, phpVersion string, ssl bool) ([]byte, erro
 		DevServerPort:   devPort,
 		LerdSite:        site.Name,
 		Profiling:       profilerEnabled(),
-		RequestTimeout:  resolveRequestTimeout(site.Path),
+		RequestTimeout:  resolveRequestTimeout(site.Path, phpVersion),
 		FrameworkNginx:  resolveFrameworkNginx(site, publicDir, fpmContainer),
 	}
 	if ssl {
@@ -498,7 +521,7 @@ func renderContainerVhost(site config.Site, container string, port int, backendS
 		CustomContainer: container,
 		CustomPort:      port,
 		BackendSSL:      backendSSL,
-		RequestTimeout:  resolveRequestTimeout(site.Path),
+		RequestTimeout:  resolveRequestTimeout(site.Path, site.PHPVersion),
 	}
 	if ssl {
 		data.CertDomain = site.PrimaryDomain()
@@ -599,7 +622,7 @@ func renderHostProxyVhost(site config.Site, tmplName string, ssl bool) ([]byte, 
 		UpstreamHost:   hostProxyUpstream(),
 		UpstreamPort:   site.HostPort,
 		BackendSSL:     site.HostSSL,
-		RequestTimeout: resolveRequestTimeout(site.Path),
+		RequestTimeout: resolveRequestTimeout(site.Path, ""),
 	}
 	if ssl {
 		data.CertDomain = site.PrimaryDomain()
@@ -673,7 +696,7 @@ func GenerateWorktreeVhost(domain, path, phpVersion, siteName, branch string) er
 		DevServerBase:   devBase,
 		DevServerPort:   devPort,
 		Profiling:       profilerEnabled(),
-		RequestTimeout:  resolveRequestTimeout(path),
+		RequestTimeout:  resolveRequestTimeout(path, phpVersion),
 		FrameworkNginx:  frameworkNginx,
 	}
 
@@ -720,7 +743,7 @@ func GenerateWorktreeSSLVhost(domain, path, phpVersion, parentDomain, siteName, 
 		DevServerBase:   devBase,
 		DevServerPort:   devPort,
 		Profiling:       profilerEnabled(),
-		RequestTimeout:  resolveRequestTimeout(path),
+		RequestTimeout:  resolveRequestTimeout(path, phpVersion),
 		FrameworkNginx:  frameworkNginx,
 	}
 
@@ -749,7 +772,7 @@ func GenerateWorktreeHostProxyVhostFor(domain, path, parentDomain string, upstre
 		UpstreamHost:   hostProxyUpstream(),
 		UpstreamPort:   upstreamPort,
 		BackendSSL:     backendSSL,
-		RequestTimeout: resolveRequestTimeout(path),
+		RequestTimeout: resolveRequestTimeout(path, ""),
 	}
 	tmplName := "vhost-hostproxy.conf.tmpl"
 	if secured {
@@ -950,7 +973,7 @@ func GenerateProxyVhost(domain, upstreamHost string, upstreamPort int) error {
 		Domain:         domain,
 		UpstreamHost:   upstreamHost,
 		UpstreamPort:   upstreamPort,
-		RequestTimeout: resolveRequestTimeout(""),
+		RequestTimeout: resolveRequestTimeout("", ""),
 	}
 
 	rendered, err := renderProxyVhost(tmpl, data)
