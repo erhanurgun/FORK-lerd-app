@@ -310,6 +310,8 @@ doctor:
       fix: storage:link               # names one of the framework's own commands
       detail: The public/storage link is missing.   # overrides the generated message (optional)
       severity: warn                  # warn | fail (optional, per-type default)
+      check:                          # drop the check unless the rule matches (optional)
+        composer: nativephp/electron
 
 # Extra nginx config spliced into the site's server block (optional)
 nginx:
@@ -411,7 +413,9 @@ The `doctor:` section adds framework-specific health checks to the ones every si
 
 The section also takes a `migrate_command`, naming whichever of the framework's own `commands:` applies the schema. The universal database checks offer it as their fix, so an empty or missing database is reported with the button that fills it. A server database that does not exist at all is the exception: migrations have nowhere to run until the schema is there, so that finding carries a button that creates it and the migrate button returns on the re-check. Every framework spells it differently (Laravel `migrate`, Symfony `doctrine:migrations:migrate`, Drupal `updb`), so nothing but the definition can say; a framework that declares none, or names a command it does not have, gets a finding with no fix rather than a button that maps to nothing.
 
-Each check carries a `name` (a stable id), a `type` that selects the evaluator, an optional `label` for display, an optional `detail` that overrides the generated message, an optional `severity`, and an optional `fix`.
+Each check carries a `name` (a stable id), a `type` that selects the evaluator, an optional `label` for display, an optional `detail` that overrides the generated message, an optional `severity`, an optional `fix`, and an optional `check`.
+
+`check` takes the same rule shape as a worker's or a command's, so `composer: <package>`, `file: <path>`, or `missing_file: <path>`. A check whose rule fails is dropped rather than run, which is what a check about an optional package wants: NativePHP's desktop runtime has nothing to say on a Laravel project that never installed it, and a permanently green row is clutter.
 
 A top-level `cache_command` names the console subcommand that clears the framework's compiled caches, `cr` for Drupal, `cache:clear` for Symfony, `optimize:clear` for Laravel. lerd runs it through `console` after rewriting a project's database connection: a framework caches the container definitions built from that configuration, and one built against the old database survives the swap and answers every request with an error about something it can no longer find. It runs only when a database key's value actually changed, and only when the project's dependencies are installed.
 
