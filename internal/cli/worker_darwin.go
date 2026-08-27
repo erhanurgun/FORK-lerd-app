@@ -94,6 +94,7 @@ func writeWorkerHostUnit(unitName, sitePath, command, restart string) (bool, err
 		return false, fmt.Errorf("creating worker run dir: %w", err)
 	}
 	scriptPath := filepath.Join(workersDir, unitName+".sh")
+	pidFile := filepath.Join(workersDir, unitName+".pid")
 
 	// bun projects rewrite npm/npx/node to bun and run it directly (no manager),
 	// with ~/.bun/bin added to PATH; Node projects resolve a version and run
@@ -121,9 +122,17 @@ func writeWorkerHostUnit(unitName, sitePath, command, restart string) (bool, err
 		}
 	}
 
-	script := buildDarwinHostWorkerGuardScript(execPrefix, config.BinDir(), sitePath, command, extraBinDirs)
+	script := buildDarwinHostWorkerGuardScript(execPrefix, config.BinDir(), sitePath, command, extraBinDirs, pidFile)
 	if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
 		return false, fmt.Errorf("writing host worker guard script: %w", err)
+	}
+
+	// Persist the reap command so stop can take down the rest of the process
+	// group: launchd signals the job leader alone, and a worker that launches a
+	// desktop app leaves it running, reparented to init.
+	reapPath := filepath.Join(workersDir, unitName+".reap")
+	if err := os.WriteFile(reapPath, []byte(buildHostWorkerReapCommand(pidFile)), 0644); err != nil {
+		feedback.Warn("worker %s: writing reap sidecar: %v (stop may leave an orphan)", unitName, err)
 	}
 
 	unit := buildDarwinHostWorkerService(scriptPath, restart)
