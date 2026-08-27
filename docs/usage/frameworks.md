@@ -211,6 +211,28 @@ Default workers:
 | `schedule` | Task Scheduler | `php artisan schedule:work` | - | - |
 | `reverb` | Reverb WebSocket | `php artisan reverb:start` | `laravel/reverb` | proxy at `/app`, auto-assigned port |
 | `horizon` | Horizon | `php artisan horizon` | `laravel/horizon` | conflicts with `queue`; auto-reload via `horizon:listen` (see [queue workers](queue-workers.md)) |
+| `native` | NativePHP | `php artisan native:serve` | `nativephp/electron` | runs on the host, see [NativePHP](#nativephp) |
+| `jump` | NativePHP Jump | `php artisan native:jump` | `nativephp/mobile` | runs on the host, see [NativePHP](#nativephp) |
+
+### NativePHP
+
+[NativePHP](https://nativephp.com) turns a Laravel app into a native application, and it is two products with two toolchains. `nativephp/electron` builds a desktop app; `nativephp/mobile` builds iOS and Android apps. Both register the same `native:*` artisan commands, so a project picks one. lerd links and serves either like any other Laravel site, at its own `.test` domain, and adds workers, commands and health checks gated on whichever package is installed, so a plain Laravel project sees none of it.
+
+The full end-to-end is in the [NativePHP walkthrough](../getting-started/nativephp.md); what follows is what the definition actually declares.
+
+**Where the artisan process runs.** Everything native shells out to tools that exist only on the host: Electron needs a display, `native:run` needs Gradle and adb or xcodebuild and simctl, and the PHP-FPM container has none of them. lerd's commands and `host: true` workers already run on the host, but `php` there is lerd's shim, which routes straight back into the container. So the artisan process itself runs through a real host PHP, the per-platform binary NativePHP ships in `nativephp/php-bin`. The desktop package already depends on it; the mobile `native:install` adds it as a dev dependency and unpacks the build matching the site's PHP version, which is the version `composer.lock` was resolved against.
+
+**Desktop** gets a `native` worker running `native:serve`, and `native:install` and `native:build` commands. Starting and stopping the worker opens and closes the Electron window, the same as any other worker.
+
+**Mobile** gets a `jump` worker running `native:jump`, the development server that puts a build on an address a phone can reach, and `native:install`, `native:run` and `native:open` as commands. Those three finish rather than staying up, and `native:run` and `native:open` produce terminal output because they ask which platform and which device.
+
+**Doctor checks.** Each product gets one for the runtime lerd can install, carrying `native:install` as its fix, since a fresh clone always arrives without it. Mobile adds two more for the toolchain lerd cannot install: one when neither Xcode nor the Android SDK is present, and one when the Android SDK is there but the JDK Gradle would pick is older than 17. Both report and offer no button, because installing either is a multi-gigabyte vendor download.
+
+**The site keeps its vhost.** On desktop the app runs its own PHP server on its own port and the `.test` domain is a convenience. On mobile it is more: `native:run` takes a `--start-url` and `native:jump` exists precisely to serve the app to a device over the network, which is the problem [LAN sharing](lan-sharing.md) already solves.
+
+`native:install` and `native:build` appear twice in the definition, once per product, with mutually exclusive `composer` gates, so `lerd run native:install` means the right thing whichever package you have and only one is ever resolved.
+
+Plugins, code signing and store uploads are not covered.
 
 ### Adding workers to Laravel
 
