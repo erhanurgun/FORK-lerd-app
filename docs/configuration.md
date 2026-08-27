@@ -243,7 +243,7 @@ custom_workers:
 
 Worker definitions stay in `custom_workers` permanently. The `workers` field (a separate list of names) tracks which are currently active and is synced automatically by start/stop commands.
 
-Framework yamls (under `lerd-frameworks/frameworks/<framework>/<version>.yaml`) declare workers under a sibling `workers:` block with the same shape, so `host`, `per_worktree`, and `replaces_build` apply there too. The shipped Laravel 11 / 12 / 13 yamls use this for `vite` (`host: true`, `per_worktree: true`, `replaces_build: true`), and any custom framework can do the same to teach lerd about per-branch dev servers.
+Framework yamls (under `lerd-frameworks/frameworks/<framework>/<version>.yaml`) declare workers under a sibling `workers:` block with the same shape, so `host`, `per_worktree`, and `replaces_build` apply there too. Every framework yaml that builds assets with vite (Laravel 9+, Statamic 4+, Symfony 5+, CakePHP 4+, Tempest) uses this for `vite` (`host: true`, `per_worktree: true`, `replaces_build: true`), gated on `node_modules/vite` so the worker only appears once the project actually installs a dev server, and any custom framework can do the same to teach lerd about per-branch dev servers.
 
 ### Inline custom service definitions
 
