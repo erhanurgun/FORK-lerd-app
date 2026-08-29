@@ -121,6 +121,18 @@ func requiredServiceFor(sitePath string, w config.FrameworkWorker) string {
 	return w.RequiresService.Name
 }
 
+// requiredServiceUnit is the systemd unit of the service a worker declares it
+// needs, so the worker's own unit can be ordered after it. Without the ordering
+// a boot starts the two together and the worker crash-loops until the service it
+// is talking to comes up.
+func requiredServiceUnit(sitePath string, w config.FrameworkWorker) string {
+	name := requiredServiceFor(sitePath, w)
+	if name == "" {
+		return ""
+	}
+	return "lerd-" + name
+}
+
 // hostWorkerNotReadyMsg returns an actionable message for a host worker (vite et
 // al) that can't start because its dependency check fails. On a node project the
 // cause is almost always JS deps not yet installed on the host, so it names the

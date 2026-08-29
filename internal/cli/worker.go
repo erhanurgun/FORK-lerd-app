@@ -335,7 +335,7 @@ func WorkerStartForSite(siteName, sitePath, phpVersion, workerName string, w con
 		label = workerName
 	}
 
-	changed, err := writeWorkerUnitFile(unitName, label, unitSiteName, sitePath, phpVersion, command, restart, w.Schedule, fpmUnit, w.Host)
+	changed, err := writeWorkerUnitFile(unitName, label, unitSiteName, sitePath, phpVersion, command, restart, w.Schedule, fpmUnit, requiredServiceUnit(sitePath, w), w.Host)
 	if err != nil {
 		return fmt.Errorf("writing worker unit: %w", err)
 	}
