@@ -4,7 +4,6 @@ package cli
 
 import (
 	"io"
-	"strings"
 
 	"github.com/geodro/lerd/internal/dns"
 	"github.com/geodro/lerd/internal/feedback"
@@ -23,13 +22,9 @@ func writeDNSUnit(_ io.Writer) error {
 
 // ensureDNSImageForStart ensures the lerd-dnsmasq container image exists on Linux.
 func ensureDNSImageForStart() {
-	// Build the dnsmasq image if it doesn't exist. Ignore errors — the image
-	// will be pulled/built during RunParallel if missing.
-	containerfile := "FROM docker.io/library/alpine:latest\nRUN apk add --no-cache dnsmasq\n"
-	if !podman.ImageExists("lerd-dnsmasq:local") {
-		cmd := podman.Cmd("build", "-t", "lerd-dnsmasq:local", "-")
-		cmd.Stdin = strings.NewReader(containerfile)
-		cmd.Run() //nolint:errcheck
+	// Ignore errors — the image will be built again during RunParallel if missing.
+	if !podman.ImageExists(podman.DNSMasqImage) {
+		_ = podman.BuildDNSMasqImage(io.Discard, dns.ReadUpstreamDNS())
 	}
 }
 
@@ -48,12 +43,7 @@ func pullDNSImages() []BuildJob {
 		{
 			Label: "Building dnsmasq image",
 			Run: func(w io.Writer) error {
-				containerfile := "FROM docker.io/library/alpine:latest\nRUN apk add --no-cache dnsmasq\n"
-				cmd := podman.Cmd("build", "-t", "lerd-dnsmasq:local", "-")
-				cmd.Stdin = strings.NewReader(containerfile)
-				cmd.Stdout = w
-				cmd.Stderr = w
-				return cmd.Run()
+				return podman.BuildDNSMasqImage(w, dns.ReadUpstreamDNS())
 			},
 		},
 	}
