@@ -6,6 +6,7 @@
 package origin
 
 import (
+	"net/url"
 	"os"
 	"strings"
 )
@@ -24,6 +25,17 @@ func StoreBaseURLs() []string {
 		return list
 	}
 	return []string{"https://raw.githubusercontent.com/" + frameworksRepo + "/main/frameworks"}
+}
+
+// StoreHost returns the hostname of the framework store, or "" when the base
+// carries none. Probes that need a name the install actually fetches take it
+// from here so a self-hosted store is tested rather than one lerd never calls.
+func StoreHost() string {
+	u, err := url.Parse(StoreBaseURLs()[0])
+	if err != nil {
+		return ""
+	}
+	return u.Hostname()
 }
 
 // ServiceStoreBaseURLs returns the service-preset-store base, nested under a

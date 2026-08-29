@@ -75,16 +75,11 @@ func ensureImages() {
 
 		img := image
 		switch {
-		case img == "lerd-dnsmasq:local":
+		case img == podman.DNSMasqImage:
 			jobs = append(jobs, BuildJob{
 				Label: "Building dnsmasq",
 				Run: func(w io.Writer) error {
-					containerfile := "FROM docker.io/library/alpine:latest\nRUN apk add --no-cache dnsmasq\n"
-					cmd := podman.Cmd("build", "-t", "lerd-dnsmasq:local", "-")
-					cmd.Stdin = strings.NewReader(containerfile)
-					cmd.Stdout = w
-					cmd.Stderr = w
-					return cmd.Run()
+					return podman.BuildDNSMasqImage(w, dns.ReadUpstreamDNS())
 				},
 			})
 
