@@ -118,11 +118,13 @@ It is a multi-gigabyte download, which is why lerd reports the gap rather than f
 
 Linking a NativePHP project still gives you `myapp.test`, and on mobile that is more than a convenience.
 
-`native:run` takes a `--start-url`, so the app can open on any route rather than `/`. `native:jump` goes further: it serves a development build to a real phone over the network and prints a QR code to scan, which is the same problem [LAN sharing](../usage/lan-sharing.md) already solves for browsers. lerd ships it as a worker:
+`native:run` takes a `--start-url`, so the app can open on any route rather than `/`. `native:jump` goes further: it serves a development build to a real phone over the network and prints a QR code to scan, which is the same problem [LAN sharing](../usage/lan-sharing.md) already solves for browsers:
 
 ```bash
-lerd worker start jump
+lerd run native:jump
 ```
+
+It runs in a terminal rather than as a worker, and the QR code is why: a background unit has nowhere to draw one. It also asks which network interface to advertise when a machine has more than one, which podman and libvirt bridges make almost every development machine, and a unit has nobody to answer.
 
 The `.test` domain itself stays useful throughout, for hitting a route with curl and for the parts of the app that are still an ordinary web app. The native runtime serves its own copy on its own port, so the two never collide.
 
@@ -152,7 +154,7 @@ Three checks are specific to NativePHP, and each is gated on the package, so a p
 | `lerd run native:install` | Installed the native toolchain's own dependencies and unpacked the host PHP binary that drives them |
 | `lerd worker start native` | Launched the Electron window as a supervised host worker |
 | `lerd run native:run` | Built the app and installed it on a simulator, emulator or device |
-| `lerd worker start jump` | Served a development build to a phone over the network |
+| `lerd run native:jump` | Served a development build to a phone over the network |
 
 ---
 
@@ -162,10 +164,14 @@ Three checks are specific to NativePHP, and each is gated on the package, so a p
 |---|---|---|
 | `native:install` | both | Install the native runtime for this machine (mobile is confirm-gated) |
 | `native:build` | desktop | Package the desktop app as a binary |
-| `native:run` | mobile | Build and launch on a simulator, emulator or device |
+| `native:run` | mobile | Build and launch on a simulator, emulator or device (it picks the platform your machine can build for) |
 | `native:open` | mobile | Open the Xcode or Android Studio project |
 
-And two workers, `native` for the desktop window and `jump` for the mobile development server. Every other `native:*` command works through the host binary directly, for example:
+| `native:jump` | mobile | Serve to a phone on your network and draw the QR code |
+
+Desktop also has a worker, `native`, because `native:serve` is a daemon: it supervises the Electron window and its toggle sits beside the queue and scheduler on the site's card. Mobile has none, and not by omission. Nothing in that flow is long-running in a way a background unit can carry: `native:run` builds and launches once, `native:open` hands off to Xcode or Android Studio, and Jump needs a terminal. All four are in the site's Commands panel instead.
+
+Every other `native:*` command works through the host binary directly, for example:
 
 ```bash
 vendor/nativephp/php-bin/bin/host/php artisan native:debug
