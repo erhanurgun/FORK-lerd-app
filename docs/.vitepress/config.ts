@@ -157,6 +157,7 @@ export default defineConfig({
             { text: 'Symfony', link: '/getting-started/symfony' },
             { text: 'WordPress', link: '/getting-started/wordpress' },
             { text: 'Drupal', link: '/getting-started/drupal' },
+            { text: 'TYPO3', link: '/getting-started/typo3' },
             { text: 'CakePHP', link: '/getting-started/cakephp' },
             { text: 'CodeIgniter', link: '/getting-started/codeigniter' },
             { text: 'Statamic', link: '/getting-started/statamic' },
