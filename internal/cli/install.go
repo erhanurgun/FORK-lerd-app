@@ -1107,6 +1107,14 @@ func runInstall(cmd *cobra.Command, _ []string) error {
 	// package manager swaps underneath it is recognised on the next command.
 	writeInstalledVersion(version.Version)
 
+	// Every other step still reports success when this one build fails, so the
+	// install reads as complete while lerd-dns crash-loops on a missing image
+	// and no .test name ever resolves (#1537). Say so instead.
+	if wantDNS && isDNSContainerUnit() && !podman.ImageExists(podman.DNSMasqImage) {
+		feedback.Begin()
+		feedback.Warn("the dnsmasq image did not build, so lerd-dns cannot start and .test names will not resolve. Check the container's network access with `lerd doctor`, then run `lerd install` again")
+	}
+
 	feedback.Begin()
 	feedback.Done("lerd installation complete")
 	feedback.Begin()

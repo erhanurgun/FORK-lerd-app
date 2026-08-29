@@ -98,3 +98,24 @@ func TestChangelogURLsEmptyTagFallsBackToMain(t *testing.T) {
 		t.Errorf("got %q, want %q", got[0], want)
 	}
 }
+
+// The container DNS probe resolves the store's own host, so a self-hosted
+// store is probed instead of a name the install never fetches.
+func TestStoreHostFollowsTheStoreOverride(t *testing.T) {
+	if got := StoreHost(); got != "raw.githubusercontent.com" {
+		t.Errorf("default store host = %q, want raw.githubusercontent.com", got)
+	}
+	t.Setenv("LERD_STORE_BASE_URL", "https://store.example.test:8443/frameworks")
+	if got := StoreHost(); got != "store.example.test" {
+		t.Errorf("overridden store host = %q, want store.example.test", got)
+	}
+}
+
+// A store base that is not a URL leaves nothing to probe; the caller skips
+// rather than resolving an empty name.
+func TestStoreHostEmptyWhenBaseIsNotAURL(t *testing.T) {
+	t.Setenv("LERD_STORE_BASE_URL", "not a url")
+	if got := StoreHost(); got != "" {
+		t.Errorf("store host = %q, want empty", got)
+	}
+}

@@ -16,6 +16,7 @@ import (
 	"github.com/geodro/lerd/internal/config"
 	"github.com/geodro/lerd/internal/dns"
 	"github.com/geodro/lerd/internal/feedback"
+	"github.com/geodro/lerd/internal/origin"
 	phpPkg "github.com/geodro/lerd/internal/php"
 	"github.com/geodro/lerd/internal/podman"
 	"github.com/geodro/lerd/internal/services"
@@ -426,6 +427,26 @@ func runDoctorInto(w io.Writer, useColor bool) (DoctorReport, error) {
 		if !dnsRunning && PortInUse("5300") {
 			warn("DNS port 5300", "port in use by another process, lerd-dns may fail to start (find: "+FindListenerCmd("5300")+")")
 		}
+	}
+
+	// Everything above is about .test resolving on the host. aardvark-dns
+	// answers container names and .test from its own records, so those keep
+	// working while every other lookup goes to the forwarders the lerd network
+	// was given, and a stale or unroutable forwarder there is invisible until
+	// composer or npm times out mid-download (#1519). Probe the store's own
+	// host so a self-hosted store is tested rather than a name lerd never fetches.
+	storeHost := origin.StoreHost()
+	switch {
+	case storeHost == "":
+		// A store base with no hostname leaves nothing to look up.
+	case !podman.ContainerRunningQuiet("lerd-nginx"):
+		warn("internet DNS from containers", "skipped — lerd-nginx not running (start lerd first)")
+	case podman.ResolvesFromNginx(storeHost):
+		ok(fmt.Sprintf("internet DNS from containers (%s)", storeHost))
+	default:
+		fail("internet DNS from containers",
+			fmt.Sprintf("%s does not resolve inside a container, so composer, npm and the framework store will fail", storeHost),
+			"re-point the network at your current resolvers: lerd stop && lerd start (inspect them with: podman network inspect lerd --format '{{.NetworkDNSServers}}')")
 	}
 
 	// ── Ports ────────────────────────────────────────────────────────────────
