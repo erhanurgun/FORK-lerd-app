@@ -3,6 +3,8 @@ package sitedoctor
 import (
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/geodro/lerd/internal/config"
 	"github.com/geodro/lerd/internal/serviceops"
@@ -27,7 +29,49 @@ var listDatabases = func(service string) ([]string, error) {
 func stubDatabaseLister(fn func(string) ([]string, error)) func() {
 	prev := listDatabases
 	listDatabases = fn
-	return func() { listDatabases = prev }
+	forgetDatabases()
+	return func() {
+		listDatabases = prev
+		forgetDatabases()
+	}
+}
+
+// dbListTTL bounds how long one engine's database list is reused. `lerd doctor`
+// sweeps every site, and without this each one pays its own container exec to
+// ask the same engine the same question.
+const dbListTTL = 5 * time.Second
+
+type dbListEntry struct {
+	names []string
+	err   error
+	at    time.Time
+}
+
+var dbListCache = struct {
+	sync.Mutex
+	entries map[string]dbListEntry
+}{entries: map[string]dbListEntry{}}
+
+// cachedDatabases is listDatabases with the recent answer reused. One lock
+// covers every engine and is held across the lookup on purpose: the sweep's
+// callers wait for a running exec instead of each starting their own, and a
+// machine runs one or two engines, so serialising them costs a single extra
+// exec on a cold cache and saves one per site after that.
+func cachedDatabases(service string) ([]string, error) {
+	dbListCache.Lock()
+	defer dbListCache.Unlock()
+	if e, ok := dbListCache.entries[service]; ok && time.Since(e.at) < dbListTTL {
+		return e.names, e.err
+	}
+	names, err := listDatabases(service)
+	dbListCache.entries[service] = dbListEntry{names: names, err: err, at: time.Now()}
+	return names, err
+}
+
+func forgetDatabases() {
+	dbListCache.Lock()
+	defer dbListCache.Unlock()
+	dbListCache.entries = map[string]dbListEntry{}
 }
 
 // checkServerDatabase fails when the site's database does not exist on the
@@ -61,8 +105,8 @@ func checkServerDatabase(path string) (Check, bool) {
 	}
 	return Check{Name: "server_database", Status: StatusFail, Fix: FixCreateDatabase,
 		Detail: fmt.Sprintf("%s %s %s not exist. Create %s, then run migrations.",
-			plural(len(missing), "Database", "Databases"), strings.Join(named, ", "),
-			plural(len(missing), "does", "do"), plural(len(missing), "it", "them"))}, true
+			Plural(len(missing), "Database", "Databases"), strings.Join(named, ", "),
+			Plural(len(missing), "does", "do"), Plural(len(missing), "it", "them"))}, true
 }
 
 // MissingDatabases returns the lerd-managed databases a project points at that
@@ -78,7 +122,7 @@ func MissingDatabases(path string) []config.DBTarget {
 // schema that may well exist.
 func missingDatabases(path string) (missing []config.DBTarget, checked bool) {
 	for _, t := range config.DBTargetsFor(path) {
-		names, err := listDatabases(t.Service)
+		names, err := cachedDatabases(t.Service)
 		if err != nil {
 			continue
 		}
