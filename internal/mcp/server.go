@@ -1467,16 +1467,8 @@ func execCheck(args map[string]any) (any, *rpcError) {
 }
 
 func validatePHPVersionMCP(s string) error {
-	parts := strings.SplitN(s, ".", 2)
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+	if !config.ValidPHPVersion(s) {
 		return fmt.Errorf("must be MAJOR.MINOR format")
-	}
-	for _, p := range parts {
-		for _, c := range p {
-			if c < '0' || c > '9' {
-				return fmt.Errorf("must be MAJOR.MINOR format")
-			}
-		}
 	}
 	return nil
 }
