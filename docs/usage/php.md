@@ -76,6 +76,19 @@ lerd rector process
 
 These run inside the project's PHP-FPM container with the project's working directory mounted, so configuration files (`pest.xml`, `pint.json`, `phpstan.neon`, etc.) are picked up automatically. Real lerd commands always take precedence; if you have a `vendor/bin/composer`, `lerd composer` still resolves to the built-in command.
 
+### Running a package you have not installed
+
+[cpx](https://cpx.dev) is to Composer what npx is to npm: it runs a command from any Composer package without adding it to the project. Require it once, and `lerd cpx` runs it inside the project's container:
+
+```bash
+lerd composer global require cpx/cpx
+lerd cpx phpstan/phpstan analyse
+```
+
+The package runs on the PHP version the site is registered on rather than whatever PHP is on the host, which is the whole reason to route it through lerd. Fetched packages are cached under `~/.cpx` on the host, so they survive a container restart and are shared with any cpx you run outside lerd.
+
+Requiring it globally also puts a `cpx` shim on your PATH, so bare `cpx` works too and runs through the same container. `lerd cpx` is the explicit form, and the one that tells you what to install when cpx is missing.
+
 The MCP integration exposes the same surface through two tools, `vendor_bins` (list available binaries) and `vendor_run` (execute one), so AI assistants can discover and run project tooling without per-project configuration.
 
 ### IDE quality tools
@@ -182,6 +195,12 @@ Xdebug is configured with:
 - `xdebug.client_port=9003`
 
 Set your IDE to listen on port `9003`. In VS Code, the default PHP Debug configuration works without changes. In PhpStorm, set **Settings > PHP > Debug > Debug port** to `9003`.
+
+Port `9003` is reserved: no lerd service is ever published on it, because a container that held it would answer Xdebug's connect-back itself and your IDE would simply never see a session. An install that already shifted a service onto it before this was reserved keeps it, so `lerd doctor` names the service and the command that moves it:
+
+```bash
+lerd service port rustfs 9004 --container 9001
+```
 
 `host.containers.internal` is resolved via a real reachability probe: when lerd writes the shared hosts file it tries each candidate IP (netavark's `host.containers.internal` entry, the host's primary LAN IP, slirp4netns's `10.0.2.2`) by opening a TCP connection to lerd-ui on port 7073 from inside lerd-nginx, and writes the first one that succeeds. If none succeed, `lerd doctor` reports the failure so you get a real diagnosis instead of Xdebug silently timing out with `Time-out connecting to debugging client`.
 :::

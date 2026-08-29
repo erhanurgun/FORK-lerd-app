@@ -33,7 +33,7 @@ Lerd detects your framework from the project itself and configures workers, envi
 - [WordPress](/getting-started/wordpress)
 - [Containers (Node, Python, Go, …)](/getting-started/containers) for stacks that are not PHP at all.
 
-The sidebar also carries walkthroughs for Drupal, CakePHP, CodeIgniter, Statamic, Tempest and Magento.
+The sidebar also carries walkthroughs for Drupal, TYPO3, CakePHP, CodeIgniter, Statamic, Tempest and Magento.
 
 ## Coming from another tool
 

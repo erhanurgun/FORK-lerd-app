@@ -26,9 +26,9 @@
 | `lerd about` | Show version, build info, and project URL |
 | `lerd man [page]` | Browse the built-in documentation in the terminal; pass a page name to jump directly (e.g. `lerd man sites`) |
 | `lerd tui` | Open a btop-style terminal dashboard with live site / service / worker status, per-site detail pane, inline domain and version editing, shell drop-in, log tailing, filter + sort, and global settings |
-| `lerd check` | Validate `.lerd.yaml` syntax, services, and PHP version before setup |
-| `lerd doctor` | Full environment diagnostic: podman, systemd, DNS, ports, PHP images, config validity; also reports how much podman disk is reclaimable. Add `--fix` to apply the safe automatic repairs (confirming each; `--yes` to skip prompts, `--dry-run` to preview); privileged and external-state findings are left for you to run. `--json` emits the findings, each tagged with a fix tier, for tooling |
-| `lerd site:doctor [domain]` | App-level health checks for a single site (env file, services the site declares that this machine has never installed, which `--fix` and the dashboard's *Install the missing services* button install, ones that are installed but stopped, which the *Start the stopped services* button starts, services picked in `.lerd.yaml` that the site's env file does not point at, a key the env file sets more than once, env drift, application key, a configured database that is missing (a SQLite file that is absent or empty, or a MySQL/Postgres schema that does not exist on the service, which `--fix` and the dashboard's *Create the missing database* button create), composer/node dependency install + lock, `composer audit`/`npm audit`, PHP version range, an nginx vhost that no longer matches what lerd would write for the site, routes running well above the site's typical response time, plus the framework's own checks). A broken database suppresses the framework migration check so the remedy isn't repeated. Defaults to the site in the current directory; pass a domain to target another. Add `--json` for machine-readable output, or `--fix` to apply the findings lerd can resolve on its own and re-check |
+| `lerd check` | Deprecated alias for `lerd site:doctor`, which validates `.lerd.yaml` as one check inside the site's health report |
+| `lerd doctor` | Full environment diagnostic: podman, systemd, DNS, ports, PHP images, config validity; also reports how much podman disk is reclaimable, and finishes by sweeping every linked site through the cheap half of `site:doctor`, one summary line each with `lerd site:doctor <domain>` for the detail (the audits and the timing lookup stay on the per-site command). Add `--fix` to apply the safe automatic repairs (confirming each; `--yes` to skip prompts, `--dry-run` to preview) and to offer the disk reclaim it reported; privileged and external-state findings are left for you to run. `--json` emits the findings, each tagged with a fix tier, for tooling |
+| `lerd site:doctor [domain]` | App-level health checks for a single site (`.lerd.yaml` validity: PHP version, workers, services, container block, commands, database service, env file, services the site declares that this machine has never installed, which `--fix` and the dashboard's *Install the missing services* button install, ones that are installed but stopped, which the *Start the stopped services* button starts, services picked in `.lerd.yaml` that the site's env file does not point at, a key the env file sets more than once, env drift, application key, a configured database that is missing (a SQLite file that is absent or empty, or a MySQL/Postgres schema that does not exist on the service, which `--fix` and the dashboard's *Create the missing database* button create), composer/node dependency install + lock, `composer audit`/`npm audit`, PHP version range, an nginx vhost that no longer matches what lerd would write for the site, routes running well above the site's typical response time, plus the framework's own checks). A broken database suppresses the framework migration check so the remedy isn't repeated. Defaults to the site in the current directory; pass a domain to target another. Add `--json` for machine-readable output, or `--fix` to apply the findings lerd can resolve on its own and re-check |
 | `lerd cleanup` | Reclaim podman disk from orphaned lerd images (old PHP build and base images a rebuild left behind), unused service images no installed service references any more (e.g. an old `mysql:8.0` after upgrading, keeping each service's current image and its one-back rollback target), and dangling untagged images. Previews the list and confirms before removing. Never touches a tagged image in use, your databases, or volumes |
 | `lerd cleanup --dry-run` | Show what would be reclaimed and the approximate size, remove nothing |
 | `lerd cleanup --safe` | Only reclaim images provably built by lerd, leave unused service and dangling images alone |
@@ -263,39 +263,6 @@ Switch the PHP runtime for the current site between shared PHP-FPM and per-site 
 
 See [Importing from Laravel Sail](/usage/import-sail) for full documentation.
 
-## Queue workers
-
-| Command | Description |
-|---|---|
-| `lerd queue:start` | Start a queue worker for the current project |
-| `lerd queue:stop` | Stop the queue worker for the current project |
-
-## Horizon
-
-For projects that use `laravel/horizon`, lerd detects it automatically from `composer.json`.
-
-| Command | Description |
-|---|---|
-| `lerd horizon:start` | Start Laravel Horizon for the current project as a persistent background service |
-| `lerd horizon:stop` | Stop Horizon |
-| `lerd horizon:reload [on\|off]` | Toggle Horizon auto-reload on file changes for the current site; with no argument prints the current state. Needs the `chokidar` npm package |
-
-## Reverb
-
-Requires [Laravel Broadcasting](https://laravel.com/docs/13.x/broadcasting) with the `laravel/reverb` package, lerd detects it automatically from `composer.json`.
-
-| Command | Description |
-|---|---|
-| `lerd reverb:start` | Start the Reverb WebSocket server for the current project as a persistent background service |
-| `lerd reverb:stop` | Stop the Reverb server |
-
-## Schedule
-
-| Command | Description |
-|---|---|
-| `lerd schedule:start` | Start the task scheduler (`schedule:work`) for the current project as a persistent background service |
-| `lerd schedule:stop` | Stop the task scheduler |
-
 ## Framework workers
 
 | Command | Description |
@@ -303,6 +270,22 @@ Requires [Laravel Broadcasting](https://laravel.com/docs/13.x/broadcasting) with
 | `lerd worker start <name>` | Start any named framework worker for the current project |
 | `lerd worker stop <name>` | Stop a named framework worker |
 | `lerd worker list` | List all workers defined for the current project's framework |
+
+Each worker also gets commands under its own name, generated from the current project's framework definition, in both the `name:verb` and `name verb` spellings:
+
+| Command | Description |
+|---|---|
+| `lerd queue:start` | Start a queue worker for the current project |
+| `lerd queue:stop` | Stop the queue worker for the current project |
+| `lerd horizon:start` | Start Laravel Horizon for the current project as a persistent background service |
+| `lerd horizon:stop` | Stop Horizon |
+| `lerd horizon:reload [on\|off]` | Toggle Horizon auto-reload on file changes for the current site; with no argument prints the current state. Needs the `chokidar` npm package |
+| `lerd reverb:start` | Start the Reverb WebSocket server for the current project as a persistent background service |
+| `lerd reverb:stop` | Stop the Reverb server |
+| `lerd schedule:start` | Start the task scheduler (`schedule:work`) for the current project as a persistent background service |
+| `lerd schedule:stop` | Stop the task scheduler |
+
+Which of these exist depends on what the project's framework declares, so a Symfony project gets `lerd messenger:start` and a Laravel one without `laravel/reverb` still gets `reverb:start` (it refuses with the missing package). A `:reload` command appears for workers whose definition has a reload variant, and start commands carry a flag per `tune_command` placeholder, so `lerd queue:start --help` is the authority on what your project accepts. See [framework workers](../usage/framework-workers.md).
 
 ## Idle-suspend
 
@@ -351,6 +334,7 @@ Activity-driven worker suspension: lerd gracefully stops each site's suspendable
 | `lerd a [args...]` | Short alias for `lerd console` / `lerd artisan` |
 | `lerd test [args...]` | Shortcut for `lerd artisan test` |
 | `lerd <vendor-bin> [args...]` | Run any composer-installed binary from the project's `vendor/bin` directory (e.g. `lerd pest`, `lerd pint`, `lerd phpstan`). Real lerd commands always win over vendor binaries with the same name. |
+| `lerd cpx <package> [args...]` | Run a command from any Composer package without adding it to the project, [cpx](https://cpx.dev) being to Composer what npx is to npm. Uses the globally required binary (`lerd composer global require cpx/cpx`) and runs it on the PHP version the project is registered on |
 | `lerd shell` | Open an interactive shell inside the project's PHP-FPM container |
 
 ## AI integration
