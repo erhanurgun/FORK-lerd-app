@@ -911,3 +911,15 @@ func TestHostPortsFor_UnknownService(t *testing.T) {
 		t.Errorf("HostPortsFor(unknown) = %v, want nil", got)
 	}
 }
+
+// The IDE listens on the Xdebug port, so no allocator may hand it to a
+// container: one that published it would answer the debugger's connect-back
+// itself and the IDE would never see a session (#1555).
+func TestReservedHostPorts_ReservesTheXdebugPort(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+
+	if !ReservedHostPorts()[XdebugClientPort] {
+		t.Errorf("port %d is not reserved, so a service shift can land on it", XdebugClientPort)
+	}
+}
