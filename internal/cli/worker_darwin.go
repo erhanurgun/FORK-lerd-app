@@ -42,7 +42,10 @@ const defaultMacOSNodeVersion = "22"
 // Scheduled workers (Schedule != "") still aren't supported on macOS —
 // launchd's StartCalendarInterval would work but the unit translation
 // isn't wired through services.Mgr yet.
-func writeWorkerUnitFile(unitName, label, siteName, sitePath, phpVersion, command, restart, schedule, fpmUnit string, host bool) (bool, error) {
+// requiresUnit is accepted for parity with the Linux writer and ignored:
+// launchd has no ordering directive, so the preflight is the only gate here.
+func writeWorkerUnitFile(unitName, label, siteName, sitePath, phpVersion, command, restart, schedule, fpmUnit, requiresUnit string, host bool) (bool, error) {
+	_ = requiresUnit
 	// Generation-boundary guard so every caller is covered (incl. the boot
 	// restore path): every value below is a line of the unit, and a cloned
 	// repo's .lerd.yaml can set the worker ones.
@@ -302,5 +305,5 @@ func restoreWorker(siteName, sitePath, phpVersion, workerName string, w config.F
 	if label == "" {
 		label = workerName
 	}
-	writeWorkerUnitFile(unitName, label, displaySite, sitePath, phpVersion, command, restart, w.Schedule, fpmUnit, w.Host) //nolint:errcheck
+	writeWorkerUnitFile(unitName, label, displaySite, sitePath, phpVersion, command, restart, w.Schedule, fpmUnit, requiredServiceUnit(sitePath, w), w.Host) //nolint:errcheck
 }

@@ -531,6 +531,11 @@ func ServiceEntryOrphaned(name string) bool {
 	return !IsDefaultPreset(name) && !CustomServiceExists(name)
 }
 
+// XdebugClientPort is the port Xdebug connects back to on the host, written into
+// every PHP image's ini by the image build. It is reserved against every host
+// port lerd hands out, since the debugger and the IDE have to meet there.
+const XdebugClientPort = 9003
+
 // ReservedHostPorts returns every host port a lerd service may bind: each
 // configured service entry's effective ports (HostPorts), every bundled preset's
 // default ports (including optional presets not in the default set), and every
@@ -542,6 +547,10 @@ func ServiceEntryOrphaned(name string) bool {
 // and customs.
 func ReservedHostPorts() map[int]bool {
 	reserved := map[int]bool{}
+	// The IDE listens on the Xdebug port, so no container may publish it: one
+	// that did would answer the debugger's connect-back itself and the IDE would
+	// simply never see a session (#1555).
+	reserved[XdebugClientPort] = true
 	cfg, _ := LoadGlobal()
 	add := func(n int) {
 		if n > 0 {

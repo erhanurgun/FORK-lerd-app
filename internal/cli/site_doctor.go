@@ -204,7 +204,8 @@ func printSiteDoctor(resp sitedoctor.Response, label string) {
 	fmt.Println()
 	switch {
 	case resp.Failures > 0 || resp.Warnings > 0:
-		fmt.Printf("  %s\n", feedback.Dim(fmt.Sprintf("%d failing · %d warning", resp.Failures, resp.Warnings)))
+		fmt.Printf("  %s\n", feedback.Dim(fmt.Sprintf("%d failing · %d %s", resp.Failures, resp.Warnings,
+			sitedoctor.Plural(resp.Warnings, "warning", "warnings"))))
 	default:
 		fmt.Printf("  %s\n", feedback.Green("all checks pass"))
 	}
