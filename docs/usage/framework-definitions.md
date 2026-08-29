@@ -272,6 +272,9 @@ workers:
       - other-worker
     proxy:                        # nginx proxy config (optional)
       path: /ws
+      paths:                      # several paths on one port (optional)
+        - /ws
+        - /ws-api
       port_env_key: WS_PORT
       default_port: 8080
     host: false                   # run on the host via fnm instead of in the FPM

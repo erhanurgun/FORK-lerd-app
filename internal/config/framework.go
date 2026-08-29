@@ -255,9 +255,14 @@ func (w FrameworkWorker) IsPerWorktree() bool {
 // for this worker. When present, nginx adds a location block that proxies
 // requests to the worker inside the PHP-FPM container.
 type WorkerProxy struct {
-	Path        string `yaml:"path"`                   // URL path to proxy (e.g. "/app")
-	PortEnvKey  string `yaml:"port_env_key,omitempty"` // env key holding the port (e.g. "REVERB_SERVER_PORT")
-	DefaultPort int    `yaml:"default_port,omitempty"` // fallback port if env key is missing (default: 8080)
+	Path string `yaml:"path"` // URL path to proxy (e.g. "/app")
+	// Paths lists every path the worker's server answers on, one location each
+	// (Reverb takes its WebSocket on /app and its HTTP API on /apps). It wins
+	// over Path where both are set, so a definition can carry both and still
+	// proxy on binaries too old to read this field.
+	Paths       []string `yaml:"paths,omitempty"`
+	PortEnvKey  string   `yaml:"port_env_key,omitempty"` // env key holding the port (e.g. "REVERB_SERVER_PORT")
+	DefaultPort int      `yaml:"default_port,omitempty"` // fallback port if env key is missing (default: 8080)
 }
 
 // WorkerService is a running lerd service a worker depends on. WhenEnv is a
@@ -839,6 +844,7 @@ var laravelFramework = &Framework{
 			Check:   &FrameworkRule{Composer: "laravel/reverb"},
 			Proxy: &WorkerProxy{
 				Path:        "/app",
+				Paths:       []string{"/app", "/apps"},
 				PortEnvKey:  "REVERB_SERVER_PORT",
 				DefaultPort: 8080,
 			},

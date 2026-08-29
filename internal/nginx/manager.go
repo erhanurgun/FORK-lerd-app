@@ -25,9 +25,14 @@ import (
 )
 
 // detectSiteProxy checks the site's framework definition for a worker with a
-// proxy configuration. Returns the proxy path and port if found. The path is
-// regexp.QuoteMeta-escaped: the vhost templates interpolate it into an nginx
-// regex location (`location ~ ^{{.ProxyPath}}(/|$)`) so the anchoring only
+// proxy configuration. Returns one location path per path the worker's server
+// answers on, plus the port. A worker can serve several: Reverb takes its
+// WebSocket on /app and the HTTP broadcasting API on /apps. The list form wins
+// over the single `path` when both are set, so a definition can carry both and
+// still proxy on binaries too old to read the list.
+//
+// Each path is regexp.QuoteMeta-escaped: the vhost templates interpolate it
+// into an nginx regex location (`location ~ ^{{.}}(/|$)`) so the anchoring only
 // matches that path and its subpaths, not an unrelated one sharing the same
 // prefix. A framework-declared path is realistically literal but can contain
 // regex metacharacters a template author never intended as regex — "/socket.io"
@@ -38,14 +43,14 @@ import (
 // under it) and a missing leading slash is added (`^app(/|$)` can never match a
 // URI, which always starts with "/"). A proxy declaring no path at all names
 // nothing to proxy, and is reported as no proxy rather than capturing the site.
-func detectSiteProxy(site config.Site) (path string, port int, ok bool) {
+func detectSiteProxy(site config.Site) (paths []string, port int, ok bool) {
 	fw, fwOK := config.GetFrameworkForDir(site.Framework, site.Path)
 	if !fwOK {
-		return "", 0, false
+		return nil, 0, false
 	}
 	proxy, _ := fw.DetectProxy(site.Path)
 	if proxy == nil {
-		return "", 0, false
+		return nil, 0, false
 	}
 	proxyPort := proxy.DefaultPort
 	if proxyPort == 0 {
@@ -58,17 +63,27 @@ func detectSiteProxy(site config.Site) (path string, port int, ok bool) {
 			}
 		}
 	}
-	if proxy.Path == "" {
-		return "", 0, false
+	declared := proxy.Paths
+	if len(declared) == 0 {
+		declared = []string{proxy.Path}
 	}
-	// "/" trims to empty, which renders `^(/|$)`: the root and everything under
-	// it, what a root-mounted worker means. Restoring it to "/" instead would
-	// render `^/(/|$)`, matching "/" and "//" and nothing else.
-	proxyPath := strings.TrimSuffix(proxy.Path, "/")
-	if proxyPath != "" && !strings.HasPrefix(proxyPath, "/") {
-		proxyPath = "/" + proxyPath
+	for _, raw := range declared {
+		if raw == "" {
+			continue
+		}
+		// "/" trims to empty, which renders `^(/|$)`: the root and everything
+		// under it, what a root-mounted worker means. Restoring it to "/"
+		// instead would render `^/(/|$)`, matching "/" and "//" and nothing else.
+		p := strings.TrimSuffix(raw, "/")
+		if p != "" && !strings.HasPrefix(p, "/") {
+			p = "/" + p
+		}
+		paths = append(paths, regexp.QuoteMeta(p))
 	}
-	return regexp.QuoteMeta(proxyPath), proxyPort, true
+	if len(paths) == 0 {
+		return nil, 0, false
+	}
+	return paths, proxyPort, true
 }
 
 // detectSiteDevServer returns the prefix and host port for a site whose
@@ -117,11 +132,12 @@ type VhostData struct {
 	PHPVersionShort string
 	// FPMContainer is the container nginx fastcgi's to: the shared
 	// lerd-php<ver>-fpm, or a per-site container for custom-FPM sites.
-	FPMContainer    string
-	CertDomain      string // domain whose cert files to use (defaults to Domain)
-	PublicDir       string // document root subdirectory, e.g. "public", "web", "."
-	Proxy           bool   // true when the site has a worker with WebSocket/HTTP proxy config
-	ProxyPath       string // URL path for the proxy (e.g. "/app")
+	FPMContainer string
+	CertDomain   string // domain whose cert files to use (defaults to Domain)
+	PublicDir    string // document root subdirectory, e.g. "public", "web", "."
+	// ProxyPaths are the URL paths a worker's server answers on (e.g. "/app",
+	// "/apps"), one location block each. Empty when the site has no proxy.
+	ProxyPaths      []string
 	ProxyPort       int    // port the worker listens on inside the PHP-FPM container
 	CustomContainer string // container name for custom container sites (e.g. "lerd-custom-nestapp")
 	CustomPort      int    // port the app listens on inside the custom container
@@ -247,7 +263,6 @@ func (d VhostData) validate() error {
 		"server names":     d.ServerNames,
 		"domain":           d.Domain,
 		"cert domain":      d.CertDomain,
-		"proxy path":       d.ProxyPath,
 		"PHP version":      d.PHPVersion,
 		"FPM container":    d.FPMContainer,
 		"custom container": d.CustomContainer,
@@ -257,6 +272,11 @@ func (d VhostData) validate() error {
 	} {
 		if i := strings.IndexAny(v, nginxValueForbidden); i >= 0 {
 			return fmt.Errorf("nginx %s %q contains %q, which would end the directive it lands in", name, v, string(v[i]))
+		}
+	}
+	for _, v := range d.ProxyPaths {
+		if i := strings.IndexAny(v, nginxValueForbidden); i >= 0 {
+			return fmt.Errorf("nginx proxy path %q contains %q, which would end the directive it lands in", v, string(v[i]))
 		}
 	}
 	// The paths reach the templates only through Root(), which quotes them, so
@@ -446,7 +466,7 @@ func renderFPMVhost(site config.Site, phpVersion string, ssl bool) ([]byte, erro
 	}
 
 	publicDir := resolvePublicDir(site)
-	proxyPath, proxyPort, hasProxy := detectSiteProxy(site)
+	proxyPaths, proxyPort, _ := detectSiteProxy(site)
 	devBase, devPort := detectSiteDevServer(site)
 	fpmContainer := podman.FPMContainerName(site, phpVersion)
 	data := VhostData{
@@ -457,8 +477,7 @@ func renderFPMVhost(site config.Site, phpVersion string, ssl bool) ([]byte, erro
 		PHPVersionShort: phpShort(phpVersion),
 		FPMContainer:    fpmContainer,
 		PublicDir:       publicDir,
-		Proxy:           hasProxy,
-		ProxyPath:       proxyPath,
+		ProxyPaths:      proxyPaths,
 		ProxyPort:       proxyPort,
 		UpstreamHost:    hostProxyUpstream(),
 		DevServerBase:   devBase,
