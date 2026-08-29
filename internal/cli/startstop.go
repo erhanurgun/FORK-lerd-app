@@ -453,6 +453,19 @@ func runStart(_ *cobra.Command, _ []string) error {
 	if err := nginx.EnsureNginxConfig(); err != nil {
 		fmt.Printf("  WARN: nginx config: %v\n", err)
 	}
+	// The quadlet carries the host ports nginx publishes, so a start has to
+	// rewrite it too, and restart the container when it changed: a running
+	// nginx keeps the mapping it was created with, so writing the unit alone
+	// leaves a moved nginx.http_port unapplied until something else restarts
+	// it (#1544).
+	if quadletChanged, err := nginx.RewriteNginxQuadlet(); err != nil {
+		fmt.Printf("  WARN: nginx quadlet: %v\n", err)
+	} else if quadletChanged {
+		_ = podman.DaemonReloadFn()
+		if err := podman.RestartUnit("lerd-nginx"); err != nil {
+			fmt.Printf("  WARN: restarting nginx on the new ports: %v\n", err)
+		}
+	}
 	if err := nginx.EnsureLerdVhost(); err != nil {
 		fmt.Printf("  WARN: lerd vhost: %v\n", err)
 	}
