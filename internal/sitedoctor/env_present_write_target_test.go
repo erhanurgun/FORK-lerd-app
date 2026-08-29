@@ -102,3 +102,12 @@ func TestCheckEnvPresent_keepsTheCommandForALerdOwnedFile(t *testing.T) {
 		t.Errorf("check = %+v, want a failure naming lerd env", c)
 	}
 }
+
+// An app file lerd can seed from an example is still lerd's to create, which is
+// WordPress copying wp-config-sample.php, so the example wins over the installer.
+func TestEnvMissingDetail_prefersTheExampleOverTheInstaller(t *testing.T) {
+	d := envMissingDetail("wp-config.php", "wp-config-sample.php", true)
+	if !strings.Contains(d, "lerd env") || !strings.Contains(d, "wp-config-sample.php") {
+		t.Errorf("detail = %q, want the command and the sample it copies", d)
+	}
+}

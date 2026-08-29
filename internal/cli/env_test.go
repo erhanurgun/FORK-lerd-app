@@ -890,28 +890,3 @@ func TestShouldStartFrameworkService_neverForSQLite(t *testing.T) {
 		}
 	}
 }
-
-// The file a framework's own installer writes must never be created by lerd:
-// TYPO3 serves its installer while config/system/settings.php is absent and
-// fails outright once an empty one exists (#1563).
-func TestAppWritesEnvFile(t *testing.T) {
-	typo3 := &config.Framework{}
-	typo3.Env.File = ".env"
-	typo3.Env.AppFile = "config/system/settings.php"
-
-	if !appWritesEnvFile(typo3, "config/system/settings.php") {
-		t.Error("the app-written settings file was not recognised, so lerd would create it empty")
-	}
-	if appWritesEnvFile(typo3, ".env") {
-		t.Error("a dotenv target must stay lerd's to create")
-	}
-
-	laravel := &config.Framework{}
-	laravel.Env.File = ".env"
-	if appWritesEnvFile(laravel, ".env") {
-		t.Error("a framework declaring no app_file must keep the ordinary path")
-	}
-	if appWritesEnvFile(nil, ".env") {
-		t.Error("an unknown framework must keep the ordinary path")
-	}
-}

@@ -513,17 +513,18 @@ func applyLabels(resp *Response) {
 // for the services the project picks. Leaving the finding at "it is missing"
 // hands the user a question lerd already knows the answer to.
 func envMissingDetail(envFile, exampleFile string, appWritten bool) string {
-	// A file the application writes during its own install must not be created
-	// by hand: an empty one reads to the framework as "already configured" and
-	// breaks a project that was merely waiting to be installed (#1563). Name the
-	// installer instead of a command that would make things worse.
+	if exampleFile != "" {
+		return fmt.Sprintf("%s is missing, run `lerd env` to create it from %s and wire the services this project picks.", envFile, exampleFile)
+	}
+	// With nothing to seed from, a file the application writes during its own
+	// install must not be created by hand: an empty one reads to the framework as
+	// "already configured" and breaks a project that was merely waiting to be
+	// installed (#1563). Name the installer instead of a command that would make
+	// things worse.
 	if appWritten {
 		return fmt.Sprintf("%s is missing, so this project has not been installed yet. Run the framework's own install (`lerd run setup` where it offers one), which writes it.", envFile)
 	}
-	if exampleFile == "" {
-		return fmt.Sprintf("%s is missing, run `lerd env` to create it and wire the services this project picks.", envFile)
-	}
-	return fmt.Sprintf("%s is missing, run `lerd env` to create it from %s and wire the services this project picks.", envFile, exampleFile)
+	return fmt.Sprintf("%s is missing, run `lerd env` to create it and wire the services this project picks.", envFile)
 }
 
 func checkEnvPresent(path, envFile, exampleFile string, appWritten bool) (Check, bool) {
