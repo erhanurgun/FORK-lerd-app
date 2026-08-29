@@ -299,6 +299,7 @@ func Start(currentVersion string) error {
 	mux.HandleFunc("/api/watcher/start", withCORS(handleWatcherStart))
 	mux.HandleFunc("/api/settings", withCORS(handleSettings))
 	mux.HandleFunc("/api/settings/autostart", withCORS(handleSettingsAutostart))
+	mux.HandleFunc("/api/settings/start-on-open", withCORS(handleSettingsStartOnOpen))
 	mux.HandleFunc("/api/settings/worker-mode", withCORS(handleSettingsWorkerMode))
 	mux.HandleFunc("/api/settings/idle-suspend", withCORS(publishAfter(handleSettingsIdleSuspend, eventbus.KindSites)))
 	mux.HandleFunc("/api/settings/dns-upstream", withCORS(handleSettingsDNSUpstream))
@@ -544,10 +545,58 @@ func terminalDirCandidates(dir string) []terminalCmd {
 	candidates := []terminalCmd{}
 
 	if t := os.Getenv("TERMINAL"); t != "" {
-		candidates = append(candidates, terminalCmd{t, []string{}})
+		candidates = append(candidates, namedTerminal(t, dir))
 	}
 
-	candidates = append(candidates,
+	// A terminal the user picked in System Settings outranks one that merely
+	// happens to be on PATH, so it goes ahead of the list rather than after it.
+	if bundle := macDefaultTerminal(); bundle != "" {
+		candidates = append(candidates, terminalCmd{"open", []string{"-b", bundle, dir}})
+	}
+	// The same on Linux, where the choice lives in the freedesktop launcher, the
+	// distribution's alternatives link, or the desktop's own setting.
+	if t := linuxDefaultTerminal(); t != "" {
+		candidates = append(candidates, namedTerminal(t, dir))
+	}
+
+	candidates = append(candidates, knownTerminals(dir)...)
+
+	if runtime.GOOS == "darwin" {
+		// `open -a Terminal dir` opens a new window at dir without echoing any
+		// command — cleaner than `do script "cd ... && exec $SHELL"` which types
+		// the command visibly into the shell. iTerm2 supports the same via open.
+		// Warp registers public.folder, so it takes the directory the same way
+		// the other two do and needs none of its warp:// URI scheme.
+		if _, err := os.Stat("/Applications/Warp.app"); err == nil {
+			candidates = append(candidates, terminalCmd{"open", []string{"-a", "Warp", dir}})
+		}
+		if _, err := os.Stat("/Applications/iTerm.app"); err == nil {
+			candidates = append(candidates, terminalCmd{"open", []string{"-a", "iTerm", dir}})
+		}
+		candidates = append(candidates, terminalCmd{"open", []string{"-a", "Terminal", dir}})
+	}
+
+	return candidates
+}
+
+// namedTerminal builds the invocation for a terminal named by the user or the
+// desktop. Its own flags are used when lerd knows them, since the generic
+// `-e sh -c` form several emulators do not accept: kitty and ghostty take the
+// program directly, and a chosen kitty would otherwise fail and fall through to
+// whatever happened to be next on PATH.
+func namedTerminal(name, dir string) terminalCmd {
+	for _, t := range knownTerminals(dir) {
+		if t.bin == filepath.Base(name) {
+			return terminalCmd{name, t.args}
+		}
+	}
+	return terminalCmd{name, []string{"-e", "sh", "-c", `cd "$0" && exec "$SHELL"`, dir}}
+}
+
+// knownTerminals is the fallback list, and the source of the flags namedTerminal
+// reuses when the chosen terminal is one of them.
+func knownTerminals(dir string) []terminalCmd {
+	return []terminalCmd{
 		terminalCmd{"kitty", []string{"--directory", dir}},
 		terminalCmd{"foot", []string{"--working-directory", dir}},
 		terminalCmd{"alacritty", []string{"--working-directory", dir}},
@@ -562,19 +611,7 @@ func terminalDirCandidates(dir string) []terminalCmd {
 		terminalCmd{"tilix", []string{"--working-directory", dir}},
 		terminalCmd{"terminator", []string{"--working-directory", dir}},
 		terminalCmd{"xterm", []string{"-e", "sh", "-c", `cd "$0" && exec "$SHELL"`, dir}},
-	)
-
-	if runtime.GOOS == "darwin" {
-		// `open -a Terminal dir` opens a new window at dir without echoing any
-		// command — cleaner than `do script "cd ... && exec $SHELL"` which types
-		// the command visibly into the shell. iTerm2 supports the same via open.
-		if _, err := os.Stat("/Applications/iTerm.app"); err == nil {
-			candidates = append(candidates, terminalCmd{"open", []string{"-a", "iTerm", dir}})
-		}
-		candidates = append(candidates, terminalCmd{"open", []string{"-a", "Terminal", dir}})
 	}
-
-	return candidates
 }
 
 // openTerminalAt opens the user's preferred terminal emulator in dir.
@@ -585,12 +622,7 @@ func openTerminalAt(dir string) error {
 		if err != nil {
 			continue
 		}
-		args := t.args
-		// For $TERMINAL with no preset args, just pass the dir via cd wrapper
-		if t.bin == os.Getenv("TERMINAL") && len(args) == 0 {
-			args = []string{"-e", "sh", "-c", `cd "$0" && exec "$SHELL"`, dir}
-		}
-		cmd := exec.Command(bin, args...)
+		cmd := exec.Command(bin, t.args...)
 		cmd.Dir = dir
 		if runtime.GOOS != "darwin" {
 			cmd.Env = graphicalEnv()
@@ -5196,11 +5228,15 @@ func handleLogs(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-var allowedQueueUnit = regexp.MustCompile(`^[a-z0-9-]+$`)
+// allowedQueueUnit validates a site or worker segment of a log stream path.
+// Custom worker names in .lerd.yaml and site handles are free-form apart from
+// whitespace, so underscores and capitals have to pass or their logs 404.
+var allowedQueueUnit = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 // SettingsResponse is the response for GET /api/settings.
 type SettingsResponse struct {
 	AutostartOnLogin          bool     `json:"autostart_on_login"`
+	StartOnDashboardOpen      bool     `json:"start_on_dashboard_open"`
 	WorkerExecMode            string   `json:"worker_exec_mode"`
 	WorkerModeApplies         bool     `json:"worker_mode_applies"` // true on macOS only
 	IdleSuspendEnabled        bool     `json:"idle_suspend_enabled"`
@@ -5216,6 +5252,7 @@ func handleSettings(w http.ResponseWriter, _ *http.Request) {
 	idleEnabled := false
 	idleMinutes := int(config.DefaultIdleSuspendTimeout / time.Minute)
 	dnsEnabled := true
+	startOnOpen := false
 	var dnsUpstream []string
 	if cfg != nil {
 		mode = cfg.WorkerExecMode()
@@ -5223,9 +5260,11 @@ func handleSettings(w http.ResponseWriter, _ *http.Request) {
 		idleMinutes = int(cfg.IdleSuspendTimeout() / time.Minute)
 		dnsEnabled = cfg.DNSManaged()
 		dnsUpstream = cfg.DNS.Upstream
+		startOnOpen = cfg.Autostart.OnDashboardOpen
 	}
 	writeJSON(w, SettingsResponse{
 		AutostartOnLogin:          lerdSystemd.IsAutostartEnabled(),
+		StartOnDashboardOpen:      startOnOpen,
 		WorkerExecMode:            mode,
 		WorkerModeApplies:         runtime.GOOS == "darwin",
 		IdleSuspendEnabled:        idleEnabled,
@@ -5410,16 +5449,56 @@ func handleSettingsAutostart(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"ok": true, "autostart_on_login": body.Enabled})
 }
 
+// handleSettingsStartOnOpen records whether opening the dashboard on a stopped
+// lerd should start it. Config only: the dashboard is what acts on the flag.
+func handleSettingsStartOnOpen(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+	cfg, err := config.LoadGlobal()
+	if err != nil || cfg == nil {
+		writeJSON(w, map[string]any{"ok": false, "error": "loading config"})
+		return
+	}
+	cfg.Autostart.OnDashboardOpen = body.Enabled
+	if err := config.SaveGlobal(cfg); err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true, "start_on_dashboard_open": body.Enabled})
+}
+
+// uiUnit is the unit this process runs as, and runStart is cli.RunStart
+// indirected so a test can assert the dashboard never asks the start to restart
+// it: that boots this process out of launchd half way through the sequence.
+const uiUnit = "lerd-ui"
+
+var runStart = cli.RunStart
+
+// handleLerdStart runs the same start as the CLI and streams its progress, so
+// the dashboard's start button reports each stage and unit rather than hanging
+// on a request that can take minutes.
+//
+// lerd-ui is skipped: starting a unit boots it out of launchd first, which is a
+// SIGTERM to this very process, so asking for our own unit would kill the start
+// half way and leave the dashboard down behind a 502.
 func handleLerdStart(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if err := cli.RunStart(); err != nil {
-		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
-		return
+	writeLine, _ := startNDJSONStream(w, r)
+	if err := runStart(func(evt cli.StartEvent) { writeLine(evt) }, uiUnit); err != nil {
+		writeLine(cli.StartEvent{Phase: "failed", Error: err.Error()})
 	}
-	writeJSON(w, map[string]any{"ok": true})
 }
 
 func handleLerdStop(w http.ResponseWriter, r *http.Request) {

@@ -162,9 +162,9 @@ Supported PHP versions: **8.5**, **8.4**, **8.3**, **8.2**, **8.1**, and the fro
 | `lerd php:ports remove <host...> [--php VERSION]` | Unpublish host ports from the version's shell container |
 | `lerd php:ports list [--php VERSION]` | List the extra host ports published for a PHP version |
 | `lerd php:ini [version\|shared]` | Open a PHP version's php.ini in `$EDITOR`, or the shared file (`php:ini shared`) applied to every version |
-| `lerd pest:browser install [version]` | Set up in-container Pest browser testing: bake musl chromium into the FPM image, download the Playwright registry into a persistent volume, and shim Playwright's glibc browser to it |
-| `lerd pest:browser remove [version]` | Remove chromium from the FPM image and disable Pest browser testing (the Playwright cache volume is left intact) |
-| `lerd pest:browser doctor [version]` | Diagnose the Pest browser testing setup (plugin, chromium, playwright, shim) for a PHP version |
+| `lerd pest:browser install [version]` | Set up in-container Pest browser testing: bake musl chromium and Xvfb into the FPM image, download the Playwright registry into a persistent volume, and shim Playwright's glibc browser to it |
+| `lerd pest:browser remove [version]` | Remove chromium and Xvfb from the FPM image and disable Pest browser testing (the Playwright cache volume is left intact) |
+| `lerd pest:browser doctor [version]` | Diagnose the Pest browser testing setup (plugin, chromium, Xvfb, playwright, shim) for a PHP version |
 | `lerd php:bun install [version] [--pin VERSION]` | Install (or update) a musl bun into the container's persistent `/root/.bun` volume, shared across every PHP version; `--pin` fixes a specific bun version instead of latest |
 | `lerd php:bun update [version]` | Update the container's bun in place (`bun upgrade`) |
 | `lerd php:bun version [version]` | Show the bun version installed in the PHP-FPM container |
