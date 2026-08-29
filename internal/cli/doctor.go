@@ -432,20 +432,20 @@ func runDoctorInto(w io.Writer, useColor bool) (DoctorReport, error) {
 	section = "Ports"
 	fmt.Fprintln(w, "\n[Ports]")
 
+	// Report the ports nginx is actually configured to bind, not 80/443: on a
+	// host that moved them, probing the defaults reports a conflict that no
+	// config change can resolve (#1544).
+	httpPort, httpsPort := config.NginxPorts()
 	nginxRunning, _ := podman.ContainerRunning("lerd-nginx")
-	if nginxRunning {
-		ok("port 80  (nginx running)")
-		ok("port 443 (nginx running)")
-	} else {
-		if PortInUse("80") {
-			fail("port 80", "in use by another process", "find the process: "+FindListenerCmd("80"))
-		} else {
-			ok("port 80  (free)")
-		}
-		if PortInUse("443") {
-			fail("port 443", "in use by another process", "find the process: "+FindListenerCmd("443"))
-		} else {
-			ok("port 443 (free)")
+	for _, p := range []int{httpPort, httpsPort} {
+		port := strconv.Itoa(p)
+		switch {
+		case nginxRunning:
+			ok(fmt.Sprintf("port %-4s (nginx running)", port))
+		case PortInUse(port):
+			fail("port "+port, "in use by another process", "find the process: "+FindListenerCmd(port))
+		default:
+			ok(fmt.Sprintf("port %-4s (free)", port))
 		}
 	}
 
