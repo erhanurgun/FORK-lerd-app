@@ -186,7 +186,7 @@ func Run(ctx context.Context, path string, fw *config.Framework) Response {
 		// settings.php its installer wrote, and reporting that as the env file
 		// present would hide the missing one lerd and drush both need.
 		writeFile, _ := fw.Env.ResolveWrite(path)
-		if c, ok := checkEnvPresent(path, writeFile, fwExampleFile(fw)); ok {
+		if c, ok := checkEnvPresent(path, writeFile, fwExampleFile(fw), writeFile == fw.Env.AppFile); ok {
 			resp.add(c)
 		}
 		if c, ok := checkServiceWiring(path, envFile, fw); ok {
@@ -512,19 +512,27 @@ func applyLabels(resp *Response) {
 // seeding an empty one when it does not, and then writes the connection values
 // for the services the project picks. Leaving the finding at "it is missing"
 // hands the user a question lerd already knows the answer to.
-func envMissingDetail(envFile, exampleFile string) string {
-	if exampleFile == "" {
-		return fmt.Sprintf("%s is missing, run `lerd env` to create it and wire the services this project picks.", envFile)
+func envMissingDetail(envFile, exampleFile string, appWritten bool) string {
+	if exampleFile != "" {
+		return fmt.Sprintf("%s is missing, run `lerd env` to create it from %s and wire the services this project picks.", envFile, exampleFile)
 	}
-	return fmt.Sprintf("%s is missing, run `lerd env` to create it from %s and wire the services this project picks.", envFile, exampleFile)
+	// With nothing to seed from, a file the application writes during its own
+	// install must not be created by hand: an empty one reads to the framework as
+	// "already configured" and breaks a project that was merely waiting to be
+	// installed (#1563). Name the installer instead of a command that would make
+	// things worse.
+	if appWritten {
+		return fmt.Sprintf("%s is missing, so this project has not been installed yet. Run the framework's own install (`lerd run setup` where it offers one), which writes it.", envFile)
+	}
+	return fmt.Sprintf("%s is missing, run `lerd env` to create it and wire the services this project picks.", envFile)
 }
 
-func checkEnvPresent(path, envFile, exampleFile string) (Check, bool) {
+func checkEnvPresent(path, envFile, exampleFile string, appWritten bool) (Check, bool) {
 	if _, err := os.Stat(filepath.Join(path, envFile)); err != nil {
 		return Check{
 			Name:   "env_present",
 			Status: StatusFail,
-			Detail: envMissingDetail(envFile, exampleFile),
+			Detail: envMissingDetail(envFile, exampleFile, appWritten),
 		}, true
 	}
 	return Check{Name: "env_present", Status: StatusOK}, true

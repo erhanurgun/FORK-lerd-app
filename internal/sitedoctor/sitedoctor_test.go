@@ -46,13 +46,13 @@ func laravelLikeFW() *config.Framework {
 func TestCheckEnvPresent(t *testing.T) {
 	dir := t.TempDir()
 
-	c, _ := checkEnvPresent(dir, ".env", ".env.example")
+	c, _ := checkEnvPresent(dir, ".env", ".env.example", false)
 	if c.Status != StatusFail {
 		t.Errorf("missing .env: got %q, want fail", c.Status)
 	}
 
 	writeEnv(t, dir, ".env", "APP_KEY=x\n")
-	if c, _ := checkEnvPresent(dir, ".env", ".env.example"); c.Status != StatusOK {
+	if c, _ := checkEnvPresent(dir, ".env", ".env.example", false); c.Status != StatusOK {
 		t.Errorf("present .env: got %q, want ok", c.Status)
 	}
 }
