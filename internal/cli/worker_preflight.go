@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -73,6 +74,9 @@ func workerStartPreflight(sitePath, workerName string, w config.FrameworkWorker)
 	if msg := missingRequiredServiceMsg(workerName, sitePath, w); msg != "" {
 		return errors.New(msg)
 	}
+	if msg := missingWorkerProgramMsg(workerName, sitePath, w); msg != "" {
+		return errors.New(msg)
+	}
 	if w.Check != nil && !config.MatchesRule(sitePath, *w.Check) {
 		if msg := hostWorkerNotReadyMsg(workerName, sitePath, w); msg != "" {
 			return errors.New(msg)
@@ -119,6 +123,27 @@ func requiredServiceFor(sitePath string, w config.FrameworkWorker) string {
 		}
 	}
 	return w.RequiresService.Name
+}
+
+// missingWorkerProgramMsg returns an actionable message when a worker's command
+// names a program inside the project that is not there. Such a worker starts,
+// dies on "No such file or directory", and is restarted every few seconds, so
+// the reason scrolls past in a log nobody is reading while the unit flaps. Only
+// a project-relative path is judged: a bare name is resolved through PATH, which
+// is not lerd's to second-guess, and an absolute one belongs to the host.
+func missingWorkerProgramMsg(workerName, sitePath string, w config.FrameworkWorker) string {
+	fields := strings.Fields(w.Command)
+	if len(fields) == 0 {
+		return ""
+	}
+	program := fields[0]
+	if filepath.IsAbs(program) || !strings.Contains(program, "/") {
+		return ""
+	}
+	if _, err := os.Stat(filepath.Join(sitePath, program)); err == nil {
+		return ""
+	}
+	return fmt.Sprintf("worker %q needs %s, which this project does not have yet\nIts framework installs it: check `lerd run` for the command that does", workerName, program)
 }
 
 // requiredServiceUnit is the systemd unit of the service a worker declares it

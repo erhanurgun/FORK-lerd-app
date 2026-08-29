@@ -152,6 +152,17 @@ type VhostData struct {
 	FrameworkNginx string
 }
 
+// HTTPSRedirectHost is $host with the configured HTTPS port appended when nginx
+// publishes something other than 443. The plain-HTTP vhost redirects to it, and
+// without the port that redirect lands on 443, where a host that moved its ports
+// has nothing listening (#1544).
+func (d VhostData) HTTPSRedirectHost() string {
+	if _, httpsPort := config.NginxPorts(); httpsPort != 443 {
+		return "$host:" + strconv.Itoa(httpsPort)
+	}
+	return "$host"
+}
+
 // Root is the document root as the templates render it, quoted so a path with a
 // space stays a single nginx token. Every generator that fills a VhostData goes
 // through it, so the site, worktree, and SSL vhosts are all covered.
@@ -1848,6 +1859,8 @@ func RewriteNginxQuadlet() (changed bool, err error) {
 	// The template carries only the lerd-owned mounts, so a site or parked
 	// directory outside $HOME must have its Volume= line re-injected here, the
 	// same way RewriteFPMQuadlets does, or nginx restarts without the docroot.
+	httpPort, httpsPort := config.NginxPorts()
+	content = podman.ApplyNginxPorts(content, httpPort, httpsPort)
 	content = podman.InjectExtraVolumes(content, podman.ExtraVolumePaths())
 	return podman.WriteQuadletDiff("lerd-nginx", content)
 }

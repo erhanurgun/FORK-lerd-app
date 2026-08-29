@@ -170,6 +170,7 @@ export default defineConfig({
           text: 'Add-ons',
           items: [
             { text: 'Services (MongoDB, phpMyAdmin, …)', link: '/getting-started/services' },
+            { text: 'NativePHP (desktop & mobile)', link: '/getting-started/nativephp' },
           ],
         },
       ],

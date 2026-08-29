@@ -576,6 +576,10 @@ type DoctorCheck struct {
 	// Severity overrides the triggered status ("warn" or "fail"); each type has
 	// a sensible default (command→fail, the rest→warn).
 	Severity string `yaml:"severity,omitempty"`
+	// Check gates the whole check the way a worker's does: a check that speaks
+	// about an optional package is dropped on a project without it, rather than
+	// reporting a permanently green row.
+	Check *FrameworkRule `yaml:"check,omitempty"`
 
 	// env_key_set
 	EnvKey string `yaml:"env_key,omitempty"`
