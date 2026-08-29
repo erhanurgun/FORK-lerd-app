@@ -51,6 +51,13 @@ An Electron window opens running your app. The `native` worker is a [host worker
 lerd worker stop native
 ```
 
+Closing the window from the app itself ends `native:serve` with it, so the worker stops and its toggle turns off on its own. That is why the definition declares `restart: on-failure` rather than `always`: an always-restart worker would reopen the window you just closed. A crash still brings the app back, which is what you want mid-edit.
+
+::: tip The toggle follows the process, not the window
+If Electron loses its window but its own process survives, which is what a renderer crash looks like, lerd still reports the worker as running, because `native:serve` genuinely is. Neither of NativePHP's ports can tell you otherwise: it picks the PHP server from 8100-9000 and its API from 4000-5000 at boot and writes neither anywhere lerd could read, so there is nothing to probe. Toggle the worker off and on to get the window back.
+:::
+
+
 Package a binary when you're ready:
 
 ```bash
