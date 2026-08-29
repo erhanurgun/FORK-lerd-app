@@ -104,10 +104,7 @@ func validateWorkers(path string, cfg *config.ProjectConfig, fw *config.Framewor
 	if fw == nil {
 		fw, _ = config.GetFrameworkForDir(cfg.Framework, path)
 	}
-	hasQueue, hasHorizon := false, false
 	for _, w := range cfg.Workers {
-		hasQueue = hasQueue || w == "queue"
-		hasHorizon = hasHorizon || w == "horizon"
 		// A worker the project defines itself is its own definition, whether or
 		// not the site runs a custom container.
 		if _, ok := cfg.CustomWorkers[w]; ok || config.IsBuiltinWorker(w) {
@@ -122,15 +119,28 @@ func validateWorkers(path string, cfg *config.ProjectConfig, fw *config.Framewor
 			problems = append(problems, fmt.Sprintf("worker: %q is not defined for framework %s", w, cfg.Framework))
 			continue
 		}
-		if wDef.Check != nil && !config.MatchesRule(path, *wDef.Check) {
+		switch {
+		case wDef.Check != nil && !config.MatchesRule(path, *wDef.Check):
 			warnings = append(warnings, fmt.Sprintf("worker: %s prerequisite not met (check rule failed)", w))
+		case wDef.ExcludeCheck != nil && config.MatchesRule(path, *wDef.ExcludeCheck):
+			warnings = append(warnings, fmt.Sprintf("worker: %s superseded by %s, it will be skipped", w, describeCheckRule(*wDef.ExcludeCheck)))
 		}
 	}
-	if hasQueue && hasHorizon {
-		warnings = append(warnings, "workers: both queue and horizon are listed, horizon manages queues so the queue worker is skipped")
-	}
-	if hasQueue && siteHasHorizon(path) {
-		warnings = append(warnings, "workers: queue is listed but laravel/horizon is installed, horizon is started instead")
+	// Two listed workers where one declares it stops the other: the pairing comes
+	// from the definitions, so nothing here has to know that horizon is what
+	// manages a Laravel site's queues.
+	if fw != nil {
+		for _, w := range cfg.Workers {
+			wDef, ok := fw.Workers[w]
+			if !ok {
+				continue
+			}
+			for _, other := range wDef.ConflictsWith {
+				if slices.Contains(cfg.Workers, other) {
+					warnings = append(warnings, fmt.Sprintf("workers: both %s and %s are listed, %s stops %s when it starts", other, w, w, other))
+				}
+			}
+		}
 	}
 	return problems, warnings
 }
@@ -209,8 +219,15 @@ func validateCommands(cfg *config.ProjectConfig) (problems, warnings []string) {
 	return problems, warnings
 }
 
-// siteHasHorizon reports whether composer.json lists laravel/horizon.
-func siteHasHorizon(path string) bool {
-	data, err := os.ReadFile(filepath.Join(path, "composer.json"))
-	return err == nil && strings.Contains(string(data), `"laravel/horizon"`)
+// describeCheckRule renders a rule for a finding: the reader only needs the
+// dependency that triggered it, not the rule's shape.
+func describeCheckRule(r config.FrameworkRule) string {
+	switch {
+	case r.Composer != "":
+		return "composer package " + r.Composer
+	case r.File != "":
+		return "file " + r.File
+	default:
+		return "(empty rule)"
+	}
 }
