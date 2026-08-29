@@ -197,6 +197,11 @@ type GlobalConfig struct {
 		// every existing install — users who never touch the toggle
 		// see no change.
 		Disabled bool `yaml:"disabled,omitempty" mapstructure:"disabled"`
+		// OnDashboardOpen brings the stack up when the dashboard is opened on a
+		// stopped lerd, so a browser or the desktop app is enough to start it
+		// and no terminal is needed. Opt-in: the zero value leaves the start to
+		// the button on the dashboard's own "core services down" banner.
+		OnDashboardOpen bool `yaml:"on_dashboard_open,omitempty" mapstructure:"on_dashboard_open"`
 	} `yaml:"autostart,omitempty" mapstructure:"autostart"`
 	Shims struct {
 		// PathDisabled stops lerd from writing its bin dir (the php/composer/
@@ -413,6 +418,25 @@ func (c *GlobalConfig) WorkerExecMode() string {
 // predicate the install wizard, `lerd secure`, and the cert layer all share.
 func (c *GlobalConfig) DNSManaged() bool {
 	return c == nil || c.DNS.Enabled
+}
+
+// NginxPorts returns the host ports nginx should publish, falling back to the
+// defaults when the config is unreadable or names no port. Every caller that
+// binds, probes or reports those ports reads them here, so the unit and the
+// checks against it can't drift apart.
+func NginxPorts() (httpPort, httpsPort int) {
+	httpPort, httpsPort = 80, 443
+	cfg, err := LoadGlobal()
+	if err != nil || cfg == nil {
+		return httpPort, httpsPort
+	}
+	if cfg.Nginx.HTTPPort > 0 {
+		httpPort = cfg.Nginx.HTTPPort
+	}
+	if cfg.Nginx.HTTPSPort > 0 {
+		httpsPort = cfg.Nginx.HTTPSPort
+	}
+	return httpPort, httpsPort
 }
 
 func defaultConfig() *GlobalConfig {

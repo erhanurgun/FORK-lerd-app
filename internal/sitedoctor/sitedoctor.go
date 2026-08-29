@@ -157,7 +157,7 @@ func AppliesForPath(path, fwName string) bool {
 // it, since its package.json still drives the node checks.
 func Applies(path string, fw *config.Framework) bool {
 	if fw != nil {
-		if len(fw.Requires) > 0 || fw.HasEnvConfig() || len(frameworkChecks(fw)) > 0 {
+		if len(fw.Requires) > 0 || fw.HasEnvConfig() || len(frameworkChecks(fw, path)) > 0 {
 			return true
 		}
 		if fw.PHP.Min != "" || fw.PHP.Max != "" {
@@ -258,7 +258,7 @@ func RunWith(ctx context.Context, path string, fw *config.Framework, opts Option
 	// (results collected in order) so a down app caps the panel at roughly one
 	// timeout instead of the sum of them all.
 	var tasks []func() (Check, bool)
-	for _, spec := range frameworkChecks(fw) {
+	for _, spec := range frameworkChecks(fw, path) {
 		spec := spec
 		// A command check is an exec into the site's container, which is what the
 		// quick pass exists to avoid.
@@ -461,12 +461,20 @@ func frameworkLabel(fw *config.Framework) string {
 	return fw.Name
 }
 
-// frameworkChecks returns the framework's declarative doctor checks, or nil.
-func frameworkChecks(fw *config.Framework) []config.DoctorCheck {
+// frameworkChecks returns the framework's declarative doctor checks, dropping
+// any whose gate does not hold for this project, or nil.
+func frameworkChecks(fw *config.Framework, projectDir string) []config.DoctorCheck {
 	if fw == nil || fw.Doctor == nil {
 		return nil
 	}
-	return fw.Doctor.Checks
+	var out []config.DoctorCheck
+	for _, c := range fw.Doctor.Checks {
+		if c.Check != nil && !config.MatchesRule(projectDir, *c.Check) {
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
 }
 
 // runDeclaredCheck dispatches one store-declared check to its typed evaluator,

@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1024,7 +1023,7 @@ func runEnv(_ *cobra.Command, _ []string) error {
 	// the plugin is present but chromium isn't baked into the FPM image yet.
 	if config.ComposerHasPackage(cwd, "pestphp/pest-plugin-browser") {
 		if v, derr := phpDet.DetectVersion(cwd); derr == nil && pestBrowserSupportedVersion(v) == nil {
-			if gcfg, cerr := config.LoadGlobal(); cerr == nil && !slices.Contains(gcfg.GetPackages(), pestBrowserPkg) {
+			if gcfg, cerr := config.LoadGlobal(); cerr == nil && len(missingPestBrowserPkgs(gcfg)) > 0 {
 				envInfo("  Detected pest-plugin-browser — run `lerd pest:browser install` to enable in-container browser testing\n")
 			}
 		}

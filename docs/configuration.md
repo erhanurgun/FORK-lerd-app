@@ -41,8 +41,12 @@ share:
                             # share:tool; omitted (the default) means
                             # auto-detect.
 nginx:
-  http_port: 80
-  https_port: 443
+  http_port: 80        # host ports nginx publishes. Change these when another
+  https_port: 443      # service already owns 80/443; nginx still listens on
+                       # 80/443 inside its container, so only the host side
+                       # moves and sites are then reached at
+                       # https://myapp.test:10443. Applied on the next
+                       # `lerd start` or `lerd install`.
   request_timeout: 60   # optional, default 60. Seconds nginx waits on a slow
                         # request before returning 504. Maps to
                         # fastcgi_read_timeout/fastcgi_send_timeout for PHP-FPM
