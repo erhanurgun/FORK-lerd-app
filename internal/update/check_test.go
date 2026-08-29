@@ -151,8 +151,9 @@ func withTempCache(t *testing.T, tag string) {
 	}
 }
 
-// TestSummarizeChangelog verifies the short-list parser: section headers are
-// kept, bold headlines are extracted with their issue refs, and prose is dropped.
+// TestSummarizeChangelog verifies the short-list parser: version and section
+// headers are kept, bold headlines are extracted with their issue refs, and
+// prose is dropped.
 func TestSummarizeChangelog(t *testing.T) {
 	sections := `## [1.33.1] - 2026-08-15
 
@@ -170,7 +171,9 @@ on for several lines and explains the release theme in detail.
 - **A key an env file sets twice is reported** (#1403, #1404). A site showed postgres on every surface while the application ran on SQLite.`
 
 	got := SummarizeChangelog(sections)
-	want := `### Added
+	want := `## [1.33.1] - 2026-08-15
+
+### Added
 - A site wizard in the dashboard (#1473)
 - Offline docs in the dashboard (#1456)
 
@@ -187,5 +190,25 @@ on for several lines and explains the release theme in detail.
 func TestSummarizeChangelog_empty(t *testing.T) {
 	if got := SummarizeChangelog(""); got != "" {
 		t.Errorf("SummarizeChangelog(\"\") = %q, want \"\"", got)
+	}
+}
+
+// A bullet without a bold headline carries its issue ref inside the sentence, so
+// the ref must not be appended a second time.
+func TestSummarizeChangelog_plainEntryKeepsOneIssueRef(t *testing.T) {
+	sections := "### Docs\n\n- The landing page draws each framework with its own mark (#1498). Both stores publish that artwork.\n"
+	want := "### Docs\n- The landing page draws each framework with its own mark (#1498)"
+	if got := SummarizeChangelog(sections); got != want {
+		t.Errorf("SummarizeChangelog:\ngot:  %q\nwant: %q", got, want)
+	}
+}
+
+// A range spanning two releases repeats its section names, so the version each
+// group belongs to has to survive or the list reads as one flat release.
+func TestSummarizeChangelog_keepsTheVersionHeaders(t *testing.T) {
+	sections := "## [1.33.1] - 2026-08-15\n\n### Fixed\n\n- **Later fix** (#2).\n\n## [1.33.0] - 2026-08-01\n\n### Fixed\n\n- **Earlier fix** (#1).\n"
+	want := "## [1.33.1] - 2026-08-15\n\n### Fixed\n- Later fix (#2)\n\n## [1.33.0] - 2026-08-01\n\n### Fixed\n- Earlier fix (#1)"
+	if got := SummarizeChangelog(sections); got != want {
+		t.Errorf("SummarizeChangelog:\ngot:\n%s\n\nwant:\n%s", got, want)
 	}
 }

@@ -191,11 +191,21 @@ func extractChangelogSections(changelog, currentVersion, latestVersion string) s
 }
 
 // SummarizeChangelog condenses full changelog sections into a short list of
-// entry headlines with their issue numbers, keeping the ### section headers.
-// Long prose paragraphs and the ## [version] header are dropped.
+// entry headlines with their issue numbers, keeping the version and section
+// headers. Long prose paragraphs are dropped.
 func SummarizeChangelog(sections string) string {
 	var result strings.Builder
 	for _, line := range strings.Split(sections, "\n") {
+		// A range spanning two releases repeats its section names, so the version
+		// header stays or the list reads as one flat release.
+		if strings.HasPrefix(line, "## [") {
+			if result.Len() > 0 {
+				result.WriteByte('\n')
+			}
+			result.WriteString(line)
+			result.WriteByte('\n')
+			continue
+		}
 		if strings.HasPrefix(line, "### ") {
 			if result.Len() > 0 {
 				result.WriteByte('\n')
@@ -245,7 +255,9 @@ func summarizeEntry(line string) string {
 		}
 	}
 	out := "- " + headline
-	if issueRef != "" {
+	// A bullet with no bold headline carries its ref inside the sentence the
+	// headline was cut from, so appending would print it twice.
+	if issueRef != "" && !strings.Contains(headline, issueRef) {
 		out += " " + issueRef
 	}
 	return out
