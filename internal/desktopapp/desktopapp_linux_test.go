@@ -12,6 +12,7 @@ import (
 func TestInstall_writesAClickableEntryAndItsIcon(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_DATA_HOME", dir)
+	t.Setenv("XDG_DATA_DIRS", t.TempDir())
 
 	entry, err := Install()
 	if err != nil {
@@ -28,7 +29,7 @@ func TestInstall_writesAClickableEntryAndItsIcon(t *testing.T) {
 	// Clicked from a launcher there is no terminal, so the entry has to say so
 	// and has to ask for the splash, or the click is a minute of nothing.
 	for _, want := range []string{
-		"Type=Application", "Name=Start Lerd", "Terminal=false",
+		"Type=Application", "Name=Lerd", "Terminal=false",
 		"dashboard --splash", "Categories=Development;",
 	} {
 		if !strings.Contains(text, want) {
@@ -56,6 +57,7 @@ func TestDesktopEntry_execIsAnAbsolutePath(t *testing.T) {
 func TestRemove_takesTheEntryAndTheIcon(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_DATA_HOME", dir)
+	t.Setenv("XDG_DATA_DIRS", t.TempDir())
 	if _, err := Install(); err != nil {
 		t.Fatal(err)
 	}
@@ -72,5 +74,49 @@ func TestRemove_takesTheEntryAndTheIcon(t *testing.T) {
 	// the entry does, and it must not fail.
 	if err := Remove(); err != nil {
 		t.Errorf("second Remove = %v, want nil", err)
+	}
+}
+
+// The desktop app ships an entry called Lerd of its own, so a second one under
+// that name would put two identical icons in the application list. Where it is
+// installed the launcher says what it adds instead.
+func TestLauncherName_stepsAsideForTheDesktopApp(t *testing.T) {
+	data := t.TempDir()
+	shared := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", data)
+	t.Setenv("XDG_DATA_DIRS", shared)
+
+	if got := LauncherName(); got != "Lerd" {
+		t.Errorf("without the app: got %q, want %q", got, "Lerd")
+	}
+
+	exports := filepath.Join(data, "flatpak", "exports", "share", "applications")
+	if err := os.MkdirAll(exports, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(exports, desktopAppEntryID), []byte("[Desktop Entry]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := LauncherName(); got != "Start Lerd" {
+		t.Errorf("with the flatpak: got %q, want %q", got, "Start Lerd")
+	}
+}
+
+// A distro package puts its entry in the shared directories rather than a
+// flatpak export, and it collides just the same.
+func TestLauncherName_alsoSeesAPackagedApp(t *testing.T) {
+	shared := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("XDG_DATA_DIRS", shared)
+
+	apps := filepath.Join(shared, "applications")
+	if err := os.MkdirAll(apps, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(apps, desktopAppEntryID), []byte("[Desktop Entry]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := LauncherName(); got != "Start Lerd" {
+		t.Errorf("with a packaged app: got %q, want %q", got, "Start Lerd")
 	}
 }

@@ -15,12 +15,52 @@ import (
 //go:embed assets/lerd-mark.png
 var markPNG []byte
 
-// LauncherName is what the Linux desktop entry is called. The lerd-desktop
-// flatpak ships its own entry named "Lerd", and shadowing that one is not an
-// option: it carries the x-scheme-handler/lerd association, and taking that
-// over would point lerd:// back at this launcher, which opens the app through
-// lerd://. So the two sit side by side and this one says what it adds.
-const LauncherName = "Start Lerd"
+// LauncherName is what the Linux desktop entry is called. On its own it is
+// "Lerd", the same as everywhere else. The lerd-desktop app ships an entry under
+// that name too, and shadowing that one is not an option: it carries the
+// x-scheme-handler/lerd association, and taking it over would point lerd:// back
+// at this launcher, which opens the app through lerd://. So where both are
+// installed the two sit side by side and this one says what it adds.
+func LauncherName() string {
+	if desktopAppEntryInstalled() {
+		return "Start " + Name
+	}
+	return Name
+}
+
+// desktopAppEntryID is the lerd-desktop app's entry, named after its app id.
+const desktopAppEntryID = "sh.lerd.Desktop.desktop"
+
+// desktopAppEntryInstalled reports whether the desktop app already lists itself.
+// The flatpak exports its entry per user and system-wide, and a distro package
+// would put one in the shared application directories, so all of them are asked.
+func desktopAppEntryInstalled() bool {
+	dirs := []string{
+		filepath.Join(dataHome(), "flatpak", "exports", "share", "applications"),
+		"/var/lib/flatpak/exports/share/applications",
+	}
+	for _, base := range filepath.SplitList(xdgDataDirs()) {
+		dirs = append(dirs, filepath.Join(base, "applications"))
+	}
+	for _, dir := range dirs {
+		if dir == "" {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(dir, desktopAppEntryID)); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// xdgDataDirs is the shared data search path, with the spec's default when the
+// session sets none.
+func xdgDataDirs() string {
+	if v := os.Getenv("XDG_DATA_DIRS"); v != "" {
+		return v
+	}
+	return "/usr/local/share:/usr/share"
+}
 
 // entryName is the desktop file's basename. It doubles as the icon's, so a
 // launcher that resolves Icon= through the theme finds the same artwork.
@@ -91,7 +131,7 @@ func Install() (string, error) {
 func desktopEntry(bin, icon string) string {
 	return "[Desktop Entry]\n" +
 		"Type=Application\n" +
-		"Name=" + LauncherName + "\n" +
+		"Name=" + LauncherName() + "\n" +
 		"GenericName=Local PHP development environment\n" +
 		"Comment=Bring the environment up, then open the Lerd app or the dashboard\n" +
 		"Exec=" + bin + " dashboard --splash\n" +
