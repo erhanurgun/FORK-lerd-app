@@ -215,7 +215,13 @@ An IDE set to stop on the first line of every script therefore stops there, in a
 Cannot find a local copy of the file on server /usr/local/etc/lerd/dump-bridge.php
 ```
 
-Nothing is broken, and your own breakpoints are still fine. In **PhpStorm** the setting is **Settings > PHP > Debug > Break at first line in PHP scripts**; turn it off and sessions start at your breakpoints instead. **VS Code** does not do this by default, but if you set `"stopOnEntry": true` in your launch configuration it behaves the same way.
+Nothing is broken, and your own breakpoints are still fine. In **PhpStorm** three settings can cause it, and the two that matter here are not the obvious one:
+
+- **Settings > PHP > Debug > External connections > Force break at first line when no path mapping specified** — the bridge has none, so this one fires and is what draws the *Click to set up path mappings* link
+- **Settings > PHP > Debug > External connections > Force break at first line when a script is outside the project** — the bridge is outside it, so this one fires too
+- **Settings > PHP > Debug > Break at first line in PHP scripts** — the general one, off by default
+
+All three are worth turning off for a lerd project: the first two default to **on**, so unchecking only the third leaves the session still stopping in the bridge. **VS Code** does not do this by default, but `"stopOnEntry": true` in a launch configuration behaves the same way.
 
 The same is worth knowing about `start_with_request=yes`, which is the default: with the debugger listening, *every* request connects, so the first one lands on the bridge before you have asked to debug anything in particular. [On-demand debugging](#on-demand-debugging-workers-and-cli) is the way to keep the debugger quiet until you trigger a session.
 
