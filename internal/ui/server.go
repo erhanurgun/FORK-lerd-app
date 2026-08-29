@@ -544,7 +544,7 @@ func terminalDirCandidates(dir string) []terminalCmd {
 	candidates := []terminalCmd{}
 
 	if t := os.Getenv("TERMINAL"); t != "" {
-		candidates = append(candidates, terminalCmd{t, []string{}})
+		candidates = append(candidates, namedTerminal(t, dir))
 	}
 
 	// A terminal the user picked in System Settings outranks one that merely
@@ -552,23 +552,13 @@ func terminalDirCandidates(dir string) []terminalCmd {
 	if bundle := macDefaultTerminal(); bundle != "" {
 		candidates = append(candidates, terminalCmd{"open", []string{"-b", bundle, dir}})
 	}
+	// The same on Linux, where the choice lives in the freedesktop launcher, the
+	// distribution's alternatives link, or the desktop's own setting.
+	if t := linuxDefaultTerminal(); t != "" {
+		candidates = append(candidates, namedTerminal(t, dir))
+	}
 
-	candidates = append(candidates,
-		terminalCmd{"kitty", []string{"--directory", dir}},
-		terminalCmd{"foot", []string{"--working-directory", dir}},
-		terminalCmd{"alacritty", []string{"--working-directory", dir}},
-		terminalCmd{"wezterm", []string{"start", "--cwd", dir}},
-		terminalCmd{"ghostty", []string{"--working-directory=" + dir}},
-		// ptyxis is single-instance: --working-directory is honoured only
-		// alongside --new-window/--tab/-x, so a bare launch lands in $HOME.
-		terminalCmd{"ptyxis", []string{"--new-window", "--working-directory", dir}},
-		terminalCmd{"konsole", []string{"--separate", "--workdir", dir}},
-		terminalCmd{"gnome-terminal", []string{"--working-directory", dir}},
-		terminalCmd{"xfce4-terminal", []string{"--working-directory", dir}},
-		terminalCmd{"tilix", []string{"--working-directory", dir}},
-		terminalCmd{"terminator", []string{"--working-directory", dir}},
-		terminalCmd{"xterm", []string{"-e", "sh", "-c", `cd "$0" && exec "$SHELL"`, dir}},
-	)
+	candidates = append(candidates, knownTerminals(dir)...)
 
 	if runtime.GOOS == "darwin" {
 		// `open -a Terminal dir` opens a new window at dir without echoing any
@@ -588,6 +578,41 @@ func terminalDirCandidates(dir string) []terminalCmd {
 	return candidates
 }
 
+// namedTerminal builds the invocation for a terminal named by the user or the
+// desktop. Its own flags are used when lerd knows them, since the generic
+// `-e sh -c` form several emulators do not accept: kitty and ghostty take the
+// program directly, and a chosen kitty would otherwise fail and fall through to
+// whatever happened to be next on PATH.
+func namedTerminal(name, dir string) terminalCmd {
+	for _, t := range knownTerminals(dir) {
+		if t.bin == filepath.Base(name) {
+			return terminalCmd{name, t.args}
+		}
+	}
+	return terminalCmd{name, []string{"-e", "sh", "-c", `cd "$0" && exec "$SHELL"`, dir}}
+}
+
+// knownTerminals is the fallback list, and the source of the flags namedTerminal
+// reuses when the chosen terminal is one of them.
+func knownTerminals(dir string) []terminalCmd {
+	return []terminalCmd{
+		terminalCmd{"kitty", []string{"--directory", dir}},
+		terminalCmd{"foot", []string{"--working-directory", dir}},
+		terminalCmd{"alacritty", []string{"--working-directory", dir}},
+		terminalCmd{"wezterm", []string{"start", "--cwd", dir}},
+		terminalCmd{"ghostty", []string{"--working-directory=" + dir}},
+		// ptyxis is single-instance: --working-directory is honoured only
+		// alongside --new-window/--tab/-x, so a bare launch lands in $HOME.
+		terminalCmd{"ptyxis", []string{"--new-window", "--working-directory", dir}},
+		terminalCmd{"konsole", []string{"--separate", "--workdir", dir}},
+		terminalCmd{"gnome-terminal", []string{"--working-directory", dir}},
+		terminalCmd{"xfce4-terminal", []string{"--working-directory", dir}},
+		terminalCmd{"tilix", []string{"--working-directory", dir}},
+		terminalCmd{"terminator", []string{"--working-directory", dir}},
+		terminalCmd{"xterm", []string{"-e", "sh", "-c", `cd "$0" && exec "$SHELL"`, dir}},
+	}
+}
+
 // openTerminalAt opens the user's preferred terminal emulator in dir.
 // It checks $TERMINAL first, then falls back to a list of common emulators.
 func openTerminalAt(dir string) error {
@@ -596,12 +621,7 @@ func openTerminalAt(dir string) error {
 		if err != nil {
 			continue
 		}
-		args := t.args
-		// For $TERMINAL with no preset args, just pass the dir via cd wrapper
-		if t.bin == os.Getenv("TERMINAL") && len(args) == 0 {
-			args = []string{"-e", "sh", "-c", `cd "$0" && exec "$SHELL"`, dir}
-		}
-		cmd := exec.Command(bin, args...)
+		cmd := exec.Command(bin, t.args...)
 		cmd.Dir = dir
 		if runtime.GOOS != "darwin" {
 			cmd.Env = graphicalEnv()
