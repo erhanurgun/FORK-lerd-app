@@ -371,6 +371,15 @@ func Detect() ([]UnhealthyWorker, error) {
 			if !unitEnabledFn(unit) {
 				continue
 			}
+			// A worker whose command ends when the user closes what it was
+			// running has finished, not drifted: NativePHP's native:serve exits
+			// with its window, and vite with its dev server. Their definitions
+			// say so by declaring on-failure, since an always-restart unit would
+			// reopen what the user just closed. Only always can be inactive
+			// against its own policy, which is what drift means.
+			if restart := unitMeta[unit].Restart; restart != "" && restart != "always" {
+				continue
+			}
 			detected = "expected-but-stopped"
 		default: // "active": up, but a health-probed server may have died under it.
 			m := meta[site]
