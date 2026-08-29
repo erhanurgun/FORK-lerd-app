@@ -59,7 +59,8 @@ assistant into the target project directory:
   GEMINI.md                        Gemini CLI context
   .vscode/mcp.json                 GitHub Copilot (VS Code) MCP config
   .github/copilot-instructions.md  GitHub Copilot instructions
-  AGENTS.md                        Codex CLI context (Codex MCP is global-only)
+  AGENTS.md                        Codex CLI context (also read by OpenCode)
+  opencode.json                    OpenCode MCP config
 
 Run this from a Laravel project root, or use --path to specify a directory.`,
 		RunE: func(_ *cobra.Command, _ []string) error {
@@ -169,7 +170,10 @@ func writeProjectArtefacts(abs string, verbose, createMissing bool) error {
 				if err := writeClientMCP(full, c); err != nil {
 					return err
 				}
-				log("  updated " + c.ProjectMCP)
+				// Report the file that was written, which is not always the one
+				// the client declares: an existing opencode.jsonc is merged into
+				// rather than shadowed by a sibling .json.
+				log("  updated " + filepath.Base(resolveClientConfigPath(full)))
 			}
 		}
 		for _, cx := range c.Contexts {
@@ -241,11 +245,13 @@ This command updates:
   ~/.codex/config.toml             Codex CLI global MCP config
   ~/.config/Code/User/mcp.json     GitHub Copilot (VS Code) global MCP config
   ~/.gemini/config/mcp_config.json Google Antigravity global MCP config
+  ~/.config/opencode/opencode.json OpenCode global MCP config
   ~/.claude/skills/lerd/SKILL.md   Claude Code user-scope skill
   ~/.cursor/rules/lerd.mdc         Cursor user-scope rules
   ~/.junie/guidelines.md           JetBrains Junie user-scope guidelines
   ~/.gemini/GEMINI.md              Gemini CLI user-scope context
-  ~/.codex/AGENTS.md               Codex CLI user-scope context`,
+  ~/.codex/AGENTS.md               Codex CLI user-scope context
+  ~/.config/opencode/AGENTS.md     OpenCode user-scope context`,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			return RunMCPEnableGlobal()
 		},
@@ -334,10 +340,12 @@ func writeGlobalMCPConfigs(home string, verbose bool) error {
 		if c.GlobalMCP == "" {
 			continue
 		}
-		if err := writeClientMCP(filepath.Join(home, c.GlobalMCP), c); err != nil {
+		globalPath := filepath.Join(home, c.GlobalMCP)
+		if err := writeClientMCP(globalPath, c); err != nil {
 			return err
 		}
-		log("updated ~/" + c.GlobalMCP)
+		written, _ := filepath.Rel(home, resolveClientConfigPath(globalPath))
+		log("updated ~/" + written)
 	}
 	if sweepLegacySharedAIMCP(home) {
 		log("cleaned ~/" + legacySharedAIMCP + " (no longer written)")
@@ -521,7 +529,7 @@ func RemoveGlobalAISkills(home string, verbose bool) error {
 			if changed, err := removeClientMCP(full, c); err != nil {
 				fmt.Printf("  warn: %s: %v\n", full, err)
 			} else if changed {
-				log("  cleaned " + full)
+				log("  cleaned " + resolveClientConfigPath(full))
 			}
 		}
 		for _, cx := range c.Contexts {
@@ -558,7 +566,7 @@ func RemoveProjectAISkills(abs string, verbose bool) error {
 			if changed, err := removeClientMCP(full, c); err != nil {
 				fmt.Printf("  warn: %s: %v\n", full, err)
 			} else if changed {
-				log("  cleaned " + full)
+				log("  cleaned " + resolveClientConfigPath(full))
 			}
 		}
 		for _, cx := range c.Contexts {
