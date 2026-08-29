@@ -12,7 +12,13 @@
     setRemoteFullAccess
   } from '$stores/remoteControl';
   import { openRemoteControlModal, openLANProgressModal, type LANAction } from '$stores/modals';
-  import { autostartEnabled, loadAutostart, toggleAutostart } from '$stores/autostart';
+  import {
+    autostartEnabled,
+    loadAutostart,
+    toggleAutostart,
+    startOnDashboardOpen,
+    toggleStartOnDashboardOpen
+  } from '$stores/autostart';
   import { idleEnabled, idleTimeoutMinutes, loadIdle, saveIdle } from '$stores/idle';
   import Toggle from '$components/Toggle.svelte';
   import StatusPill from '$components/StatusPill.svelte';
@@ -81,6 +87,16 @@
       await toggleAutostart(!$autostartEnabled);
     } finally {
       autostartBusy = false;
+    }
+  }
+
+  let startOnOpenBusy = $state(false);
+  async function onToggleStartOnOpen() {
+    startOnOpenBusy = true;
+    try {
+      await toggleStartOnDashboardOpen(!$startOnDashboardOpen);
+    } finally {
+      startOnOpenBusy = false;
     }
   }
 
@@ -228,6 +244,27 @@
         {/if}
       </div>
       <p class="text-xs text-gray-500 dark:text-gray-400">{m.system_autostart_description()}</p>
+    </SettingsCard>
+
+    <SettingsCard>
+      <div class="flex items-center justify-between gap-3 mb-2">
+        <span class="text-sm font-semibold text-gray-700 dark:text-gray-300">{m.system_startOnOpen_title()}</span>
+        {#if $accessMode.localControl}
+          <Toggle
+            on={$startOnDashboardOpen}
+            loading={startOnOpenBusy}
+            onclick={onToggleStartOnOpen}
+            title={$startOnDashboardOpen ? m.system_startOnOpen_toggleOff() : m.system_startOnOpen_toggleOn()}
+          />
+        {:else}
+          <StatusPill
+            size="sm"
+            tone={$startOnDashboardOpen ? 'ok' : 'muted'}
+            label={$startOnDashboardOpen ? m.common_enabled() : m.common_disabled()}
+          />
+        {/if}
+      </div>
+      <p class="text-xs text-gray-500 dark:text-gray-400">{m.system_startOnOpen_description()}</p>
     </SettingsCard>
 
     <SettingsCard>

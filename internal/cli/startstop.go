@@ -7,8 +7,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/geodro/lerd/internal/config"
@@ -156,7 +158,7 @@ func NewStartCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "start",
 		Short: "Start Lerd (DNS, nginx, PHP-FPM, and installed services)",
-		RunE:  runStart,
+		RunE:  func(*cobra.Command, []string) error { return startLerd(nil, nil) },
 	}
 }
 
@@ -377,7 +379,40 @@ func lerdDNSAnswering() bool {
 	return dns.CheckStatus(dns.ConfiguredTLD()) != dns.StatusDown
 }
 
-func runStart(_ *cobra.Command, _ []string) error {
+// StartEvent is one step of the start sequence. The dashboard streams these so
+// a start driven from the UI reads like the CLI's spinner instead of a button
+// that hangs for a minute with nothing to show for it.
+type StartEvent struct {
+	// Phase is "step" for a stage of the sequence, "unit" for one unit that has
+	// finished starting (Error set if it failed), and "done" at the end.
+	Phase string `json:"phase"`
+	Step  string `json:"step,omitempty"`
+	Unit  string `json:"unit,omitempty"`
+	// Total is the number of units the run will start, sent once before the
+	// first of them so the dashboard can show progress out of a known total.
+	Total int    `json:"total,omitempty"`
+	Error string `json:"error,omitempty"`
+}
+
+// startLerd is the full start sequence. emit, when set, receives a StartEvent
+// per stage and per unit; it is called from the parallel start jobs, so it is
+// serialised here rather than in every caller.
+//
+// skip names units the run must not touch, for a daemon starting lerd from
+// inside one of them: starting a unit boots it out of launchd first, which is
+// the same SIGTERM a stop is, so lerd-ui asking for its own unit killed the
+// start half way and left the dashboard unreachable behind a 502.
+func startLerd(emit func(StartEvent), skip []string) error {
+	var emitMu sync.Mutex
+	report := func(e StartEvent) {
+		if emit == nil {
+			return
+		}
+		emitMu.Lock()
+		defer emitMu.Unlock()
+		emit(e)
+	}
+	report(StartEvent{Phase: "step", Step: "preparing"})
 	// Clear the intentional-stop marker up front: we're bringing lerd up, so the
 	// worker health watcher should resume reporting real drift once units are back.
 	_ = config.ClearStopped()
@@ -447,6 +482,7 @@ func runStart(_ *cobra.Command, _ []string) error {
 	checkPortConflicts(units)
 
 	// Build or pull any missing images before starting containers.
+	report(StartEvent{Phase: "step", Step: "images"})
 	ensureImages()
 
 	// Rewrite nginx.conf so any config changes in new binary versions take effect.
@@ -527,6 +563,7 @@ func runStart(_ *cobra.Command, _ []string) error {
 	serviceUnits := append(lifecycle.CoreUnits(), lifecycle.InstalledServiceUnits()...)
 	serviceUnits = append(serviceUnits, lifecycle.InstalledCustomContainerUnits()...)
 	serviceUnits = append(serviceUnits, "lerd-ui", "lerd-watcher")
+	serviceUnits = dropSkipped(serviceUnits, skip)
 
 	// Phase 2: worker units that depend on running containers.
 	workerUnits := append(lifecycle.RegisteredQueueUnits(), lifecycle.RegisteredStripeUnits()...)
@@ -544,9 +581,11 @@ func runStart(_ *cobra.Command, _ []string) error {
 	// (site shown asleep, workers actually running) and making workerheal skip it.
 	// Mirrors the worktree autostart filter; real activity wakes it via the engine.
 	workerUnits = dropIdleSuspendedUnits(workerUnits)
+	workerUnits = dropSkipped(workerUnits, skip)
 
 	feedback.Begin()
 	feedback.Line("starting lerd")
+	report(StartEvent{Phase: "step", Step: "units", Total: len(serviceUnits) + len(workerUnits)})
 
 	makeJobs := func(us []string) []BuildJob {
 		jobs := make([]BuildJob, len(us))
@@ -556,10 +595,18 @@ func runStart(_ *cobra.Command, _ []string) error {
 			jobs[i] = BuildJob{
 				Label: label,
 				Run: func(w io.Writer) error {
+					var err error
 					if unit == "lerd-dns" {
-						return podman.RestartUnit(unit)
+						err = podman.RestartUnit(unit)
+					} else {
+						err = podman.StartUnit(unit)
 					}
-					return podman.StartUnit(unit)
+					ev := StartEvent{Phase: "unit", Unit: label}
+					if err != nil {
+						ev.Error = err.Error()
+					}
+					report(ev)
+					return err
 				},
 			}
 		}
@@ -594,6 +641,7 @@ func runStart(_ *cobra.Command, _ []string) error {
 	// stop there; on every other platform it is a no-op that returns false and
 	// the start continues as normal.
 	if reportOverlayHealOutcome(serviceErr) {
+		report(StartEvent{Phase: "done"})
 		return nil
 	}
 	if len(workerUnits) > 0 {
@@ -644,6 +692,7 @@ func runStart(_ *cobra.Command, _ []string) error {
 	// script fires on interface "up" but that event precedes lerd-dns starting.
 	// The NixOS note lives here (and on install), not inside ConfigureResolver:
 	// the watcher calls that whenever .test fails.
+	report(StartEvent{Phase: "step", Step: "dns"})
 	dns.NoteNixOSOwnsResolver()
 	if err := dns.ConfigureResolver(); err != nil {
 		fmt.Printf("  WARN: DNS resolver config: %v\n", err)
@@ -676,6 +725,7 @@ func runStart(_ *cobra.Command, _ []string) error {
 		}
 	}
 
+	report(StartEvent{Phase: "done"})
 	return nil
 }
 
@@ -1125,8 +1175,18 @@ func dedupeStrings(in []string) []string {
 	return out
 }
 
-// RunStart starts all lerd services (exported for use by the UI server).
-func RunStart() error { return runStart(nil, nil) }
+// RunStart starts all lerd services (exported for use by the UI server). emit,
+// when set, receives one StartEvent per stage and per unit. Pass the caller's
+// own unit in skip so the start does not boot the caller out.
+func RunStart(emit func(StartEvent), skip ...string) error { return startLerd(emit, skip) }
+
+// dropSkipped removes skip's units from us, leaving the order of the rest.
+func dropSkipped(us, skip []string) []string {
+	if len(skip) == 0 {
+		return us
+	}
+	return slices.DeleteFunc(us, func(u string) bool { return slices.Contains(skip, u) })
+}
 
 // RunStop stops lerd containers (exported for use by the UI server).
 func RunStop() error { return runStop(nil, nil) }
@@ -1155,11 +1215,11 @@ func runQuit(_ *cobra.Command, _ []string) error {
 	return lifecycle.Quit(spinnerRunner, killTray)
 }
 
-// canPromptForPassword reports whether sudo would have someone to ask. sudo reads
-// the password from the controlling terminal, not from stdin, so /dev/tty is the
-// signal: `lerd start < /dev/null` in a terminal can still prompt, and a systemd
-// service with neither cannot. term.IsTerminal on stdin alone gets both wrong.
-func canPromptForPassword() bool {
+// hasControllingTerminal reports whether this run has a terminal behind it.
+// /dev/tty rather than stdin is the signal: `lerd start < /dev/null` in a
+// terminal still has one, and a launchd job or a Finder-launched app has
+// neither. term.IsTerminal on stdin alone gets both wrong.
+func hasControllingTerminal() bool {
 	if term.IsTerminal(int(os.Stdin.Fd())) {
 		return true
 	}
@@ -1170,6 +1230,10 @@ func canPromptForPassword() bool {
 	tty.Close()
 	return true
 }
+
+// canPromptForPassword reports whether sudo would have someone to ask: it reads
+// the password from the controlling terminal, not from stdin.
+func canPromptForPassword() bool { return hasControllingTerminal() }
 
 // dnsEnabled reports whether the user has lerd manage DNS. When off, start must
 // not install DNS sudoers grants or touch any resolver state.
