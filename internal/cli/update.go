@@ -356,9 +356,13 @@ func refreshStorePresets() {
 	if len(names) == 0 {
 		return
 	}
+	client := store.NewServiceClient()
+	names = publishedByStore(client, names)
+	if len(names) == 0 {
+		return
+	}
 	sort.Strings(names)
 	feedback.Header(fmt.Sprintf("Refreshing %d service preset%s", len(names), pluralS(len(names))))
-	client := store.NewServiceClient()
 	for _, name := range names {
 		step := feedback.Start(name)
 		if _, err := client.FetchServicePreset(name); err != nil {
@@ -367,6 +371,29 @@ func refreshStorePresets() {
 		}
 		step.OK("")
 	}
+}
+
+// publishedByStore narrows names to the presets the service store actually
+// carries. The built-in presets ship embedded and were never pushed to the
+// store, so fetching one is a guaranteed 404 that reads as a broken update. An
+// index the store cannot serve leaves nothing to refresh: the cached and
+// embedded copies keep serving either way.
+func publishedByStore(client *store.Client, names []string) []string {
+	idx, err := client.FetchServiceIndex()
+	if err != nil {
+		return nil
+	}
+	published := make(map[string]bool, len(idx.Services))
+	for _, e := range idx.Services {
+		published[e.Name] = true
+	}
+	var out []string
+	for _, name := range names {
+		if published[name] {
+			out = append(out, name)
+		}
+	}
+	return out
 }
 
 // refreshGlobalMCPSkills re-writes the user-scope skill, rules, and guidelines
