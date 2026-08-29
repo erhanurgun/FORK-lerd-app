@@ -268,6 +268,8 @@ A start takes the better part of a minute, so the app shows a native progress wi
 
 It is a launcher, not a second copy of lerd: it drives the same start the CLI does and hands the opening to `lerd dashboard`. Every `lerd install` and `lerd update` rebuilds it so it keeps pointing at the binary that is live, and `lerd uninstall` removes it.
 
+On **Linux** the same thing is a desktop entry at `~/.local/share/applications/lerd.desktop`, so **Lerd** appears in whatever your desktop uses to list applications. Clicking it behaves the same way: the environment starts if it is down, and then the Lerd desktop app opens if you have it installed, or your browser on the dashboard if you do not. Progress is reported through a desktop notification that rewrites itself as each unit comes up, which uses the same session bus lerd already posts its other notifications on rather than a dialog tool your desktop may not ship. A session with no notification daemon still starts normally, just without the progress popup.
+
 ::: tip Not showing up in Spotlight?
 The install registers the app with LaunchServices, so it appears in Launchpad and Finder immediately. Spotlight is a separate index, and if nothing under your home directory is searchable (check with `mdls ~/Applications/Lerd.app`, which prints nothing when the volume has no index) the fix is to rebuild it with `sudo mdutil -E /`, not to reinstall lerd.
 :::
