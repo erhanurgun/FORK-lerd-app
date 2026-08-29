@@ -160,6 +160,37 @@ func SetHostPortForContainerPort(ports []string, containerPort, hostPort int) []
 	return ports
 }
 
+// ApplyNginxPorts rewrites the host side of nginx's PublishPort lines to the
+// configured ports, keeping the container side on 80/443. A non-positive port
+// leaves its mapping alone, so an unset half keeps the bundled default.
+func ApplyNginxPorts(content string, httpPort, httpsPort int) string {
+	want := map[string]int{"80": httpPort, "443": httpsPort}
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "PublishPort=") {
+			continue
+		}
+		spec := strings.TrimPrefix(trimmed, "PublishPort=")
+		proto := ""
+		if slash := strings.IndexByte(spec, '/'); slash >= 0 {
+			proto, spec = spec[slash:], spec[:slash]
+		}
+		segs := strings.Split(spec, ":")
+		if len(segs) < 2 {
+			continue
+		}
+		host := len(segs) - 2
+		port, ok := want[segs[len(segs)-1]]
+		if !ok || port <= 0 {
+			continue
+		}
+		segs[host] = strconv.Itoa(port)
+		lines[i] = "PublishPort=" + strings.Join(segs, ":") + proto
+	}
+	return strings.Join(lines, "\n")
+}
+
 // ApplyExtraPorts appends extra PublishPort lines to quadlet content.
 func ApplyExtraPorts(content string, extraPorts []string) string {
 	var sb strings.Builder
