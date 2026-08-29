@@ -305,6 +305,10 @@ type GlobalConfig struct {
 		// zero value keeps the theme-adaptive icon; toggled via `lerd tray icon`
 		// and the tray menu.
 		HighContrastIcon bool `yaml:"high_contrast_icon,omitempty" mapstructure:"high_contrast_icon"`
+		// Disabled keeps the tray applet out of start and install, for desktops
+		// that already show lerd's state elsewhere or have no tray host at all.
+		// Inverted so the zero value keeps the tray, as every install had it.
+		Disabled bool `yaml:"disabled,omitempty" mapstructure:"disabled"`
 	} `yaml:"tray,omitempty" mapstructure:"tray"`
 	HostProxy struct {
 		// Disabled refuses to set up or start any host-proxy dev-server unit,
@@ -1248,6 +1252,17 @@ func (c *GlobalConfig) IsHighContrastTrayIcon() bool {
 // SaveGlobal; the tray re-reads it on every poll.
 func (c *GlobalConfig) SetHighContrastTrayIcon(enabled bool) {
 	c.Tray.HighContrastIcon = enabled
+}
+
+// IsTrayEnabled reports whether lerd should run the tray applet at all. Stored
+// inverted, so a config that never mentions the tray keeps it.
+func (c *GlobalConfig) IsTrayEnabled() bool {
+	return c == nil || !c.Tray.Disabled
+}
+
+// SetTrayEnabled turns the tray applet on or off. Persist via SaveGlobal.
+func (c *GlobalConfig) SetTrayEnabled(enabled bool) {
+	c.Tray.Disabled = !enabled
 }
 
 // NodeManagedPref returns the persisted Node-management choice. set is false

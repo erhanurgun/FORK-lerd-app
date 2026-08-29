@@ -16,6 +16,8 @@
     autostartEnabled,
     loadAutostart,
     toggleAutostart,
+    trayEnabled,
+    toggleTray,
     startOnDashboardOpen,
     toggleStartOnDashboardOpen
   } from '$stores/autostart';
@@ -77,6 +79,16 @@
       startLAN('expose');
     } else {
       openRemoteControlModal(() => startLAN('expose'));
+    }
+  }
+
+  let trayBusy = $state(false);
+  async function onToggleTray() {
+    trayBusy = true;
+    try {
+      await toggleTray(!$trayEnabled);
+    } finally {
+      trayBusy = false;
     }
   }
 
@@ -265,6 +277,27 @@
         {/if}
       </div>
       <p class="text-xs text-gray-500 dark:text-gray-400">{m.system_startOnOpen_description()}</p>
+    </SettingsCard>
+
+    <SettingsCard>
+      <div class="flex items-center justify-between gap-3 mb-2">
+        <span class="text-sm font-semibold text-gray-700 dark:text-gray-300">{m.system_tray_title()}</span>
+        {#if $accessMode.localControl}
+          <Toggle
+            on={$trayEnabled}
+            loading={trayBusy}
+            onclick={onToggleTray}
+            title={$trayEnabled ? m.system_tray_toggleOff() : m.system_tray_toggleOn()}
+          />
+        {:else}
+          <StatusPill
+            size="sm"
+            tone={$trayEnabled ? 'ok' : 'muted'}
+            label={$trayEnabled ? m.common_enabled() : m.common_disabled()}
+          />
+        {/if}
+      </div>
+      <p class="text-xs text-gray-500 dark:text-gray-400">{m.system_tray_description()}</p>
     </SettingsCard>
 
     <SettingsCard>
