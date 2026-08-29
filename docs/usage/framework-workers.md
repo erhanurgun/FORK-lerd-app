@@ -57,9 +57,14 @@ workers:
     command: php artisan reverb:start
     proxy:
       path: /app                    # URL path for the proxy location block
+      paths:                        # every path the server answers on (optional)
+        - /app
+        - /apps
       port_env_key: REVERB_SERVER_PORT  # env key holding the port
       default_port: 8080            # starting port for auto-assignment
 ```
+
+A server that answers on more than one path lists them all under `paths`, and each gets its own location block on the same port. Reverb is the case in point: the WebSocket connection lands on `/app` while the HTTP broadcasting API a server-side `ShouldBroadcast` event posts to lives on `/apps/{app_id}/events`, and a path left out falls through to PHP and answers 404. Where both are set, `paths` is the list that gets proxied and `path` is ignored, so a definition keeps `path` alongside it and still proxies on lerd versions released before `paths` existed.
 
 Port assignment scans all proxy port env keys across all sites to prevent collisions between different workers and frameworks.
 

@@ -351,6 +351,54 @@ func TestGenerateVhost_proxyWithoutPathIsNotProxied(t *testing.T) {
 	}
 }
 
+// A worker whose server answers on more than one path needs a location for
+// each: Reverb serves its WebSocket on /app and the HTTP broadcasting API on
+// /apps, and a path left unproxied falls through to PHP and 404s.
+func TestGenerateVhost_proxyPathsRendersEveryPath(t *testing.T) {
+	confD := setupConfD(t)
+	site := proxySite(t, "app", &config.WorkerProxy{Paths: []string{"/app", "/apps"}, DefaultPort: 6001})
+	if err := GenerateVhost(site, "8.4"); err != nil {
+		t.Fatalf("GenerateVhost: %v", err)
+	}
+	content := readConf(t, filepath.Join(confD, "app.test.conf"))
+	for _, want := range []string{`location ~ ^/app(/|$) {`, `location ~ ^/apps(/|$) {`} {
+		if !strings.Contains(content, want) {
+			t.Errorf("expected %s in:\n%s", want, content)
+		}
+	}
+	if strings.Count(content, "proxy_pass http://$proxybackend:6001;") != 2 {
+		t.Errorf("expected one proxy_pass per declared path, got:\n%s", content)
+	}
+}
+
+func TestGenerateSSLVhost_proxyPathsRendersEveryPath(t *testing.T) {
+	confD := setupConfD(t)
+	site := proxySite(t, "app", &config.WorkerProxy{Paths: []string{"/app", "/apps"}, DefaultPort: 6001})
+	if err := GenerateSSLVhost(site, "8.4"); err != nil {
+		t.Fatalf("GenerateSSLVhost: %v", err)
+	}
+	content := readConf(t, filepath.Join(confD, "app.test-ssl.conf"))
+	for _, want := range []string{`location ~ ^/app(/|$) {`, `location ~ ^/apps(/|$) {`} {
+		if !strings.Contains(content, want) {
+			t.Errorf("expected %s in:\n%s", want, content)
+		}
+	}
+}
+
+// The single-path form stays the fallback, not a path the list is added to:
+// a definition carries both so binaries too old to read paths keep proxying.
+func TestGenerateVhost_proxyPathsSupersedeSinglePath(t *testing.T) {
+	confD := setupConfD(t)
+	site := proxySite(t, "app", &config.WorkerProxy{Path: "/app", Paths: []string{"/app", "/apps"}, DefaultPort: 6001})
+	if err := GenerateVhost(site, "8.4"); err != nil {
+		t.Fatalf("GenerateVhost: %v", err)
+	}
+	content := readConf(t, filepath.Join(confD, "app.test.conf"))
+	if got := strings.Count(content, `location ~ ^/app(/|$) {`); got != 1 {
+		t.Errorf("expected /app proxied once, got %d:\n%s", got, content)
+	}
+}
+
 // ── GenerateHostProxyVhost ────────────────────────────────────────────────────
 
 func TestGenerateHostProxyVhost_proxiesToHostPort(t *testing.T) {
