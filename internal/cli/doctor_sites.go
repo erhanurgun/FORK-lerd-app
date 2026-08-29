@@ -87,7 +87,7 @@ func summariseSiteReport(label string, resp sitedoctor.Response) siteSweepResult
 		parts = append(parts, fmt.Sprintf("%d failing", res.Failures))
 	}
 	if res.Warnings > 0 {
-		parts = append(parts, fmt.Sprintf("%d warning", res.Warnings))
+		parts = append(parts, fmt.Sprintf("%d %s", res.Warnings, sitedoctor.Plural(res.Warnings, "warning", "warnings")))
 	}
 	summary := strings.Join(parts, ", ")
 	if first := firstProblem(resp); first != "" {

@@ -52,9 +52,11 @@ var dbListCache = struct {
 	entries map[string]dbListEntry
 }{entries: map[string]dbListEntry{}}
 
-// cachedDatabases is listDatabases with the recent answer reused. The lock is
-// held across the lookup on purpose: concurrent callers asking for the same
-// engine wait for the one exec instead of each starting their own.
+// cachedDatabases is listDatabases with the recent answer reused. One lock
+// covers every engine and is held across the lookup on purpose: the sweep's
+// callers wait for a running exec instead of each starting their own, and a
+// machine runs one or two engines, so serialising them costs a single extra
+// exec on a cold cache and saves one per site after that.
 func cachedDatabases(service string) ([]string, error) {
 	dbListCache.Lock()
 	defer dbListCache.Unlock()
@@ -103,8 +105,8 @@ func checkServerDatabase(path string) (Check, bool) {
 	}
 	return Check{Name: "server_database", Status: StatusFail, Fix: FixCreateDatabase,
 		Detail: fmt.Sprintf("%s %s %s not exist. Create %s, then run migrations.",
-			plural(len(missing), "Database", "Databases"), strings.Join(named, ", "),
-			plural(len(missing), "does", "do"), plural(len(missing), "it", "them"))}, true
+			Plural(len(missing), "Database", "Databases"), strings.Join(named, ", "),
+			Plural(len(missing), "does", "do"), Plural(len(missing), "it", "them"))}, true
 }
 
 // MissingDatabases returns the lerd-managed databases a project points at that

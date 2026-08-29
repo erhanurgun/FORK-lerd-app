@@ -54,7 +54,7 @@ func ValidateProjectConfig(path string, fw *config.Framework) (problems, warning
 
 	if cfg.PHPVersion != "" {
 		switch {
-		case !validPHPVersion(cfg.PHPVersion):
+		case !config.ValidPHPVersion(cfg.PHPVersion):
 			problem("php_version: %q is not a MAJOR.MINOR version", cfg.PHPVersion)
 		case !phpkg.IsInstalled(cfg.PHPVersion):
 			warn("php_version: %s is not installed, run lerd php:install %s", cfg.PHPVersion, cfg.PHPVersion)
@@ -207,21 +207,6 @@ func validateCommands(cfg *config.ProjectConfig) (problems, warnings []string) {
 		}
 	}
 	return problems, warnings
-}
-
-// validPHPVersion reports whether s looks like MAJOR.MINOR, rejecting "8,5" and
-// plain words the way the init prompt does.
-func validPHPVersion(s string) bool {
-	parts := strings.SplitN(s, ".", 2)
-	if len(parts) != 2 {
-		return false
-	}
-	for _, p := range parts {
-		if p == "" || strings.TrimLeft(p, "0123456789") != "" {
-			return false
-		}
-	}
-	return true
 }
 
 // siteHasHorizon reports whether composer.json lists laravel/horizon.

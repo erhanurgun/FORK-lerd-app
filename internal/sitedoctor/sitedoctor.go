@@ -425,8 +425,8 @@ func checkRequiredServices(path string, fw *config.Framework) (Check, bool) {
 			Status: StatusFail,
 			Fix:    FixInstallServices,
 			Detail: fmt.Sprintf("%s needs %s, which %s not installed. Install %s with %s.",
-				frameworkLabel(fw), strings.Join(missing, ", "), plural(len(missing), "is", "are"),
-				plural(len(missing), "it", "them"),
+				frameworkLabel(fw), strings.Join(missing, ", "), Plural(len(missing), "is", "are"),
+				Plural(len(missing), "it", "them"),
 				serviceCommands("lerd service preset", missing)),
 		}, true
 	case len(stopped) > 0:
@@ -435,8 +435,8 @@ func checkRequiredServices(path string, fw *config.Framework) (Check, bool) {
 			Status: StatusWarn,
 			Fix:    FixStartServices,
 			Detail: fmt.Sprintf("%s %s required but not running. Start %s with %s.",
-				strings.Join(stopped, ", "), plural(len(stopped), "is", "are"),
-				plural(len(stopped), "it", "them"),
+				strings.Join(stopped, ", "), Plural(len(stopped), "is", "are"),
+				Plural(len(stopped), "it", "them"),
 				serviceCommands("lerd service start", stopped)),
 		}, true
 	}
@@ -1116,7 +1116,7 @@ func checkComposerAudit(ctx context.Context, path string) Check {
 		return Check{Name: "composer_audit", Status: StatusUnknown, Detail: "Couldn't read composer audit output."}
 	}
 	if n > 0 {
-		return Check{Name: "composer_audit", Status: StatusWarn, Detail: fmt.Sprintf("%d known security advisor%s in composer packages, run composer update.", n, plural(n, "y", "ies")), Fix: FixComposerUpdate}
+		return Check{Name: "composer_audit", Status: StatusWarn, Detail: fmt.Sprintf("%d known security advisor%s in composer packages, run composer update.", n, Plural(n, "y", "ies")), Fix: FixComposerUpdate}
 	}
 	return Check{Name: "composer_audit", Status: StatusOK}
 }
@@ -1185,7 +1185,7 @@ func checkNodeAudit(ctx context.Context, path string) Check {
 		return Check{Name: "node_audit", Status: StatusUnknown, Detail: "Couldn't read npm audit output."}
 	}
 	if n > 0 {
-		return Check{Name: "node_audit", Status: StatusWarn, Detail: fmt.Sprintf("%d known vulnerabilit%s in node packages, run npm audit fix.", n, plural(n, "y", "ies")), Fix: FixNpmAuditFix}
+		return Check{Name: "node_audit", Status: StatusWarn, Detail: fmt.Sprintf("%d known vulnerabilit%s in node packages, run npm audit fix.", n, Plural(n, "y", "ies")), Fix: FixNpmAuditFix}
 	}
 	return Check{Name: "node_audit", Status: StatusOK}
 }
@@ -1248,7 +1248,9 @@ func dirExists(p string) bool {
 	return err == nil && info.IsDir()
 }
 
-func plural(n int, one, many string) string {
+// Plural picks the singular or plural word for n. Exported so the doctor's site
+// sweep counts read the way the per-site report already does.
+func Plural(n int, one, many string) string {
 	if n == 1 {
 		return one
 	}
