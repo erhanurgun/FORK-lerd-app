@@ -54,7 +54,11 @@ dns:
                          # once at first install, then flipped with lerd dns:enable
                          # / dns:disable, never re-prompted. dns:repair re-runs the
                          # setup to fix a broken but enabled resolver.
-  tld: "test"
+  tld: "test"            # the suffix sites are served under. Dot-separated DNS
+                         # labels (letters, digits, hyphens), so "test" or
+                         # "internal.example.com". An unusable value is refused
+                         # and lerd serves .test instead, which lerd doctor
+                         # reports rather than applying silently.
   upstream:              # optional. Pins the upstream DNS servers dnsmasq
     - 192.168.100.129    # forwards non-.test queries to. Leave unset to
                          # auto-detect from the system resolver. Set this when

@@ -28,7 +28,7 @@ func TestWriteHostWorkerUnitFile_useFnmExec(t *testing.T) {
 	changed, err := writeWorkerUnitFile(
 		"lerd-vite-mysite", "Vite", "mysite",
 		sitePath, "8.4", "npm run dev",
-		"on-failure", "", "lerd-php84-fpm", true,
+		"on-failure", "", "lerd-php84-fpm", "", true,
 	)
 	if err != nil {
 		t.Fatalf("writeWorkerUnitFile (host): %v", err)
@@ -103,7 +103,7 @@ func TestWriteHostWorkerUnitFile_useBun(t *testing.T) {
 	if _, err := writeWorkerUnitFile(
 		"lerd-vite-bunsite", "Vite", "bunsite",
 		sitePath, "8.4", "npm run dev",
-		"on-failure", "", "lerd-php84-fpm", true,
+		"on-failure", "", "lerd-php84-fpm", "", true,
 	); err != nil {
 		t.Fatalf("writeWorkerUnitFile (host): %v", err)
 	}
@@ -153,7 +153,7 @@ func TestWriteHostWorkerUnitFile_bunFallbackWhenNodeUnmanaged(t *testing.T) {
 	if _, err := writeWorkerUnitFile(
 		"lerd-vite-npmsite", "Vite", "npmsite",
 		sitePath, "8.4", "npm run dev",
-		"on-failure", "", "lerd-php84-fpm", true,
+		"on-failure", "", "lerd-php84-fpm", "", true,
 	); err != nil {
 		t.Fatalf("writeWorkerUnitFile (host): %v", err)
 	}
@@ -198,7 +198,7 @@ func TestWriteHostWorkerUnitFile_unmanagedNodeBakesResolvedDir(t *testing.T) {
 	if _, err := writeWorkerUnitFile(
 		"lerd-vite-sysnode", "Vite", "sysnode",
 		sitePath, "8.4", "npm run dev",
-		"on-failure", "", "lerd-php84-fpm", true,
+		"on-failure", "", "lerd-php84-fpm", "", true,
 	); err != nil {
 		t.Fatalf("writeWorkerUnitFile (host): %v", err)
 	}
@@ -239,7 +239,7 @@ func TestWriteHostWorkerUnitFile_unmanagedNoNodeHoldsBack(t *testing.T) {
 	if _, err := writeWorkerUnitFile(
 		"lerd-vite-nonode", "Vite", "nonode",
 		sitePath, "8.4", "npm run dev",
-		"on-failure", "", "lerd-php84-fpm", true,
+		"on-failure", "", "lerd-php84-fpm", "", true,
 	); err == nil {
 		t.Fatal("want an error when no Node is resolvable, got nil")
 	}
@@ -266,7 +266,7 @@ func TestWriteHostWorkerUnitFile_unmanagedNoNodeNonNodeCommandRuns(t *testing.T)
 	if _, err := writeWorkerUnitFile(
 		"lerd-app-gosite", "Dev Server", "gosite",
 		sitePath, "", "./server --port 8000",
-		"always", "", "", true,
+		"always", "", "", "", true,
 	); err != nil {
 		t.Fatalf("non-Node command must still write its unit: %v", err)
 	}
@@ -291,7 +291,7 @@ func TestWriteHostWorkerUnitFile_nonNodeRunsDirectly(t *testing.T) {
 	if _, err := writeWorkerUnitFile(
 		"lerd-app-pysite", "Dev Server", "pysite",
 		sitePath, "", "python manage.py runserver 0.0.0.0:8000",
-		"always", "", "", true,
+		"always", "", "", "", true,
 	); err != nil {
 		t.Fatalf("writeWorkerUnitFile (host): %v", err)
 	}
@@ -319,7 +319,7 @@ func TestWriteWorkerUnitFile_hostFalse_usesPodman(t *testing.T) {
 	changed, err := writeWorkerUnitFile(
 		"lerd-horizon-mysite", "Horizon", "mysite",
 		"/srv/mysite", "8.4", "php artisan horizon",
-		"always", "", "lerd-php84-fpm", false,
+		"always", "", "lerd-php84-fpm", "", false,
 	)
 	if err != nil {
 		t.Fatalf("writeWorkerUnitFile (container): %v", err)
@@ -395,7 +395,7 @@ func TestWriteHostWorkerUnitFile_shellCommandPreserved(t *testing.T) {
 			_, err := writeWorkerUnitFile(
 				"lerd-vite-shellcase", "Test", "shellcase",
 				sitePath, "8.4", c.command,
-				"on-failure", "", "lerd-php84-fpm", true,
+				"on-failure", "", "lerd-php84-fpm", "", true,
 			)
 			if err != nil {
 				t.Fatalf("writeWorkerUnitFile: %v", err)
@@ -438,7 +438,7 @@ func TestWriteHostWorkerUnitFile_pathLeadsWithLerdBinDir(t *testing.T) {
 	_, err := writeWorkerUnitFile(
 		"lerd-vite-mysite", "Vite", "mysite",
 		sitePath, "8.4", "npm run dev",
-		"on-failure", "", "lerd-php84-fpm", true,
+		"on-failure", "", "lerd-php84-fpm", "", true,
 	)
 	if err != nil {
 		t.Fatalf("writeWorkerUnitFile: %v", err)
