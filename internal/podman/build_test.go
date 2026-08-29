@@ -310,6 +310,29 @@ func TestPhpFpmContainerfile_RuntimeIncludesGit(t *testing.T) {
 	}
 }
 
+// ext/ftp compiles FTPS in only when OpenSSL was configured; a phpize build
+// leaves PHP_OPENSSL unset and silently ships an ftp without ftp_ssl_connect
+// (#1576). The configure flag was renamed in 8.4, so both branches matter.
+func TestPhpFpmContainerfile_BuildsFTPWithSSL(t *testing.T) {
+	tmpl, err := GetQuadletTemplate("lerd-php-fpm.Containerfile")
+	if err != nil {
+		t.Fatalf("read containerfile: %v", err)
+	}
+	builder, _, ok := strings.Cut(tmpl, "# ── Runtime stage")
+	if !ok {
+		t.Fatal("runtime stage marker missing from Containerfile")
+	}
+	for _, want := range []string{
+		"openssl-dev",
+		"docker-php-ext-configure ftp --with-openssl-dir=/usr",
+		"docker-php-ext-configure ftp --with-ftp-ssl",
+	} {
+		if !strings.Contains(builder, want) {
+			t.Errorf("builder stage must contain %q or ext-ftp loses FTPS support", want)
+		}
+	}
+}
+
 func TestPhpExtensionLoaded(t *testing.T) {
 	out := "Core\ndate\nimap\nPDO\nZend OPcache\n"
 	cases := map[string]bool{
