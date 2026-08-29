@@ -25,6 +25,7 @@ RUN apk update && apk add --no-cache \
         gmp-dev \
         bzip2-dev \
         openldap-dev \
+        openssl-dev \
         sqlite-dev \
         libxslt-dev \
         zlib-dev \
@@ -33,6 +34,14 @@ RUN apk update && apk add --no-cache \
            docker-php-ext-configure gd --with-freetype-dir=/usr --with-jpeg-dir=/usr --with-png-dir=/usr --with-webp-dir=/usr; \
        else \
            docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp; \
+       fi \
+    # ext/ftp drops FTPS unless OpenSSL is configured, and a phpize build never
+    # sets PHP_OPENSSL, so ftp_ssl_connect goes missing (#1576). 8.4 renamed the
+    # opt-in flag from --with-openssl-dir to --with-ftp-ssl.
+    && if [ "$PHP_ID" -lt 80400 ]; then \
+           docker-php-ext-configure ftp --with-openssl-dir=/usr; \
+       else \
+           docker-php-ext-configure ftp --with-ftp-ssl; \
        fi \
     && docker-php-ext-install -j$(nproc) \
         curl \
