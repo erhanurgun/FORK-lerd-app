@@ -28,7 +28,7 @@ func TestInstall_writesAClickableEntryAndItsIcon(t *testing.T) {
 	// Clicked from a launcher there is no terminal, so the entry has to say so
 	// and has to ask for the splash, or the click is a minute of nothing.
 	for _, want := range []string{
-		"Type=Application", "Name=Lerd", "Terminal=false",
+		"Type=Application", "Name=Start Lerd", "Terminal=false",
 		"dashboard --splash", "Categories=Development;",
 	} {
 		if !strings.Contains(text, want) {

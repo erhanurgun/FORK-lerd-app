@@ -15,6 +15,13 @@ import (
 //go:embed assets/lerd-mark.png
 var markPNG []byte
 
+// LauncherName is what the Linux desktop entry is called. The lerd-desktop
+// flatpak ships its own entry named "Lerd", and shadowing that one is not an
+// option: it carries the x-scheme-handler/lerd association, and taking that
+// over would point lerd:// back at this launcher, which opens the app through
+// lerd://. So the two sit side by side and this one says what it adds.
+const LauncherName = "Start Lerd"
+
 // entryName is the desktop file's basename. It doubles as the icon's, so a
 // launcher that resolves Icon= through the theme finds the same artwork.
 const entryName = "lerd"
@@ -84,9 +91,9 @@ func Install() (string, error) {
 func desktopEntry(bin, icon string) string {
 	return "[Desktop Entry]\n" +
 		"Type=Application\n" +
-		"Name=" + Name + "\n" +
+		"Name=" + LauncherName + "\n" +
 		"GenericName=Local PHP development environment\n" +
-		"Comment=Start Lerd and open its dashboard\n" +
+		"Comment=Bring the environment up, then open the Lerd app or the dashboard\n" +
 		"Exec=" + bin + " dashboard --splash\n" +
 		"Icon=" + icon + "\n" +
 		"Terminal=false\n" +
