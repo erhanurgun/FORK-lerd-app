@@ -118,7 +118,7 @@ func TestGenerateVhost_honoursSitePublicDir(t *testing.T) {
 
 func TestResolveRequestTimeout_DefaultsTo60(t *testing.T) {
 	setupConfD(t)
-	if got := resolveRequestTimeout("/srv/nonexistent"); got != 60 {
+	if got := resolveRequestTimeout("/srv/nonexistent", "8.4"); got != 60 {
 		t.Errorf("resolveRequestTimeout = %d, want 60 (nginx default)", got)
 	}
 }
@@ -133,7 +133,7 @@ func TestResolveRequestTimeout_GlobalConfigWins(t *testing.T) {
 	if err := config.SaveGlobal(cfg); err != nil {
 		t.Fatalf("SaveGlobal: %v", err)
 	}
-	if got := resolveRequestTimeout("/srv/nonexistent"); got != 120 {
+	if got := resolveRequestTimeout("/srv/nonexistent", "8.4"); got != 120 {
 		t.Errorf("resolveRequestTimeout = %d, want 120 (global config)", got)
 	}
 }
@@ -152,7 +152,7 @@ func TestResolveRequestTimeout_ProjectOverrideWins(t *testing.T) {
 	if err := config.SaveProjectConfig(projectDir, &config.ProjectConfig{RequestTimeout: 300}); err != nil {
 		t.Fatalf("SaveProjectConfig: %v", err)
 	}
-	if got := resolveRequestTimeout(projectDir); got != 300 {
+	if got := resolveRequestTimeout(projectDir, "8.4"); got != 300 {
 		t.Errorf("resolveRequestTimeout = %d, want 300 (.lerd.yaml override)", got)
 	}
 }

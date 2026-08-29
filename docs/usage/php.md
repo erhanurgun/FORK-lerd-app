@@ -205,6 +205,26 @@ lerd service port rustfs 9004 --container 9001
 `host.containers.internal` is resolved via a real reachability probe: when lerd writes the shared hosts file it tries each candidate IP (netavark's `host.containers.internal` entry, the host's primary LAN IP, slirp4netns's `10.0.2.2`) by opening a TCP connection to lerd-ui on port 7073 from inside lerd-nginx, and writes the first one that succeeds. If none succeed, `lerd doctor` reports the failure so you get a real diagnosis instead of Xdebug silently timing out with `Time-out connecting to debugging client`.
 :::
 
+### Turn off "break at first line"
+
+lerd mounts a small `auto_prepend_file` into every PHP version it builds, the bridge that carries `dump()` and `dd()` output to the dashboard. Being a prepend, it is the first file PHP runs on every request, before a single line of your application.
+
+An IDE set to stop on the first line of every script therefore stops there, in a file that exists only inside the container:
+
+```
+Cannot find a local copy of the file on server /usr/local/etc/lerd/dump-bridge.php
+```
+
+Nothing is broken, and your own breakpoints are still fine. In **PhpStorm** three settings can cause it, and the two that matter here are not the obvious one:
+
+- **Settings > PHP > Debug > External connections > Force break at first line when no path mapping specified** — the bridge has none, so this one fires and is what draws the *Click to set up path mappings* link
+- **Settings > PHP > Debug > External connections > Force break at first line when a script is outside the project** — the bridge is outside it, so this one fires too
+- **Settings > PHP > Debug > Break at first line in PHP scripts** — the general one, off by default
+
+All three are worth turning off for a lerd project: the first two default to **on**, so unchecking only the third leaves the session still stopping in the bridge. **VS Code** does not do this by default, but `"stopOnEntry": true` in a launch configuration behaves the same way.
+
+The same is worth knowing about `start_with_request=yes`, which is the default: with the debugger listening, *every* request connects, so the first one lands on the bridge before you have asked to debug anything in particular. [On-demand debugging](#on-demand-debugging-workers-and-cli) is the way to keep the debugger quiet until you trigger a session.
+
 ### Picking a mode
 
 Xdebug supports several modes: `debug` (step debugging, the default), `coverage` (code coverage collection), `develop`, `profile`, `trace`, `gcstats`, and `off`. Pick one with `--mode`:
