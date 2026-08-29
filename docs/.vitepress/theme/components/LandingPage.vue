@@ -350,6 +350,7 @@ onBeforeUnmount(() => {
             <a class="strip-item" :href="withBase('/getting-started/symfony')"><span class="gl" data-bare data-logo="symfony"></span> Symfony</a>
             <a class="strip-item" :href="withBase('/getting-started/wordpress')"><span class="gl" data-bare data-logo="wordpress"></span> WordPress</a>
             <a class="strip-item" :href="withBase('/getting-started/drupal')"><span class="gl" data-bare data-logo="drupal"></span> Drupal</a>
+            <a class="strip-item" :href="withBase('/getting-started/typo3')"><span class="gl" data-bare data-logo="typo3"></span> TYPO3</a>
             <a class="strip-item" :href="withBase('/getting-started/magento')"><span class="gl" data-bare data-logo="magento"></span> Magento</a>
             <a class="strip-item" :href="withBase('/getting-started/cakephp')"><span class="gl" data-bare data-logo="cake"></span> CakePHP</a>
             <a class="strip-item" :href="withBase('/getting-started/statamic')"><span class="gl" data-bare data-logo="statamic"></span> Statamic</a>

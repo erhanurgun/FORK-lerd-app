@@ -5,7 +5,8 @@
 desktop bar, so the answer to "is anything broken" is already on screen.
 
 It is a separate, optional install. lerd does not need it and it does not need anything
-from lerd beyond the dashboard already running.
+from lerd beyond the dashboard already running. If you are setting lerd up on Omarchy for
+the first time, start with [PHP development on Omarchy](../getting-started/omarchy.md).
 
 ```bash
 omarchy plugin add https://github.com/lerd-env/lerd-omarchy-glance.git --enable

@@ -94,7 +94,7 @@ cd ~/Projects/myapp
 lerd sail import
 ```
 
-See [Importing from Laravel Sail](/usage/import-sail) for details.
+See [Laravel Sail alternative](/getting-started/sail) for the full migration guide, and [Importing from Laravel Sail](/usage/import-sail) for the flag reference.
 
 ---
 
@@ -153,3 +153,33 @@ See [Importing from Laravel Sail](/usage/import-sail) for details.
 **Choose Lando when:** your team is cross-platform, you want per-project service isolation defined in the repo, you work with hosting platforms like Pantheon, Platform.sh, or Lagoon and want their `lando pull` / `lando push` workflow, or your workflow already depends on Docker.
 
 **Choose Lerd when:** you want a zero-config shared stack you can drop any project into without committing a config file, prefer rootless Podman with a lighter footprint, or want a built-in web UI and terminal dashboard on Linux or macOS.
+
+---
+
+## Lerd vs Laradock
+
+[Laradock](https://laradock.io) is a collection of prebuilt Docker images behind one `docker-compose.yml`, checked into the repo as a `laradock/` folder, with a `workspace` container you shell into to run PHP tooling. Lerd replaces the whole arrangement with one shared, rootless stack and no files in the repo.
+
+|  | Lerd | Laradock |
+|---|---|---|
+| Platforms | Linux (systemd), macOS | Linux, macOS, Windows |
+| License | Open source (MIT) | Open source (MIT) |
+| Container runtime | Rootless Podman, no daemon | Docker, root daemon or Docker Desktop |
+| Architecture | Shared nginx + PHP-FPM across all projects | Per-project Compose stack, one container per service |
+| PHP versions | 7.4, 8.0–8.5, per project, no rebuild | Set in `laradock/.env`, rebuild the image to change |
+| Services (MySQL, Redis…) | One shared instance | Per-project, uncommented in the Compose file |
+| Domains | `.test`, automatic | Manual `/etc/hosts` plus a site conf per project |
+| HTTPS | `lerd secure` for a trusted mkcert cert instantly | Bring your own certificate |
+| Running tooling | `lerd artisan` / `lerd composer` from your own shell | `docker compose exec workspace` first |
+| Per-project config | `.lerd.yaml`, optional | `laradock/` submodule + `docker-compose.yml` + its `.env` |
+| RAM with 5 projects running | ~200 MB | Several GB (5× full stacks) |
+| First run | Pulls prebuilt images | Builds images from source |
+| Works on legacy / client repos | Yes, just `lerd link` | Only if you can add Laradock to it |
+| Dashboard | Web UI at `127.0.0.1:7073`, system tray, installable PWA | CLI + Docker Desktop |
+| Cost | Free | Free |
+
+**Choose Laradock when:** two projects need different major versions of the same database at the same time, or your team wants the environment fully described inside the repo.
+
+**Choose Lerd when:** you juggle several projects at once, you are tired of rebuilding images to change a PHP version, or you want `.test` URLs and HTTPS without wiring them by hand.
+
+See [Laradock alternative](/getting-started/laradock) for the full migration path.
