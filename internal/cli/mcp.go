@@ -170,7 +170,10 @@ func writeProjectArtefacts(abs string, verbose, createMissing bool) error {
 				if err := writeClientMCP(full, c); err != nil {
 					return err
 				}
-				log("  updated " + c.ProjectMCP)
+				// Report the file that was written, which is not always the one
+				// the client declares: an existing opencode.jsonc is merged into
+				// rather than shadowed by a sibling .json.
+				log("  updated " + filepath.Base(resolveClientConfigPath(full)))
 			}
 		}
 		for _, cx := range c.Contexts {
@@ -337,10 +340,12 @@ func writeGlobalMCPConfigs(home string, verbose bool) error {
 		if c.GlobalMCP == "" {
 			continue
 		}
-		if err := writeClientMCP(filepath.Join(home, c.GlobalMCP), c); err != nil {
+		globalPath := filepath.Join(home, c.GlobalMCP)
+		if err := writeClientMCP(globalPath, c); err != nil {
 			return err
 		}
-		log("updated ~/" + c.GlobalMCP)
+		written, _ := filepath.Rel(home, resolveClientConfigPath(globalPath))
+		log("updated ~/" + written)
 	}
 	if sweepLegacySharedAIMCP(home) {
 		log("cleaned ~/" + legacySharedAIMCP + " (no longer written)")
@@ -524,7 +529,7 @@ func RemoveGlobalAISkills(home string, verbose bool) error {
 			if changed, err := removeClientMCP(full, c); err != nil {
 				fmt.Printf("  warn: %s: %v\n", full, err)
 			} else if changed {
-				log("  cleaned " + full)
+				log("  cleaned " + resolveClientConfigPath(full))
 			}
 		}
 		for _, cx := range c.Contexts {
@@ -561,7 +566,7 @@ func RemoveProjectAISkills(abs string, verbose bool) error {
 			if changed, err := removeClientMCP(full, c); err != nil {
 				fmt.Printf("  warn: %s: %v\n", full, err)
 			} else if changed {
-				log("  cleaned " + full)
+				log("  cleaned " + resolveClientConfigPath(full))
 			}
 		}
 		for _, cx := range c.Contexts {

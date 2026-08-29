@@ -53,7 +53,7 @@ All clients share a single canonical tool reference, so the guidance never drift
 
 > **Google Antigravity** registers at `~/.gemini/config/mcp_config.json` (its project-scoped MCP config is not honoured, so it is global only). It auto-loads `GEMINI.md` and `AGENTS.md`, which the Gemini and Codex entries already write, so no separate Antigravity context file is needed.
 
-> **OpenCode** uses neither of the other two shapes: its entry sits under an `mcp` key, is typed `local` rather than `stdio`, and takes the whole invocation as a single `command` array. It reads `AGENTS.md` from the project root, which the Codex entry already writes, so only its own `~/.config/opencode/AGENTS.md` is written separately.
+> **OpenCode** uses neither of the other two shapes: its entry sits under an `mcp` key, is typed `local` rather than `stdio`, and takes the whole invocation as a single `command` array. It reads `AGENTS.md` from the project root, which the Codex entry already writes, so only its own `~/.config/opencode/AGENTS.md` is written separately. OpenCode also reads `opencode.jsonc`, and its own documentation asks for one format per directory, so where a `.jsonc` already exists lerd merges into that file rather than leaving a `.json` beside it that may never be read. The rewrite emits plain JSON, so comments in that file are not preserved.
 
 > **During `lerd install`:** If Claude Code is detected, you'll be prompted to run this automatically.
 

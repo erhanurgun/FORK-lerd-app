@@ -180,6 +180,66 @@ var aiClients = []aiClient{
 	},
 }
 
+// resolveClientConfigPath answers where a client's config actually lives. Only
+// OpenCode needs the indirection: it reads opencode.json and opencode.jsonc
+// alike, and its own docs say to keep one format per directory, so writing a
+// sibling .json next to an existing .jsonc leaves two configs where the entry
+// may never be read while the command reports success.
+func resolveClientConfigPath(path string) string {
+	if filepath.Base(path) != "opencode.json" {
+		return path
+	}
+	jsonc := path + "c"
+	if _, err := os.Stat(jsonc); err == nil {
+		return jsonc
+	}
+	return path
+}
+
+// stripJSONComments removes // and /* */ comments so a .jsonc config parses.
+// Strings are tracked so a // inside a value survives. The rewrite emits plain
+// JSON, so a comment in the file is not preserved.
+func stripJSONComments(data []byte) []byte {
+	out := make([]byte, 0, len(data))
+	inString, escaped := false, false
+	for i := 0; i < len(data); i++ {
+		c := data[i]
+		if inString {
+			out = append(out, c)
+			switch {
+			case escaped:
+				escaped = false
+			case c == '\\':
+				escaped = true
+			case c == '"':
+				inString = false
+			}
+			continue
+		}
+		switch {
+		case c == '"':
+			inString = true
+			out = append(out, c)
+		case c == '/' && i+1 < len(data) && data[i+1] == '/':
+			for i < len(data) && data[i] != '\n' {
+				i++
+			}
+			if i < len(data) {
+				out = append(out, '\n')
+			}
+		case c == '/' && i+1 < len(data) && data[i+1] == '*':
+			i += 2
+			for i+1 < len(data) && !(data[i] == '*' && data[i+1] == '/') {
+				i++
+			}
+			i++
+		default:
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 // lerdJSONEntry builds the JSON MCP server entry. The entry is identical at
 // every scope and carries no machine-specific data: the server resolves the
 // site from the directory the assistant is opened in (cwd) at runtime. Project
@@ -211,7 +271,7 @@ func writeClientMCP(path string, c aiClient) error {
 	if c.MCPFormat == fmtTOMLCodex {
 		return mergeCodexTOML(path)
 	}
-	return mergeServerJSON(path, c.ServerKey, lerdJSONEntry(c))
+	return mergeServerJSON(resolveClientConfigPath(path), c.ServerKey, lerdJSONEntry(c))
 }
 
 // writeClientContext writes a context/instructions doc per its format.
@@ -285,7 +345,7 @@ func removeClientMCP(path string, c aiClient) (bool, error) {
 	if c.MCPFormat == fmtTOMLCodex {
 		return removeCodexTOML(path)
 	}
-	return removeServerJSON(path, c.ServerKey, "lerd")
+	return removeServerJSON(resolveClientConfigPath(path), c.ServerKey, "lerd")
 }
 
 // removeClientContext removes the lerd context doc: sentinel files keep user
@@ -310,7 +370,7 @@ func removeClientContext(path string, cx ctxFile) (bool, error) {
 func mergeServerJSON(path, serverKey string, entry map[string]any) error {
 	cfg := map[string]any{}
 	if data, err := os.ReadFile(path); err == nil && len(data) > 0 {
-		if err := json.Unmarshal(data, &cfg); err != nil {
+		if err := json.Unmarshal(stripJSONComments(data), &cfg); err != nil {
 			return fmt.Errorf("parsing %s: %w", path, err)
 		}
 	}
@@ -346,7 +406,7 @@ func removeServerJSON(path, serverKey, name string) (bool, error) {
 	}
 	cfg := map[string]any{}
 	if len(data) > 0 {
-		if err := json.Unmarshal(data, &cfg); err != nil {
+		if err := json.Unmarshal(stripJSONComments(data), &cfg); err != nil {
 			return false, fmt.Errorf("parsing %s: %w", path, err)
 		}
 	}
