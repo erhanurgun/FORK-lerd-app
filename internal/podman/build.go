@@ -806,7 +806,7 @@ func WriteXdebugIni(version, mode, start string) error {
 	if start == "" {
 		start = "yes"
 	}
-	content := fmt.Sprintf("[xdebug]\nxdebug.mode=%s\nxdebug.start_with_request=%s\nxdebug.client_host=host.containers.internal\nxdebug.client_port=9003\n", mode, start)
+	content := fmt.Sprintf("[xdebug]\nxdebug.mode=%s\nxdebug.start_with_request=%s\nxdebug.client_host=host.containers.internal\nxdebug.client_port=%d\n", mode, start, config.XdebugClientPort)
 	return os.WriteFile(path, []byte(content), 0644)
 }
 

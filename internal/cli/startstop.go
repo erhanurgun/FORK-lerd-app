@@ -374,12 +374,7 @@ func podmanContainerRunning(name string) bool {
 // the configured TLD, which means a listener on the DNS port is lerd-dns itself
 // rather than a foreign process.
 func lerdDNSAnswering() bool {
-	cfg, _ := config.LoadGlobal()
-	tld := "test"
-	if cfg != nil && cfg.DNS.TLD != "" {
-		tld = cfg.DNS.TLD
-	}
-	return dns.CheckStatus(tld) != dns.StatusDown
+	return dns.CheckStatus(dns.ConfiguredTLD()) != dns.StatusDown
 }
 
 func runStart(_ *cobra.Command, _ []string) error {

@@ -199,10 +199,19 @@ type FrameworkWorker struct {
 	// framework definition rather than rewriting Command in Go means the store
 	// stays the single source of truth for what actually runs.
 	ReloadCommand string `yaml:"reload_command,omitempty"`
-	// TuneCommand is the parameterized variant of Command for `lerd queue:start`,
-	// a template with {queue}/{tries}/{timeout} placeholders so each framework
-	// declares its own flag syntax. Empty falls back to Command verbatim.
+	// TuneCommand is the parameterized variant of Command, a template whose
+	// {placeholder} tokens become the flags of the worker's generated start
+	// command: `--queue={queue} --tries={tries}` gives `lerd queue:start
+	// --queue --tries`. Each flag's default is read back from Command, so the
+	// definition declares both the syntax and the values. Empty falls back to
+	// Command verbatim.
 	TuneCommand string `yaml:"tune_command,omitempty"`
+	// RequiresService names a lerd service the worker cannot run without, so a
+	// start refuses with an actionable message instead of leaving the process to
+	// crash-loop on a DNS error. WhenEnv narrows the requirement to sites whose
+	// .env sets that key, since a queue worker only needs Redis when the site's
+	// queue connection is Redis.
+	RequiresService *WorkerService `yaml:"requires_service,omitempty"`
 	// RestartCommand gracefully restarts the queue worker in-container (e.g.
 	// Laravel's "php artisan queue:restart"). Empty means no graceful restart.
 	RestartCommand string `yaml:"restart_command,omitempty"`
@@ -249,6 +258,14 @@ type WorkerProxy struct {
 	Path        string `yaml:"path"`                   // URL path to proxy (e.g. "/app")
 	PortEnvKey  string `yaml:"port_env_key,omitempty"` // env key holding the port (e.g. "REVERB_SERVER_PORT")
 	DefaultPort int    `yaml:"default_port,omitempty"` // fallback port if env key is missing (default: 8080)
+}
+
+// WorkerService is a running lerd service a worker depends on. WhenEnv is a
+// "KEY=VALUE" pair the site's .env has to carry for the dependency to apply, so
+// Laravel's queue worker can require Redis only where QUEUE_CONNECTION=redis.
+type WorkerService struct {
+	Name    string `yaml:"name"`
+	WhenEnv string `yaml:"when_env,omitempty"`
 }
 
 // WorkerHealth declares how to tell whether a worker's server is actually
@@ -327,7 +344,7 @@ const (
 var ValidCommandOutputs = []string{CommandOutputSilent, CommandOutputText, CommandOutputURL, CommandOutputTerminal}
 
 // KnownCommandIcons is the curated icon vocabulary. .lerd.yaml entries with an
-// icon outside this set fail `lerd check`. Keep in sync with the UI Icon
+// icon outside this set warn in `lerd site:doctor`. Keep in sync with the UI Icon
 // component so an icon present here always resolves to a visual on screen.
 var KnownCommandIcons = []string{
 	"broom", "database", "refresh", "link", "check", "list",
@@ -611,8 +628,16 @@ type FrameworkServiceDetect struct {
 // fallback, and that fallback is the configuration itself, which is WordPress's
 // wp-config.php and is written as normal.
 func (e FrameworkEnvConf) ResolveWrite(projectDir string) (file, format string) {
+	// The app file is lerd's to write once the installer has created it, and not
+	// before: the framework reads the skeleton lerd would leave there as a site
+	// already configured, so it stops serving the installer that would have
+	// written the file and fails on the values that are missing. A definition
+	// naming a plain file has somewhere to write in the meantime; one naming only
+	// the app file is written as normal, since that file is the configuration.
 	if e.AppFile != "" {
-		return e.AppFile, e.appFormat()
+		if _, err := os.Stat(filepath.Join(projectDir, e.AppFile)); err == nil || e.File == "" {
+			return e.AppFile, e.appFormat()
+		}
 	}
 	if e.File == "" {
 		return e.Resolve(projectDir)
@@ -793,6 +818,10 @@ var laravelFramework = &Framework{
 			RestartCommand: "php artisan queue:restart",
 			Restart:        "always",
 			ExcludeCheck:   &FrameworkRule{Composer: "laravel/horizon"}, // horizon supersedes queue
+			RequiresService: &WorkerService{
+				Name:    "redis",
+				WhenEnv: "QUEUE_CONNECTION=redis",
+			},
 		},
 		"schedule": {
 			Label:   "Task Scheduler",
