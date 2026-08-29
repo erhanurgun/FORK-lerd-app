@@ -955,8 +955,10 @@ func runInstall(cmd *cobra.Command, _ []string) error {
 	}
 	ok()
 
-	// macOS only: the clickable launcher in ~/Applications, so starting lerd and
-	// opening the dashboard needs neither a terminal nor the menu bar.
+	// The clickable launcher, so starting lerd and opening the dashboard needs
+	// no terminal: an app bundle in ~/Applications on macOS, a desktop entry on
+	// Linux. `lerd update` re-execs this install, which is what repoints an
+	// entry written by an older version at the binary that is live now.
 	if desktopapp.Path() != "" {
 		step("Writing the " + desktopapp.Name + " launcher")
 		if _, err := desktopapp.Install(); err != nil {
