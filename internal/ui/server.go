@@ -545,10 +545,58 @@ func terminalDirCandidates(dir string) []terminalCmd {
 	candidates := []terminalCmd{}
 
 	if t := os.Getenv("TERMINAL"); t != "" {
-		candidates = append(candidates, terminalCmd{t, []string{}})
+		candidates = append(candidates, namedTerminal(t, dir))
 	}
 
-	candidates = append(candidates,
+	// A terminal the user picked in System Settings outranks one that merely
+	// happens to be on PATH, so it goes ahead of the list rather than after it.
+	if bundle := macDefaultTerminal(); bundle != "" {
+		candidates = append(candidates, terminalCmd{"open", []string{"-b", bundle, dir}})
+	}
+	// The same on Linux, where the choice lives in the freedesktop launcher, the
+	// distribution's alternatives link, or the desktop's own setting.
+	if t := linuxDefaultTerminal(); t != "" {
+		candidates = append(candidates, namedTerminal(t, dir))
+	}
+
+	candidates = append(candidates, knownTerminals(dir)...)
+
+	if runtime.GOOS == "darwin" {
+		// `open -a Terminal dir` opens a new window at dir without echoing any
+		// command — cleaner than `do script "cd ... && exec $SHELL"` which types
+		// the command visibly into the shell. iTerm2 supports the same via open.
+		// Warp registers public.folder, so it takes the directory the same way
+		// the other two do and needs none of its warp:// URI scheme.
+		if _, err := os.Stat("/Applications/Warp.app"); err == nil {
+			candidates = append(candidates, terminalCmd{"open", []string{"-a", "Warp", dir}})
+		}
+		if _, err := os.Stat("/Applications/iTerm.app"); err == nil {
+			candidates = append(candidates, terminalCmd{"open", []string{"-a", "iTerm", dir}})
+		}
+		candidates = append(candidates, terminalCmd{"open", []string{"-a", "Terminal", dir}})
+	}
+
+	return candidates
+}
+
+// namedTerminal builds the invocation for a terminal named by the user or the
+// desktop. Its own flags are used when lerd knows them, since the generic
+// `-e sh -c` form several emulators do not accept: kitty and ghostty take the
+// program directly, and a chosen kitty would otherwise fail and fall through to
+// whatever happened to be next on PATH.
+func namedTerminal(name, dir string) terminalCmd {
+	for _, t := range knownTerminals(dir) {
+		if t.bin == filepath.Base(name) {
+			return terminalCmd{name, t.args}
+		}
+	}
+	return terminalCmd{name, []string{"-e", "sh", "-c", `cd "$0" && exec "$SHELL"`, dir}}
+}
+
+// knownTerminals is the fallback list, and the source of the flags namedTerminal
+// reuses when the chosen terminal is one of them.
+func knownTerminals(dir string) []terminalCmd {
+	return []terminalCmd{
 		terminalCmd{"kitty", []string{"--directory", dir}},
 		terminalCmd{"foot", []string{"--working-directory", dir}},
 		terminalCmd{"alacritty", []string{"--working-directory", dir}},
@@ -563,19 +611,7 @@ func terminalDirCandidates(dir string) []terminalCmd {
 		terminalCmd{"tilix", []string{"--working-directory", dir}},
 		terminalCmd{"terminator", []string{"--working-directory", dir}},
 		terminalCmd{"xterm", []string{"-e", "sh", "-c", `cd "$0" && exec "$SHELL"`, dir}},
-	)
-
-	if runtime.GOOS == "darwin" {
-		// `open -a Terminal dir` opens a new window at dir without echoing any
-		// command — cleaner than `do script "cd ... && exec $SHELL"` which types
-		// the command visibly into the shell. iTerm2 supports the same via open.
-		if _, err := os.Stat("/Applications/iTerm.app"); err == nil {
-			candidates = append(candidates, terminalCmd{"open", []string{"-a", "iTerm", dir}})
-		}
-		candidates = append(candidates, terminalCmd{"open", []string{"-a", "Terminal", dir}})
 	}
-
-	return candidates
 }
 
 // openTerminalAt opens the user's preferred terminal emulator in dir.
@@ -586,12 +622,7 @@ func openTerminalAt(dir string) error {
 		if err != nil {
 			continue
 		}
-		args := t.args
-		// For $TERMINAL with no preset args, just pass the dir via cd wrapper
-		if t.bin == os.Getenv("TERMINAL") && len(args) == 0 {
-			args = []string{"-e", "sh", "-c", `cd "$0" && exec "$SHELL"`, dir}
-		}
-		cmd := exec.Command(bin, args...)
+		cmd := exec.Command(bin, t.args...)
 		cmd.Dir = dir
 		if runtime.GOOS != "darwin" {
 			cmd.Env = graphicalEnv()
