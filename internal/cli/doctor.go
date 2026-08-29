@@ -604,11 +604,11 @@ func runDoctorInto(w io.Writer, useColor bool) (DoctorReport, error) {
 	for _, s := range swept {
 		switch {
 		case s.Failures > 0:
-			fail("site "+s.Label, s.Summary, "run: lerd site:doctor "+s.Label)
+			fail(s.Label, s.Summary, "run: lerd site:doctor "+s.Label)
 		case s.Warnings > 0:
-			warn("site "+s.Label, s.Summary+", run: lerd site:doctor "+s.Label)
+			warn(s.Label, s.Summary+", run: lerd site:doctor "+s.Label)
 		default:
-			ok("site " + s.Label)
+			ok(s.Label)
 		}
 	}
 
