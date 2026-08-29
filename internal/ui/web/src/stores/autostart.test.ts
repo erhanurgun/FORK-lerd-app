@@ -39,6 +39,30 @@ describe('autostart store', () => {
     expect(init.body).toBe(JSON.stringify({ enabled: true }));
   });
 
+  it('loads start_on_dashboard_open from /api/settings', async () => {
+    globalThis.fetch = vi.fn(async () =>
+      new Response(JSON.stringify({ start_on_dashboard_open: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    ) as unknown as typeof fetch;
+    const { startOnDashboardOpen, loadAutostart } = await import('./autostart');
+    await loadAutostart();
+    expect(get(startOnDashboardOpen)).toBe(true);
+  });
+
+  it('toggleStartOnDashboardOpen POSTs and flips store on success', async () => {
+    const fetchMock = vi.fn(async () => new Response('{}', { status: 200 }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    const { startOnDashboardOpen, toggleStartOnDashboardOpen } = await import('./autostart');
+    expect(await toggleStartOnDashboardOpen(true)).toBe(true);
+    expect(get(startOnDashboardOpen)).toBe(true);
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('/api/settings/start-on-open');
+    expect(init.method).toBe('POST');
+    expect(init.body).toBe(JSON.stringify({ enabled: true }));
+  });
+
   it('does not flip on failure', async () => {
     globalThis.fetch = vi.fn(async () => new Response('nope', { status: 500 })) as unknown as typeof fetch;
     const { autostartEnabled, toggleAutostart } = await import('./autostart');

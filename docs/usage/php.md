@@ -26,8 +26,8 @@
 | `lerd php:ports add <host:container...> [--php version]` | Publish a host port on the version's shell container; a bare number publishes the same port straight through, and a busy host port shifts to the next free one |
 | `lerd php:ports remove <host...> [--php version]` | Unpublish a host port from the version's shell container |
 | `lerd php:ports list [--php version]` | List the extra host ports published for a PHP version |
-| `lerd pest:browser install [version]` | Set up in-container Pest browser testing (musl chromium + Playwright shim); see [browser testing](browser-testing#pest-browser-testing-playwright) |
-| `lerd pest:browser remove [version]` | Remove chromium from the FPM image and disable Pest browser testing |
+| `lerd pest:browser install [version]` | Set up in-container Pest browser testing (musl chromium, Xvfb, Playwright shim); see [browser testing](browser-testing#pest-browser-testing-playwright) |
+| `lerd pest:browser remove [version]` | Remove chromium and Xvfb from the FPM image and disable Pest browser testing |
 | `lerd pest:browser doctor [version]` | Diagnose the Pest browser testing setup for a PHP version |
 | `lerd php:ini [version]` | Open the user php.ini for a PHP version in `$EDITOR` |
 

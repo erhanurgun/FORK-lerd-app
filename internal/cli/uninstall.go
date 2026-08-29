@@ -9,6 +9,7 @@ import (
 
 	"github.com/geodro/lerd/internal/certs"
 	"github.com/geodro/lerd/internal/config"
+	"github.com/geodro/lerd/internal/desktopapp"
 	"github.com/geodro/lerd/internal/dns"
 	"github.com/geodro/lerd/internal/feedback"
 	"github.com/geodro/lerd/internal/podman"
@@ -108,6 +109,12 @@ func runUninstall(force bool) error {
 	step("Removing service units")
 	removeServiceUnits()
 	ok()
+
+	if desktopapp.Path() != "" {
+		step("Removing the " + desktopapp.Name + " launcher")
+		_ = desktopapp.Remove()
+		ok()
+	}
 
 	step("Reloading service manager")
 	_ = podman.DaemonReloadFn()
