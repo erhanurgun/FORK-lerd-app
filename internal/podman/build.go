@@ -1016,6 +1016,8 @@ func RewriteFPMQuadlets() error {
 
 	// Also rewrite nginx quadlet with the same extra volumes.
 	if nginxContent, err := GetQuadletTemplate("lerd-nginx.container"); err == nil {
+		httpPort, httpsPort := config.NginxPorts()
+		nginxContent = ApplyNginxPorts(nginxContent, httpPort, httpsPort)
 		nginxContent = InjectExtraVolumes(nginxContent, extraPaths)
 		if changed, err := WriteQuadletDiff("lerd-nginx", nginxContent); err == nil {
 			if changed || UnitMissingMounts("lerd-nginx", extraPaths) {

@@ -420,6 +420,25 @@ func (c *GlobalConfig) DNSManaged() bool {
 	return c == nil || c.DNS.Enabled
 }
 
+// NginxPorts returns the host ports nginx should publish, falling back to the
+// defaults when the config is unreadable or names no port. Every caller that
+// binds, probes or reports those ports reads them here, so the unit and the
+// checks against it can't drift apart.
+func NginxPorts() (httpPort, httpsPort int) {
+	httpPort, httpsPort = 80, 443
+	cfg, err := LoadGlobal()
+	if err != nil || cfg == nil {
+		return httpPort, httpsPort
+	}
+	if cfg.Nginx.HTTPPort > 0 {
+		httpPort = cfg.Nginx.HTTPPort
+	}
+	if cfg.Nginx.HTTPSPort > 0 {
+		httpsPort = cfg.Nginx.HTTPSPort
+	}
+	return httpPort, httpsPort
+}
+
 func defaultConfig() *GlobalConfig {
 	cfg := &GlobalConfig{}
 	cfg.PHP.DefaultVersion = "8.5"

@@ -240,17 +240,7 @@ func CollectPortChecks(units []string) []PortCheck {
 
 	// Nginx ports (configurable).
 	if unitSet["lerd-nginx"] {
-		cfg, err := config.LoadGlobal()
-		httpPort := 80
-		httpsPort := 443
-		if err == nil {
-			if cfg.Nginx.HTTPPort > 0 {
-				httpPort = cfg.Nginx.HTTPPort
-			}
-			if cfg.Nginx.HTTPSPort > 0 {
-				httpsPort = cfg.Nginx.HTTPSPort
-			}
-		}
+		httpPort, httpsPort := config.NginxPorts()
 		checks = append(checks,
 			PortCheck{strconv.Itoa(httpPort), "nginx HTTP", "lerd-nginx"},
 			PortCheck{strconv.Itoa(httpsPort), "nginx HTTPS", "lerd-nginx"},
@@ -498,6 +488,19 @@ func startLerd(emit func(StartEvent), skip []string) error {
 	// Rewrite nginx.conf so any config changes in new binary versions take effect.
 	if err := nginx.EnsureNginxConfig(); err != nil {
 		fmt.Printf("  WARN: nginx config: %v\n", err)
+	}
+	// The quadlet carries the host ports nginx publishes, so a start has to
+	// rewrite it too, and restart the container when it changed: a running
+	// nginx keeps the mapping it was created with, so writing the unit alone
+	// leaves a moved nginx.http_port unapplied until something else restarts
+	// it (#1544).
+	if quadletChanged, err := nginx.RewriteNginxQuadlet(); err != nil {
+		fmt.Printf("  WARN: nginx quadlet: %v\n", err)
+	} else if quadletChanged {
+		_ = podman.DaemonReloadFn()
+		if err := podman.RestartUnit("lerd-nginx"); err != nil {
+			fmt.Printf("  WARN: restarting nginx on the new ports: %v\n", err)
+		}
 	}
 	if err := nginx.EnsureLerdVhost(); err != nil {
 		fmt.Printf("  WARN: lerd vhost: %v\n", err)
