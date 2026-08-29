@@ -168,6 +168,26 @@ hosts: mymachines mdns_minimal [NOTFOUND=return] files myhostname dns resolve
 This makes glibc consult the plain `dns` module before systemd-resolved's `nss-resolve`, which the VPN client no longer shadows.
 :::
 
+::: details composer or npm fails with "could not resolve host" inside a container
+Composer, npm and the framework store all run inside the container, not on the host, so they use the resolver the lerd network hands aardvark-dns rather than yours. Those two can differ: `.test` domains and container names are answered by aardvark-dns from its own records and keep working regardless, so a broken forwarder shows up only as downloads that fail with `could not resolve host` or `curl error 28 while downloading`, with nothing else complaining.
+
+`lerd doctor` checks this directly. In the DNS section, the `internet DNS from containers` line asks the running nginx container to resolve the framework store's hostname, which is an ordinary internet name and the same lookup composer makes:
+
+```
+[DNS]
+  ...
+  internet DNS from containers (raw.githubusercontent.com)   OK
+```
+
+If it fails, the forwarders on the lerd network are stale or unreachable from inside the container network namespace. `lerd stop && lerd start` re-points them at your current host resolvers, which fixes it in most cases. To see what they are set to:
+
+```bash
+podman network inspect lerd --format '{{.NetworkDNSServers}}'
+```
+
+An address that is valid on the host but not routable from a rootless network namespace is the usual cause. This is worth checking on WSL2 in particular, where the Windows-side resolver address the WSL VM is given is not always reachable from inside the namespace.
+:::
+
 ::: details "Secure Connection Failed" after the host wakes from suspend or hibernate
 After a long suspend or hibernate, rootless podman networking can come back in a bad state: the lerd-nginx container loses its host port forward (or stops), so nothing listens on 443 and the browser shows a generic "Secure Connection Failed" for your `.test` sites, or the lerd-dns container stops and names no longer resolve.
 
