@@ -68,6 +68,10 @@ const (
 	// does not hold, a host action like the service fixes since a site cannot
 	// create its own schema from inside its container.
 	FixCreateDatabase = "database_create"
+	// FixStaleWorkers disables and deletes the unit files left behind for
+	// workers the site no longer declares, a host action for the same reason the
+	// vhost fix is one: the units live outside the container.
+	FixStaleWorkers = "stale_workers_remove"
 )
 
 // DoctorFixCommands maps each universal fix key to the shell command run in the
@@ -281,6 +285,9 @@ func RunWith(ctx context.Context, path string, fw *config.Framework, opts Option
 		resp.add(c)
 	}
 	if c, ok := checkVhost(path); ok {
+		resp.add(c)
+	}
+	if c, ok := checkStaleWorkers(path, fw); ok {
 		resp.add(c)
 	}
 	if !opts.Quick {
@@ -523,6 +530,7 @@ var universalLabels = map[string]string{
 	"php_version":       "PHP Version",
 	"vhost":             "Nginx Vhost",
 	"slow_routes":       "Response Time",
+	"stale_workers":     "Worker Units",
 }
 
 // humanize turns a snake_case check name into a Title Case fallback label.
