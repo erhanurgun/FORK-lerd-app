@@ -247,6 +247,19 @@ A worker becomes orphaned when its systemd unit is still running but its definit
 - **`lerd setup`**: offers orphaned workers as pre-selected stop steps before framework worker starts
 - **UI**: the stop button works for orphaned workers directly
 
+## Stale worker units
+
+A worker that leaves the definition entirely is a different case. A framework definition reaches every install within a day with no binary release, so a worker retired upstream is retired on every machine at once: it stops appearing in `lerd worker list`, and the dashboard stops drawing a toggle for it. Its unit file stays where it was written, though, still linked into `default.target.wants` and still armed for boot.
+
+Nothing used to reconcile the two, so a unit that answered to nothing kept being walked by [worker-heal](worker-heal.md) and reported as a worker that needed healing. Two things changed. Worker-heal now leaves a unit whose worker the site no longer declares alone, so it no longer counts towards the failing-worker banner. And `lerd site:doctor` reports it once, under **Worker Units**, with a fix that disables the unit, deletes it, and reloads the daemon:
+
+```bash
+lerd site:doctor           # names the units that answer to nothing
+lerd site:doctor --fix     # disables and removes them
+```
+
+The unit is never removed silently, because it may still be running something you want. A worker whose `check` rule simply stopped matching is not stale: the definition still names it, and the next branch checkout brings it back.
+
 ## Web UI (worker toggles)
 
 Framework workers appear as toggles in the Sites panel. Workers with a `check` rule only appear when the condition passes. Workers with `conflicts_with` suppress each other (e.g. when Horizon is available, the queue toggle is hidden).
