@@ -141,7 +141,7 @@ See [Remote / LAN Development](/usage/remote-development) for the full walkthrou
 
 ## PHP
 
-Supported PHP versions: **8.5**, **8.4**, **8.3**, **8.2**, **8.1**, and the frozen legacy tier **8.0** and **7.4**. The legacy tier is opt-in only (you have to `lerd use 7.4` or `lerd isolate 7.4` explicitly), pulls from `php:7.4-fpm-alpine` / `php:8.0-fpm-alpine` upstream tags, and intentionally skips ext-mongodb (unavailable on those PHP versions). Use the legacy tier for hosted legacy apps; default new projects to 8.4 LTS or 8.5.
+Supported PHP versions: **8.5**, **8.4**, **8.3**, **8.2**, **8.1**, the prerelease **8.6**, and the frozen legacy tier **8.0** and **7.4**. The prerelease tier is opt-in the same way (`lerd fetch 8.6`, `lerd isolate 8.6`), builds from the `8.6-rc` upstream tag while 8.6 is in beta, and is FPM only until FrankenPHP publishes an image for it. The legacy tier is opt-in only (you have to `lerd use 7.4` or `lerd isolate 7.4` explicitly), pulls from `php:7.4-fpm-alpine` / `php:8.0-fpm-alpine` upstream tags, and intentionally skips ext-mongodb (unavailable on those PHP versions). Use the legacy tier for hosted legacy apps; default new projects to 8.4 LTS or 8.5.
 
 | Command | Description |
 |---|---|
@@ -149,7 +149,7 @@ Supported PHP versions: **8.5**, **8.4**, **8.3**, **8.2**, **8.1**, and the fro
 | `lerd isolate <version>` | Pin PHP version for cwd: writes `.php-version` and updates `.lerd.yaml` if present, then re-links |
 | `lerd php:list` | List all installed PHP-FPM versions |
 | `lerd php:rebuild [version] [--local]` | Force-rebuild PHP-FPM images, or install a version this machine does not have (pulls pre-built base by default; `--local` builds from source) |
-| `lerd fetch [version...] [--local]` | Pull pre-built PHP FPM base images from ghcr.io for the given (or all supported) versions; `--local` builds from source instead |
+| `lerd fetch [version...] [--local]` | Pull pre-built PHP FPM base images from ghcr.io for the given versions, or every released one when none are named; `--local` builds from source instead |
 | `lerd xdebug on [version] [--mode MODE] [--on-demand]` | Enable Xdebug for a PHP version. `--mode` defaults to `debug`; accepts `coverage`, `develop`, `profile`, `trace`, `gcstats`, or comma combos like `debug,coverage`. `--on-demand` sets `start_with_request=trigger` so nothing auto-connects |
 | `lerd xdebug off [version]` | Disable Xdebug |
 | `lerd xdebug status` | Show Xdebug enabled/disabled state and active mode for all installed PHP versions |

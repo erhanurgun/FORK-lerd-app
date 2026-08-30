@@ -547,7 +547,9 @@ func buildFPMImage(version string, force, local bool, customExts []string, extDe
 		if tmplErr != nil {
 			return false, tmplErr
 		}
-		containerfile = strings.ReplaceAll(tmpl, "{{.Version}}", version)
+		// The placeholder carries the upstream php image tag, which is not the
+		// lerd version for a prerelease: 8.6 has no plain -fpm-alpine tag yet.
+		containerfile = strings.ReplaceAll(tmpl, "{{.Version}}", config.UpstreamPHPTag(version))
 		containerfile = strings.ReplaceAll(containerfile, "{{.CustomExtensions}}", buildCustomExtBlock(customExts, extDeps))
 		containerfile = strings.ReplaceAll(containerfile, "{{.CustomExtensionsRuntime}}", buildCustomExtRuntimeDeps(customExts, extDeps))
 		containerfile = strings.ReplaceAll(containerfile, "{{.CustomPackages}}", buildCustomPackagesBlock(packages))

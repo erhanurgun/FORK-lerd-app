@@ -674,6 +674,10 @@ type StatusResponse struct {
 	// image for, so the UI can limit a FrankenPHP site's version dropdown to
 	// the ones it can actually run (intersected client-side with installed).
 	FrankenPHPVersions []string `json:"frankenphp_php_versions"`
+	// PrereleasePHPVersions are the supported versions upstream has not released
+	// yet, so every picker can label them rather than offering a beta as an
+	// ordinary choice.
+	PrereleasePHPVersions []string `json:"prerelease_php_versions"`
 	// Home is the user's home directory, so the UI can shorten displayed paths
 	// under it to a leading ~ without shipping the absolute path in the label.
 	Home string `json:"home"`
@@ -780,23 +784,24 @@ func buildStatus() StatusResponse {
 		workspaces = []string{}
 	}
 	return StatusResponse{
-		DNS:                DNSStatus{OK: dnsStatus == dns.StatusOK, Status: string(dnsStatus), VPN: dns.VPNActive(), Enabled: dnsEnabled, TLD: tld},
-		Nginx:              ServiceCheck{Running: nginxRunning},
-		PHPFPMs:            phpStatuses,
-		PHPDefault:         phpDefault,
-		NodeDefault:        nodeDefault,
-		NodeManagedByLerd:  nodeManagedByLerd,
-		NodeManager:        nodeManager,
-		NvmAvailable:       lerdNode.ManagerByName("nvm").Available(),
-		BunAvailable:       bunAvailable,
-		BunVersion:         bunVersion,
-		UsingSystemBun:     usingSystemBun,
-		WatcherRunning:     watcherRunning,
-		FrankenPHPVersions: config.FrankenPHPVersions(),
-		Home:               homeDir,
-		Workspaces:         workspaces,
-		Instance:           serverInstance,
-		Tools:              toolStatuses,
+		DNS:                   DNSStatus{OK: dnsStatus == dns.StatusOK, Status: string(dnsStatus), VPN: dns.VPNActive(), Enabled: dnsEnabled, TLD: tld},
+		Nginx:                 ServiceCheck{Running: nginxRunning},
+		PHPFPMs:               phpStatuses,
+		PHPDefault:            phpDefault,
+		NodeDefault:           nodeDefault,
+		NodeManagedByLerd:     nodeManagedByLerd,
+		NodeManager:           nodeManager,
+		NvmAvailable:          lerdNode.ManagerByName("nvm").Available(),
+		BunAvailable:          bunAvailable,
+		BunVersion:            bunVersion,
+		UsingSystemBun:        usingSystemBun,
+		WatcherRunning:        watcherRunning,
+		FrankenPHPVersions:    config.FrankenPHPVersions(),
+		PrereleasePHPVersions: config.PrereleasePHPVersions,
+		Home:                  homeDir,
+		Workspaces:            workspaces,
+		Instance:              serverInstance,
+		Tools:                 toolStatuses,
 	}
 }
 

@@ -4064,12 +4064,14 @@ func execSiteRuntime(args map[string]any) (any, *rpcError) {
 		return toolOK(fmt.Sprintf("%s: runtime set to fpm", siteName)), nil
 	}
 
-	// FrankenPHP only publishes images for PHP >= 8.2; without this guard the
-	// build normalizes the version up (e.g. 8.1 -> 8.5) and silently runs a
-	// different PHP than the site reports. Mirror the `lerd runtime` guard.
-	if !config.IsFrankenPHPVersion(site.PHPVersion) {
-		return toolErr(fmt.Sprintf("FrankenPHP requires PHP %s or newer; this site is on PHP %s — bump it first.",
-			config.FrankenPHPMinVersion, site.PHPVersion)), nil
+	// FrankenPHP only publishes images for released PHP >= 8.2; without this
+	// guard the build normalizes the version up (e.g. 8.1 -> 8.5) and silently
+	// runs a different PHP than the site reports. Mirror the `lerd runtime` guard.
+	if reason := config.FrankenPHPUnavailableReason(site.PHPVersion); reason != "" {
+		if config.IsPrereleasePHPVersion(site.PHPVersion) {
+			return toolErr(reason + " — this site runs on FPM until it ships."), nil
+		}
+		return toolErr(reason + " — bump it first."), nil
 	}
 
 	site.Runtime = "frankenphp"
