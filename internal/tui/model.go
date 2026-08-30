@@ -466,7 +466,7 @@ func (m *Model) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		eventbus.Default.Unsubscribe(m.sub)
 		return m, tea.Quit
 
-	case "enter", " ":
+	case "enter", "space":
 		// On the Dashboard, enter (or space) acts like a click on the selected
 		// row: it jumps to that site / service / worker on its own tab.
 		if m.activeTab == tabDashboard {
