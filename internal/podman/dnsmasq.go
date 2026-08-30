@@ -9,7 +9,11 @@ import (
 // DNSMasqImage is the local tag of the dnsmasq image lerd-dns runs.
 const DNSMasqImage = "lerd-dnsmasq:local"
 
-const dnsmasqContainerfile = "FROM docker.io/library/alpine:latest\nRUN apk add --no-cache dnsmasq\n"
+// DNSMasqBaseImage is the base the dnsmasq image is built from, and the only
+// thing that build downloads.
+const DNSMasqBaseImage = "docker.io/library/alpine:latest"
+
+const dnsmasqContainerfile = "FROM " + DNSMasqBaseImage + "\nRUN apk add --no-cache dnsmasq\n"
 
 // BuildDNSMasqImage builds the dnsmasq image, retrying once with nameservers
 // pinned via --dns when the plain build fails. apk resolves from inside the

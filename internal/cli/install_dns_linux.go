@@ -7,6 +7,7 @@ import (
 
 	"github.com/geodro/lerd/internal/dns"
 	"github.com/geodro/lerd/internal/feedback"
+	"github.com/geodro/lerd/internal/imagepull"
 	"github.com/geodro/lerd/internal/podman"
 	"github.com/geodro/lerd/internal/services"
 )
@@ -28,16 +29,21 @@ func ensureDNSImageForStart() {
 	}
 }
 
+// dnsImagePlan discloses what pullDNSImages downloads. The dnsmasq build adds
+// only apk packages on top of the base, so the base pull is the whole of it.
+func dnsImagePlan() imagepull.Plan {
+	return imagepull.Plan{
+		imagepull.Pull(podman.DNSMasqBaseImage, "base for the lerd-dns image"),
+	}
+}
+
 // pullDNSImages returns build jobs to pull alpine and build the dnsmasq container image.
 func pullDNSImages() []BuildJob {
 	return []BuildJob{
 		{
 			Label: "Pulling alpine:latest",
 			Run: func(w io.Writer) error {
-				cmd := podman.Cmd("pull", "docker.io/library/alpine:latest")
-				cmd.Stdout = w
-				cmd.Stderr = w
-				return cmd.Run()
+				return podman.PullImageTo(podman.DNSMasqBaseImage, w)
 			},
 		},
 		{

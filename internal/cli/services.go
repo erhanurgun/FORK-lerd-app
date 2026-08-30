@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"charm.land/huh/v2"
 	"github.com/geodro/lerd/internal/config"
 	"github.com/geodro/lerd/internal/feedback"
+	"github.com/geodro/lerd/internal/imagepull"
 	"github.com/geodro/lerd/internal/lifecycle"
 	phpPkg "github.com/geodro/lerd/internal/php"
 	"github.com/geodro/lerd/internal/podman"
@@ -106,6 +108,9 @@ func newServiceStartCmd() *cobra.Command {
 			}
 
 			if image != "" && !podman.ImageExists(image) {
+				imagepull.Plan{
+					imagepull.Pull(image, "the "+name+" image is not in the local store"),
+				}.Fill().Report(os.Stdout)
 				jobs := []BuildJob{{
 					Label: "Pulling " + name,
 					Run:   func(w io.Writer) error { return podman.PullImageTo(image, w) },
@@ -199,7 +204,7 @@ v1.7.6 → v1.42.1) — this may require manual data migration; you've been warn
 					if ev.Message != "" {
 						feedback.Note(strings.TrimSpace(ev.Message))
 					} else if ev.Image != "" {
-						feedback.Line("pulling " + ev.Image)
+						feedback.Line("pulling " + ev.Image + imagepull.Note(ev.Bytes))
 					}
 				case "writing_quadlet":
 					feedback.Line("writing quadlet for " + ev.Image)
@@ -266,7 +271,7 @@ Supported families: mysql, mariadb, postgres.`,
 					if ev.Message != "" {
 						feedback.Note(strings.TrimSpace(ev.Message))
 					} else if ev.Image != "" {
-						feedback.Line("pulling " + ev.Image)
+						feedback.Line("pulling " + ev.Image + imagepull.Note(ev.Bytes))
 					}
 				case "writing_quadlet":
 					feedback.Line("writing quadlet for " + ev.Image)
@@ -306,7 +311,7 @@ Errors when no previous image is recorded — i.e. the service was never updated
 					if ev.Message != "" {
 						feedback.Note(strings.TrimSpace(ev.Message))
 					} else if ev.Image != "" {
-						feedback.Line("pulling " + ev.Image)
+						feedback.Line("pulling " + ev.Image + imagepull.Note(ev.Bytes))
 					}
 				case "writing_quadlet":
 					feedback.Line("writing quadlet for " + ev.Image)
@@ -853,7 +858,7 @@ func newServiceReinstallCmd() *cobra.Command {
 					feedback.Note("renaming data dir aside: " + e.Message)
 				case "pulling_image":
 					if e.Message == "" && e.Image != "" {
-						feedback.Note("pulling " + e.Image)
+						feedback.Note("pulling " + e.Image + imagepull.Note(e.Bytes))
 					}
 				case "starting_unit":
 					feedback.Note("starting " + e.Unit)

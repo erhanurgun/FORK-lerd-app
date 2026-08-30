@@ -97,3 +97,38 @@ describe('phpVersions store', () => {
     expect(res.error).toBe('updating php quadlet: boom');
   });
 });
+
+describe('confirmPhpDownload', () => {
+  const realFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  // A repeat rebuild starts from a base that is already on the machine, so it
+  // must not stop to ask about a download that will not happen.
+  it('does not prompt when the base image is already local', async () => {
+    globalThis.fetch = vi.fn(async () =>
+      new Response(JSON.stringify({ image: 'ghcr.io/lerd-env/lerd-php84-fpm-base:abc', bytes: 0, local: true }), {
+        status: 200
+      })
+    ) as unknown as typeof fetch;
+    const { confirmPhpDownload } = await import('./phpVersions');
+    expect(await confirmPhpDownload('8.4')).toBe(true);
+  });
+
+  it('asks about the version being built, not a service', async () => {
+    const urls: string[] = [];
+    globalThis.fetch = vi.fn(async (url: unknown) => {
+      urls.push(String(url));
+      return new Response(JSON.stringify({ image: '', bytes: 0, local: false }), { status: 200 });
+    }) as unknown as typeof fetch;
+    const { confirmPhpDownload } = await import('./phpVersions');
+    await confirmPhpDownload('8.4');
+    expect(urls[0]).toContain('php=8.4');
+  });
+});

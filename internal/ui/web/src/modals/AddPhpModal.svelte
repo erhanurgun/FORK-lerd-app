@@ -5,7 +5,12 @@
   import DetailButton from '$components/DetailButton.svelte';
   import BuildLog from '$components/BuildLog.svelte';
   import { closeModal } from '$stores/modals';
-  import { installablePhpVersions, streamPhpInstall, loadPhpVersions } from '$stores/phpVersions';
+  import {
+    installablePhpVersions,
+    streamPhpInstall,
+    loadPhpVersions,
+    confirmPhpDownload
+  } from '$stores/phpVersions';
   import { loadStatus } from '$stores/status';
   import { goToTab } from '$stores/route';
   import { m } from '../paraglide/messages.js';
@@ -52,6 +57,7 @@
 
   async function install() {
     if (!version) return;
+    if (!(await confirmPhpDownload(version))) return;
     installing = true;
     finished = false;
     error = '';

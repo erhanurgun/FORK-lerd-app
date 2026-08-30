@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/geodro/lerd/internal/config"
+	"github.com/geodro/lerd/internal/imagepull"
 	"github.com/geodro/lerd/internal/origin"
 )
 
@@ -248,6 +249,22 @@ func fpmImageCurrent(imageName, containerfileHash, customHash string) bool {
 		imageLabelFn(imageName, fpmCustomSetHashLabel) == customHash
 }
 
+// FPMImageCurrent reports whether the PHP image for version is already built
+// from the current recipe and extension set, so a non-forced build would be a
+// no-op. Exported so callers disclose only the downloads that really happen.
+func FPMImageCurrent(version string) bool {
+	cfg, err := config.LoadGlobal()
+	if err != nil {
+		return false
+	}
+	hash, err := ContainerfileHash()
+	if err != nil {
+		return false
+	}
+	return fpmImageCurrent(FPMImageName(version), hash,
+		customSetHash(cfg.GetExtensions(), cfg.AllExtApkDeps(), cfg.GetPackages()))
+}
+
 // imageLabel reads a single label from a local image. Returns "" on any
 // error (image missing, podman unreachable, label absent) so callers
 // treat that as "doesn't match" and fall back to a rebuild.
@@ -380,6 +397,21 @@ func basePullArgs(ref, authFile string) []string {
 	return append(args, ref)
 }
 
+// PHPBaseImageRef is the pre-built base image a non-local PHP build downloads
+// before it layers the mkcert CA and any custom extensions on top. Empty when
+// the recipe hash cannot be computed, in which case the size is undisclosed.
+func PHPBaseImageRef(version string) string {
+	hash, err := baseContainerfileHash()
+	if err != nil {
+		return ""
+	}
+	refs := origin.BaseImageRefs(strings.ReplaceAll(version, ".", ""), hash)
+	if len(refs) == 0 {
+		return ""
+	}
+	return refs[0]
+}
+
 // tryPullBaseImage attempts to pull the pre-built base image from ghcr.io.
 // Returns the image reference on success, or "" if unavailable.
 func tryPullBaseImage(version string, w io.Writer) string {
@@ -464,6 +496,14 @@ func buildFPMImage(version string, force, local bool, customExts []string, extDe
 	customHash := customSetHash(customExts, extDeps, packages)
 
 	if !force && fpmImageCurrent(imageName, canonicalHash, customHash) {
+		return false, nil
+	}
+
+	// Offline defers a refresh of an image that still runs: the rebuild would
+	// re-download the whole base. A missing image is built anyway, and
+	// `lerd php:rebuild` forces its way through.
+	if !force && imagepull.Offline() && ImageExists(imageName) {
+		fmt.Fprintf(w, "  Offline: keeping the current PHP %s image, run `lerd php:rebuild` to refresh it\n", version)
 		return false, nil
 	}
 

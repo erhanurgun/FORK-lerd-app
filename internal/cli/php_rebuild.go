@@ -8,6 +8,7 @@ import (
 
 	"github.com/geodro/lerd/internal/config"
 	"github.com/geodro/lerd/internal/feedback"
+	"github.com/geodro/lerd/internal/imagepull"
 	"github.com/geodro/lerd/internal/lifecycle"
 	phpPkg "github.com/geodro/lerd/internal/php"
 	"github.com/geodro/lerd/internal/podman"
@@ -104,6 +105,21 @@ func restartFrankenPHPUnits(units []frankenRestart) {
 	}
 }
 
+// phpBuildPlan discloses what building these PHP versions downloads: lerd's
+// prebuilt base for each version, or nothing sizeable under --local, where the
+// build starts from the upstream image named in the Containerfile instead.
+func phpBuildPlan(versions []string, local bool, reason string) imagepull.Plan {
+	plan := make(imagepull.Plan, 0, len(versions))
+	for _, v := range versions {
+		ref := ""
+		if !local {
+			ref = podman.PHPBaseImageRef(v)
+		}
+		plan = append(plan, imagepull.Build("PHP "+v+" image", ref, reason))
+	}
+	return plan
+}
+
 // RebuildPHPVersion force-rebuilds one version's image against the current
 // prebuilt base and brings everything running on it back up, streaming the
 // build to w. The dashboard's rebuild action goes through here so it means the
@@ -113,6 +129,7 @@ func RebuildPHPVersion(version string, w io.Writer) error {
 	if err != nil {
 		return err
 	}
+	phpBuildPlan([]string{version}, false, "explicit rebuild").Fill().Report(w)
 	fmt.Fprintf(w, "Rebuilding PHP %s image...\n", version)
 	if err := podman.RebuildFPMImageTo(version, false, w); err != nil {
 		return err
@@ -233,6 +250,13 @@ func runPhpRebuild(cmd *cobra.Command, args []string) error {
 			Run:   func(w io.Writer) error { return podman.BuildFrankenPHPImage(ver, true, w) },
 		})
 	}
+	plan := phpBuildPlan(versions, local, "explicit rebuild")
+	for _, v := range fpVersions {
+		plan = append(plan, imagepull.Build("FrankenPHP "+v+" image",
+			podman.FrankenPHPBaseImage(v), "Octane sites run on PHP "+v))
+	}
+	plan.Fill().Report(os.Stdout)
+
 	RunParallel(jobs) //nolint:errcheck — individual failures printed by RunParallel
 
 	restartFrankenPHPUnits(fpUnits)

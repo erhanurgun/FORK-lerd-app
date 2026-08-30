@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"sync"
 
@@ -100,6 +101,16 @@ func runFetch(cmd *cobra.Command, args []string) error {
 			},
 		}
 	}
+
+	// Only versions whose image is stale actually build, so only those are
+	// disclosed as a download.
+	var pending []string
+	for _, v := range versions {
+		if !podman.FPMImageCurrent(v) {
+			pending = append(pending, v)
+		}
+	}
+	phpBuildPlan(pending, local, "requested by lerd fetch").Fill().Report(os.Stdout)
 
 	if err := RunParallel(jobs); err != nil {
 		feedback.Warn("some images failed to build: %v", err)

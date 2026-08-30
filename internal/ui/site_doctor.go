@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/geodro/lerd/internal/config"
+	"github.com/geodro/lerd/internal/imagepull"
 	"github.com/geodro/lerd/internal/serviceops"
 	"github.com/geodro/lerd/internal/sitedoctor"
 )
@@ -205,7 +206,7 @@ func installPhaseLine(name string, ev serviceops.PhaseEvent) string {
 		if ev.Message != "" {
 			return ""
 		}
-		return name + ": pulling " + ev.Image
+		return name + ": pulling " + ev.Image + imagepull.Note(ev.Bytes)
 	case "installing_config":
 		return name + ": writing config"
 	case "starting_deps":
