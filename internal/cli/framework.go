@@ -99,7 +99,74 @@ func runFrameworkList(check bool) error {
 		}
 	}
 	feedback.Table(headers, rows)
+	listStorePackages(cwd)
 	return nil
+}
+
+// listStorePackages prints the package layer under the definitions: what the
+// store publishes, what each package contributes, and which of them this
+// project requires. The layer is otherwise invisible, since everything it
+// declares surfaces as an ordinary worker or command, so this is the only place
+// that says where a declaration came from.
+func listStorePackages(cwd string) {
+	pkgs := config.ListStorePackages(cwd)
+	if len(pkgs) == 0 {
+		return
+	}
+	rows := make([][]string, 0, len(pkgs))
+	for _, p := range pkgs {
+		rows = append(rows, []string{p.Name, packageDeclares(p), packageFileLabel(p), packageUse(p, cwd)})
+	}
+	feedback.Header("Packages")
+	feedback.Table([]string{"Package", "Declares", "File", "This project"}, rows)
+}
+
+// packageDeclares summarises a package's contributions: workers and commands by
+// name, since those are what a user recognises, and the rest by count.
+func packageDeclares(p config.StorePackageInfo) string {
+	if !p.Cached {
+		return "—"
+	}
+	var parts []string
+	for _, w := range p.Workers {
+		parts = append(parts, w+" worker")
+	}
+	if len(p.Commands) > 0 {
+		parts = append(parts, strings.Join(p.Commands, ", "))
+	}
+	if p.Setup > 0 {
+		parts = append(parts, fmt.Sprintf("%d setup", p.Setup))
+	}
+	if p.Doctor > 0 {
+		parts = append(parts, fmt.Sprintf("%d check%s", p.Doctor, pluralS(p.Doctor)))
+	}
+	if len(parts) == 0 {
+		return "—"
+	}
+	return strings.Join(parts, ", ")
+}
+
+// packageFileLabel names the file serving this project, or says the store
+// publishes one this machine has not pulled yet.
+func packageFileLabel(p config.StorePackageInfo) string {
+	if !p.Cached {
+		return "not installed"
+	}
+	if p.Version == "" {
+		return "any version"
+	}
+	return "@" + p.Version
+}
+
+func packageUse(p config.StorePackageInfo, cwd string) string {
+	switch {
+	case p.Required:
+		return "yes"
+	case cwd == "":
+		return "—"
+	default:
+		return "no"
+	}
 }
 
 func storeStatus(info config.FrameworkInfo, idx *store.Index) (latest, status string) {
