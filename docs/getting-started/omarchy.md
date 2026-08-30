@@ -2,9 +2,6 @@
 title: PHP development on Omarchy
 description: 'Omarchy ships an opinionated Arch and Hyprland desktop, but no PHP stack. Lerd adds one: automatic .test domains, HTTPS, per-project PHP 7.4 to 8.5, shared MySQL, PostgreSQL and Redis, rootless Podman, plus a native Omarchy bar widget.'
 head:
-  - - meta
-    - name: keywords
-      content: omarchy php, php development omarchy, omarchy laravel, laravel omarchy, omarchy web development, local php environment arch linux, omarchy dev environment, hyprland php development
   - - script
     - type: application/ld+json
     - |
