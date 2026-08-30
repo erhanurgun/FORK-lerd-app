@@ -175,6 +175,22 @@ export async function checkPhpUpdates(
   }
 }
 
+// openPhpShell asks the server to spawn a host terminal running an interactive
+// shell inside the version's FPM container, the same session `lerd php:shell`
+// gives. Returns the server's error so a missing terminal emulator is reported
+// rather than looking like a click that did nothing.
+export async function openPhpShell(v: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await apiFetch('/api/php-versions/' + encodeURIComponent(v) + '/shell', {
+      method: 'POST'
+    });
+    const data = await decodeJSONResult<{ ok?: boolean; error?: string }>(res);
+    return { ok: Boolean(data.ok), error: data.error };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : m.common_requestFailed() };
+  }
+}
+
 async function phpAction(v: string, action: 'set-default' | 'start' | 'stop' | 'remove'): Promise<boolean> {
   try {
     const res = await apiFetch('/api/php-versions/' + encodeURIComponent(v) + '/' + action, {

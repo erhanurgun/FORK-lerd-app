@@ -1150,6 +1150,7 @@
   "system_php_checkUpdatesFailed": "Sprawdzenie nie powiodło się",
   "system_php_checkUpdatesFound": "Dostępny jest odświeżony obraz bazowy",
   "system_php_checkUpdatesTitle": "Zapytaj rejestr, czy obraz bazowy został odświeżony",
+  "system_php_shellTitle": "Otwórz powłokę w kontenerze PHP-FPM",
   "system_php_checkUpdatesUpToDate": "Obraz bazowy jest aktualny",
   "system_php_ext_cannot": "nie zbudowało się na PHP {version}; przebudowa tego nie zmieni",
   "system_php_ext_declared": "Twoje rozszerzenia",

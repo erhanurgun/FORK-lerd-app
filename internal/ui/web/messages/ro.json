@@ -1150,6 +1150,7 @@
   "system_php_checkUpdatesFailed": "Verificarea a eșuat",
   "system_php_checkUpdatesFound": "O imagine de bază reîmprospătată este disponibilă",
   "system_php_checkUpdatesTitle": "Întreabă registrul dacă imaginea de bază a fost reîmprospătată",
+  "system_php_shellTitle": "Deschide un shell în containerul PHP-FPM",
   "system_php_checkUpdatesUpToDate": "Imaginea de bază este la zi",
   "system_php_ext_cannot": "nu s-a putut construi pe PHP {version}; o reconstruire nu va schimba asta",
   "system_php_ext_declared": "Extensiile tale",

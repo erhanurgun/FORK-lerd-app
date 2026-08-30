@@ -1150,6 +1150,7 @@
   "system_php_checkUpdatesFailed": "Controle mislukt",
   "system_php_checkUpdatesFound": "Er is een vernieuwde basis-image beschikbaar",
   "system_php_checkUpdatesTitle": "Aan het register vragen of de basis-image vernieuwd is",
+  "system_php_shellTitle": "Een shell openen in de PHP-FPM-container",
   "system_php_checkUpdatesUpToDate": "Basis-image is actueel",
   "system_php_ext_cannot": "kon niet worden gebouwd op PHP {version}; opnieuw bouwen verandert dat niet",
   "system_php_ext_declared": "Jouw extensies",

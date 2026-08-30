@@ -1150,6 +1150,7 @@
   "system_php_checkUpdatesFailed": "Prüfung fehlgeschlagen",
   "system_php_checkUpdatesFound": "Ein erneuertes Basis-Image ist verfügbar",
   "system_php_checkUpdatesTitle": "Bei der Registry nachfragen, ob das Basis-Image erneuert wurde",
+  "system_php_shellTitle": "Eine Shell im PHP-FPM-Container öffnen",
   "system_php_checkUpdatesUpToDate": "Basis-Image ist aktuell",
   "system_php_ext_cannot": "ließ sich auf PHP {version} nicht bauen; ein Rebuild ändert daran nichts",
   "system_php_ext_declared": "Deine Erweiterungen",

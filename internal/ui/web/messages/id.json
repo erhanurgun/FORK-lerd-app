@@ -1150,6 +1150,7 @@
   "system_php_checkUpdatesFailed": "Pemeriksaan gagal",
   "system_php_checkUpdatesFound": "Tersedia image dasar yang disegarkan",
   "system_php_checkUpdatesTitle": "Tanya registry apakah image dasar telah disegarkan",
+  "system_php_shellTitle": "Buka shell di dalam kontainer PHP-FPM",
   "system_php_checkUpdatesUpToDate": "Image dasar sudah terkini",
   "system_php_ext_cannot": "tidak dapat dibangun di PHP {version}; membangun ulang tidak akan mengubahnya",
   "system_php_ext_declared": "Ekstensi Anda",

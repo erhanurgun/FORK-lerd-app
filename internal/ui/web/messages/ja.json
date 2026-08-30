@@ -1150,6 +1150,7 @@
   "system_php_checkUpdatesFailed": "確認に失敗しました",
   "system_php_checkUpdatesFound": "更新されたベースイメージがあります",
   "system_php_checkUpdatesTitle": "ベースイメージが更新されたかレジストリに問い合わせます",
+  "system_php_shellTitle": "PHP-FPM コンテナ内でシェルを開く",
   "system_php_checkUpdatesUpToDate": "ベースイメージは最新です",
   "system_php_ext_cannot": "は PHP {version} でビルドできませんでした。再ビルドしても変わりません",
   "system_php_ext_declared": "あなたの拡張機能",
