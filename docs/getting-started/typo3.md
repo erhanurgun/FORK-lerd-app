@@ -19,7 +19,7 @@ Run `lerd mcp:enable-global` once and your AI assistant (Claude Code, Cursor, Ju
 ```bash [lerd new]
 cd ~/Lerd
 lerd new mysite --framework=typo3
-# runs: composer create-project typo3/cms-base-distribution ./mysite
+# runs: composer create-project typo3/cms-base-distribution:^14.0 ./mysite
 ```
 
 ```bash [composer]

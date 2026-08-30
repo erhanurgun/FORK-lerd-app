@@ -153,6 +153,12 @@ never start blocking on a prompt. `--framework-version` answers the version
 question the same way, which is how the dashboard's site wizard scaffolds a
 chosen major; it needs a `--framework` to apply to.
 
+The major you pick reaches composer as well as lerd. Each definition's create
+command names its own major, `composer create-project laravel/laravel:^11.0`, so
+the release that lands on disk is the one you asked for rather than whatever is
+newest, and the PHP range, workers and env wiring the definition brings match the
+code beside them.
+
 The command then carries the project the rest of the way: it links the new
 directory, which routes a project with no `.lerd.yaml` through the
 [init wizard](/usage/sites) for PHP version, HTTPS and services, and offers setup

@@ -1738,3 +1738,56 @@ func TestRepairVhosts_stillRemovesAVhostNoSiteOwns(t *testing.T) {
 		t.Error("an unowned SSL vhost with no certificate should be removed")
 	}
 }
+
+// includedInsideLocation reports whether the location-scope include sits inside
+// the block opened by the given header line rather than merely somewhere in the
+// file. Nginx drops the server-level fastcgi_param and proxy_set_header sets as
+// soon as a location declares one, so an include placed at server scope cannot
+// override them and the position is the whole point of the hook.
+func includedInsideLocation(content, header, include string) bool {
+	start := strings.Index(content, header)
+	if start < 0 {
+		return false
+	}
+	end := strings.Index(content[start:], "\n    }")
+	if end < 0 {
+		return false
+	}
+	return strings.Contains(content[start:start+end], include)
+}
+
+func TestGenerateVhost_includesLocationScopedCustomD(t *testing.T) {
+	confD := setupConfD(t)
+	site := config.Site{Name: "fwd", Domains: []string{"fwd.test"}, Path: "/srv/fwd"}
+	if err := GenerateVhost(site, "8.3"); err != nil {
+		t.Fatal(err)
+	}
+	content := readConf(t, filepath.Join(confD, "fwd.test.conf"))
+	if !includedInsideLocation(content, "location ~ \\.php$ {", "include /etc/nginx/custom.d/fwd.test.location.conf*;") {
+		t.Errorf("expected the location-scope include inside the php location, got:\n%s", content)
+	}
+}
+
+func TestGenerateSSLVhost_includesLocationScopedCustomD(t *testing.T) {
+	confD := setupConfD(t)
+	site := config.Site{Name: "fwd", Domains: []string{"fwd.test"}, Path: "/srv/fwd"}
+	if err := GenerateSSLVhost(site, "8.3"); err != nil {
+		t.Fatal(err)
+	}
+	content := readConf(t, filepath.Join(confD, "fwd.test-ssl.conf"))
+	if !includedInsideLocation(content, "location ~ \\.php$ {", "include /etc/nginx/custom.d/fwd.test.location.conf*;") {
+		t.Errorf("expected the location-scope include inside the php location, got:\n%s", content)
+	}
+}
+
+func TestGenerateCustomVhost_includesLocationScopedCustomD(t *testing.T) {
+	confD := setupConfD(t)
+	site := config.Site{Name: "nestapp", Domains: []string{"nestapp.test"}, ContainerPort: 3000}
+	if err := GenerateCustomVhost(site); err != nil {
+		t.Fatal(err)
+	}
+	content := readConf(t, filepath.Join(confD, "nestapp.test.conf"))
+	if !includedInsideLocation(content, "location / {", "include /etc/nginx/custom.d/nestapp.test.location.conf*;") {
+		t.Errorf("expected the location-scope include inside location /, got:\n%s", content)
+	}
+}
