@@ -89,6 +89,8 @@ removes:
 
 Removals run after the merge, so a package can replace an entry and drop another in the same file.
 
+`lerd framework list` prints the layer under the definitions table: every package the store publishes, what each one declares, which file answers for the project you are standing in, and whether that project requires it. Everything a package contributes surfaces as an ordinary worker or command, so this is the only place that says where a declaration came from. It reads the cache and never fetches.
+
 Only the packages listed under `packages` in the store index are ever looked up, so a project's dependency list never turns into a request for a file the store does not have. They are cached in `~/.local/share/lerd/packages/`, under the same file name the store serves, seeded by `lerd install`, refreshed by `lerd framework update` and on the same 24 hour window as a definition, so a package's worker resolves offline exactly like a framework's.
 
 ## Version resolution

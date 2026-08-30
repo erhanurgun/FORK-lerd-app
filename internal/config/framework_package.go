@@ -385,3 +385,57 @@ func SaveStorePackage(pkg *FrameworkPackage) error {
 	}
 	return publishStoreFile(path, data, 0644)
 }
+
+// StorePackageInfo is one published package as a lister sees it: what the
+// cached file declares, which file serves this project, and whether the project
+// requires the package at all.
+type StorePackageInfo struct {
+	Name string
+	// Version is the file that would serve this project, empty for the
+	// unversioned one. Cached reports whether that file is on disk.
+	Version  string
+	Cached   bool
+	Required bool
+	Workers  []string
+	Commands []string
+	Setup    int
+	Doctor   int
+}
+
+// ListStorePackages describes the package layer for projectDir, which may be
+// empty for a listing outside a project. It reads the cache and never fetches:
+// a listing that pulled sixteen files from the network would be a different
+// command than the one people run to see what they already have.
+func ListStorePackages(projectDir string) []StorePackageInfo {
+	entries := cachedStorePackages()
+	out := make([]StorePackageInfo, 0, len(entries))
+	for _, entry := range entries {
+		info := StorePackageInfo{Name: entry.Name}
+		if projectDir != "" {
+			info.Required = ComposerHasPackage(projectDir, entry.Name)
+		}
+		info.Version = pickPackageVersion(projectDir, entry)
+		if pkg := loadPackageYAML(StorePackageFile(entry.Name, info.Version)); pkg != nil {
+			info.Cached = true
+			for name := range pkg.Workers {
+				info.Workers = append(info.Workers, name)
+			}
+			sort.Strings(info.Workers)
+			for _, c := range pkg.Commands {
+				info.Commands = append(info.Commands, c.Name)
+			}
+			info.Setup = len(pkg.Setup)
+			if pkg.Doctor != nil {
+				info.Doctor = len(pkg.Doctor.Checks)
+			}
+		}
+		out = append(out, info)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Required != out[j].Required {
+			return out[i].Required
+		}
+		return out[i].Name < out[j].Name
+	})
+	return out
+}
