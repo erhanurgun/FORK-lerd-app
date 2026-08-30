@@ -1,6 +1,11 @@
 package podman
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"github.com/geodro/lerd/internal/config"
+)
 
 // TestComposerPlatformNameRoundTrips checks both directions of the name folding:
 // composer publishes OPcache as ext-zend-opcache (the module is "Zend OPcache",
@@ -66,5 +71,29 @@ func TestBundledExtensionsCoverContainerfile(t *testing.T) {
 		if !bundled[ext] {
 			t.Errorf("Containerfile installs %q but BundledExtensions omits it — park would never warn a project needs it", ext)
 		}
+	}
+}
+
+// A prerelease PHP outruns the PECL releases: they do not compile against it, so
+// the image drops them and BundledExtensions must not promise what it never got.
+func TestBundledExtensionsDropsPECLOnPrerelease(t *testing.T) {
+	if len(config.PrereleasePHPVersions) == 0 {
+		t.Skip("no prerelease version in the supported list")
+	}
+	v := config.PrereleasePHPVersions[0]
+	got := strings.Join(BundledExtensions(v), " ")
+	for _, ext := range []string{"igbinary", "pcov", "xdebug"} {
+		if strings.Contains(" "+got+" ", " "+ext+" ") {
+			t.Errorf("BundledExtensions(%q) advertises %q, which does not build on a prerelease", v, ext)
+		}
+	}
+	for _, ext := range []string{"curl", "intl", "opcache", "pdo_mysql", "redis", "imagick", "mongodb"} {
+		if !strings.Contains(" "+got+" ", " "+ext+" ") {
+			t.Errorf("BundledExtensions(%q) dropped %q, which the image does build", v, ext)
+		}
+	}
+	stable := strings.Join(BundledExtensions("8.5"), " ")
+	if !strings.Contains(stable, "xdebug") {
+		t.Error("BundledExtensions(8.5) lost xdebug; the prerelease rule leaked into a released version")
 	}
 }

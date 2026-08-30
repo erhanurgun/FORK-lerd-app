@@ -35,7 +35,7 @@ func NewSiteDoctorCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&asJSON, "json", false, "Output the report as JSON")
-	cmd.Flags().BoolVar(&fix, "fix", false, "Apply the findings lerd can resolve on its own (a drifted nginx vhost), then re-check")
+	cmd.Flags().BoolVar(&fix, "fix", false, "Apply the findings lerd can resolve on its own (a drifted nginx vhost, a stale worker unit), then re-check")
 	return cmd
 }
 
@@ -136,6 +136,21 @@ func applySiteDoctorFixes(path, fwName string, resp sitedoctor.Response, quiet b
 				feedback.Warn("%v", err)
 			}
 			if ready {
+				fixed = true
+			}
+		case sitedoctor.FixStaleWorkers:
+			site, err := config.FindSiteByPath(path)
+			if err != nil || site == nil {
+				continue
+			}
+			n, err := RemoveStaleWorkerUnits(*site)
+			if err != nil {
+				feedback.Warn("removing stale worker units: %v", err)
+			}
+			if n > 0 {
+				if !quiet {
+					fmt.Printf("  %s\n\n", feedback.Dim(fmt.Sprintf("removed %d stale worker unit(s)", n)))
+				}
 				fixed = true
 			}
 		case sitedoctor.FixCreateDatabase:

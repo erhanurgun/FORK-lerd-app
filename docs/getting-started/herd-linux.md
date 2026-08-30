@@ -81,7 +81,7 @@ Unlike Herd, lerd also ships as real distro packages: install it through an [apt
 | Automatic `.test` domains through the native resolver | Automatic `.test` domains through a dnsmasq container wired into your system resolver, no `/etc/hosts` edits |
 | The Secure Site toggle | `lerd secure`, a real mkcert certificate trusted by your system and browsers |
 | `herd isolate php@8.4`, PHP version per site | `lerd isolate 8.4`, or auto-detected, PHP 7.4 and 8.0 to 8.5 |
-| `herd php`, `herd composer`, always the site's version | `lerd php`, `lerd composer`, `lerd php:shell`, on the version that site is registered on |
+| `herd php`, `herd composer`, always the site's version | `lerd php`, `lerd composer`, `lerd shell`, on the version that site is registered on |
 | Services, MySQL, PostgreSQL, Redis, Mailpit | `lerd service start mysql`, plus PostgreSQL, Redis, Meilisearch, MongoDB, RustFS (S3) and Mailpit, shared across every site |
 | The database inspector, log viewer and dumps window in Herd Pro | The same surfaces in the [web dashboard](/features/web-ui), free: databases, [live logs](/features/logs), the [dump viewer](/features/dumps) and the [query viewer](/features/queries) |
 | The Xdebug toggle | `lerd xdebug:on`, a tray toggle and a dashboard switch |

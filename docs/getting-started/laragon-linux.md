@@ -83,7 +83,7 @@ Prefer your package manager? Lerd is also available through an [apt PPA, a Fedor
 | Multiple PHP versions, switched from the tray | PHP 7.4 and 8.0 to 8.5, picked per project by `lerd isolate 8.4` or auto-detected from `composer.json` |
 | Bundled MySQL, PostgreSQL, Redis, Memcached | `lerd service start mysql`, plus PostgreSQL, Redis, Meilisearch, MongoDB, S3-compatible storage and Mailpit, shared across every site |
 | The tray menu, start/stop, logs, terminal | A [system tray](/features/system-tray), a [web dashboard](/features/web-ui) at `127.0.0.1:7073` and a [terminal dashboard](/features/tui) |
-| Cmder terminal with the right PHP on `PATH` | `lerd php`, `lerd composer` and `lerd php:shell`, always on the version that project is registered on |
+| Cmder terminal with the right PHP on `PATH` | `lerd php`, `lerd composer` and `lerd shell`, always on the version that project is registered on |
 | Portable, everything in `C:\laragon` | Everything under `~/.config/lerd` and `~/.local/share/lerd`, XDG-compliant, nothing written to system directories |
 | Node, npm, Python and Go bundled alongside PHP | Per-project Node, plus [any other runtime](/getting-started/containers) through a `Containerfile.lerd` |
 

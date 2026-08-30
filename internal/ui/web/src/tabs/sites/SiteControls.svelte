@@ -65,7 +65,8 @@
       $status.frankenphp_php_versions,
       effectivePhp,
       effectivePhpMin,
-      effectivePhpMax
+      effectivePhpMax,
+      $status.prerelease_php_versions
     )
   );
   // When host bun is available, the Node dropdown offers a "bun" entry that

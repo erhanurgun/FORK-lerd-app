@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { phpOptionsForSite } from './phpVersions';
+import { phpOptionsForSite, PRERELEASE_LABEL } from './phpVersions';
 
 describe('phpOptionsForSite', () => {
   const installed = ['7.4', '8.1', '8.3', '8.4', '8.5'];
@@ -36,6 +36,17 @@ describe('phpOptionsForSite', () => {
     const opts = phpOptionsForSite('fpm', installed, franken, '8.3', '8.1', '8.3');
     expect(values(opts)).toEqual(installed); // all kept, none hidden
     expect(disabled(opts)).toEqual(['7.4', '8.4', '8.5']);
+  });
+
+  it('marks a prerelease version so it never reads as an ordinary choice', () => {
+    const opts = phpOptionsForSite('fpm', [...installed, '8.6'], franken, '8.4', undefined, undefined, ['8.6']);
+    expect(opts.find((o) => o.value === '8.6')?.description).toBe(PRERELEASE_LABEL);
+    expect(opts.find((o) => o.value === '8.5')?.description).toBeUndefined();
+  });
+
+  it('lets the framework range explain a disabled prerelease instead', () => {
+    const opts = phpOptionsForSite('fpm', [...installed, '8.6'], franken, '8.3', '8.1', '8.3', ['8.6']);
+    expect(opts.find((o) => o.value === '8.6')?.description).toBe('needs PHP 8.1 to 8.3');
   });
 
   it('never disables the current version even if it is out of range', () => {

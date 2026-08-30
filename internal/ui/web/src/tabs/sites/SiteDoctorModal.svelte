@@ -138,7 +138,8 @@
     vhost_regenerate: 'Regenerate nginx vhost',
     services_install: 'Install the missing services',
     services_start: 'Start the stopped services',
-    database_create: 'Create the missing database'
+    database_create: 'Create the missing database',
+    stale_workers_remove: 'Remove the stale worker units'
   };
 
   async function runFix(check: DoctorCheck) {

@@ -674,6 +674,10 @@ type StatusResponse struct {
 	// image for, so the UI can limit a FrankenPHP site's version dropdown to
 	// the ones it can actually run (intersected client-side with installed).
 	FrankenPHPVersions []string `json:"frankenphp_php_versions"`
+	// PrereleasePHPVersions are the supported versions upstream has not released
+	// yet, so every picker can label them rather than offering a beta as an
+	// ordinary choice.
+	PrereleasePHPVersions []string `json:"prerelease_php_versions"`
 	// Home is the user's home directory, so the UI can shorten displayed paths
 	// under it to a leading ~ without shipping the absolute path in the label.
 	Home string `json:"home"`
@@ -780,23 +784,24 @@ func buildStatus() StatusResponse {
 		workspaces = []string{}
 	}
 	return StatusResponse{
-		DNS:                DNSStatus{OK: dnsStatus == dns.StatusOK, Status: string(dnsStatus), VPN: dns.VPNActive(), Enabled: dnsEnabled, TLD: tld},
-		Nginx:              ServiceCheck{Running: nginxRunning},
-		PHPFPMs:            phpStatuses,
-		PHPDefault:         phpDefault,
-		NodeDefault:        nodeDefault,
-		NodeManagedByLerd:  nodeManagedByLerd,
-		NodeManager:        nodeManager,
-		NvmAvailable:       lerdNode.ManagerByName("nvm").Available(),
-		BunAvailable:       bunAvailable,
-		BunVersion:         bunVersion,
-		UsingSystemBun:     usingSystemBun,
-		WatcherRunning:     watcherRunning,
-		FrankenPHPVersions: config.FrankenPHPVersions(),
-		Home:               homeDir,
-		Workspaces:         workspaces,
-		Instance:           serverInstance,
-		Tools:              toolStatuses,
+		DNS:                   DNSStatus{OK: dnsStatus == dns.StatusOK, Status: string(dnsStatus), VPN: dns.VPNActive(), Enabled: dnsEnabled, TLD: tld},
+		Nginx:                 ServiceCheck{Running: nginxRunning},
+		PHPFPMs:               phpStatuses,
+		PHPDefault:            phpDefault,
+		NodeDefault:           nodeDefault,
+		NodeManagedByLerd:     nodeManagedByLerd,
+		NodeManager:           nodeManager,
+		NvmAvailable:          lerdNode.ManagerByName("nvm").Available(),
+		BunAvailable:          bunAvailable,
+		BunVersion:            bunVersion,
+		UsingSystemBun:        usingSystemBun,
+		WatcherRunning:        watcherRunning,
+		FrankenPHPVersions:    config.FrankenPHPVersions(),
+		PrereleasePHPVersions: config.PrereleasePHPVersions,
+		Home:                  homeDir,
+		Workspaces:            workspaces,
+		Instance:              serverInstance,
+		Tools:                 toolStatuses,
 	}
 }
 
@@ -4754,6 +4759,26 @@ func hostProxyAppLifecycleOp(isHostProxy bool, workerName, branch, op string) (s
 	return "", false
 }
 
+// containerRunning is the seam tests replace so the container-shell action can
+// be driven without a live podman, the way openTerminal stands in for a real
+// terminal emulator.
+var containerRunning = podman.Cache.Running
+
+// phpShellScript is what the spawned terminal runs: lerd's own shell command,
+// not a hand-built podman exec. The container script it ends up running
+// contains "$PATH", which the host shell would expand on the way through,
+// putting the host's bin directories (and lerd's php shim, since $HOME is bind
+// mounted) ahead of the container's own. Letting lerd build the exec keeps the
+// script an argv element that no shell ever parses. The absolute path is used
+// because the spawned shell does not load the user's interactive PATH.
+func phpShellScript(version string) string {
+	exe, err := os.Executable()
+	if err != nil {
+		exe = "lerd"
+	}
+	return podman.ShellQuote(exe) + " shell " + podman.ShellQuote(version)
+}
+
 func handlePHPVersionAction(w http.ResponseWriter, r *http.Request) {
 	// path: /api/php-versions/{version}/{remove|set-default|config|...}
 	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/php-versions/"), "/")
@@ -4859,6 +4884,16 @@ func handlePHPVersionAction(w http.ResponseWriter, r *http.Request) {
 		short := strings.ReplaceAll(version, ".", "")
 		unit := "lerd-php" + short + "-fpm"
 		if err := podman.StopUnit(unit); err != nil {
+			writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true})
+	case "shell":
+		if !containerRunning(podman.SharedFPMContainerName(version)) {
+			writeJSON(w, map[string]any{"ok": false, "error": "PHP " + version + " is not running"})
+			return
+		}
+		if err := openTerminal(phpShellScript(version)); err != nil {
 			writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
 			return
 		}
@@ -5017,10 +5052,10 @@ func handlePHPInstall(w http.ResponseWriter, r *http.Request) {
 		done(map[string]any{"ok": false, "error": err.Error(), "version": version})
 		return
 	}
-	// Refresh the container cache before signalling done so the client's
-	// follow-up status load (and the publishAfter broadcast) report the
-	// freshly-started FPM as running instead of a stale not-running snapshot.
-	podman.Cache.PollNow()
+	// Refresh before signalling done so the client's follow-up status load
+	// (and the publishAfter broadcast) report the freshly-started FPM as
+	// running, with the patch read out of the image it just built.
+	refreshAfterPHPBuild(version)
 	done(map[string]any{"ok": true, "version": version})
 }
 
@@ -5029,12 +5064,12 @@ var (
 	refreshPHPPatchFn = podman.RefreshFPMPHPVersion
 )
 
-// refreshAfterPHPRebuild brings back what a finished rebuild made stale: the
-// container states, the PHP patch probed out of the old image, and the cached
-// status snapshot built from both. It runs before the done event because the
-// client loads status the moment the modal closes, ahead of publishAfter's own
-// invalidation.
-func refreshAfterPHPRebuild(version string) {
+// refreshAfterPHPBuild brings back what a finished install or rebuild made
+// stale: the container states, the PHP patch probed out of the image that was
+// replaced, and the cached status snapshot built from both. It runs before the
+// done event because the client loads status the moment the modal closes,
+// ahead of publishAfter's own invalidation.
+func refreshAfterPHPBuild(version string) {
 	pollContainersFn()
 	refreshPHPPatchFn(version)
 	snapshots.Invalidate(eventbus.KindStatus)
@@ -5073,7 +5108,7 @@ func handlePHPRebuild(w http.ResponseWriter, r *http.Request, version string) {
 		done(map[string]any{"ok": false, "error": err.Error(), "version": version})
 		return
 	}
-	refreshAfterPHPRebuild(version)
+	refreshAfterPHPBuild(version)
 	done(map[string]any{"ok": true, "version": version})
 }
 
