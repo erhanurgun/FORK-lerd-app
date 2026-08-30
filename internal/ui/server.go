@@ -299,6 +299,7 @@ func Start(currentVersion string) error {
 	mux.HandleFunc("/api/watcher/start", withCORS(handleWatcherStart))
 	mux.HandleFunc("/api/settings", withCORS(handleSettings))
 	mux.HandleFunc("/api/settings/autostart", withCORS(handleSettingsAutostart))
+	mux.HandleFunc("/api/settings/tray", withCORS(handleSettingsTray))
 	mux.HandleFunc("/api/settings/start-on-open", withCORS(handleSettingsStartOnOpen))
 	mux.HandleFunc("/api/settings/worker-mode", withCORS(handleSettingsWorkerMode))
 	mux.HandleFunc("/api/settings/idle-suspend", withCORS(publishAfter(handleSettingsIdleSuspend, eventbus.KindSites)))
@@ -5244,6 +5245,7 @@ type SettingsResponse struct {
 	DNSEnabled                bool     `json:"dns_enabled"`
 	DNSUpstream               []string `json:"dns_upstream"`          // pinned upstreams, empty = auto-detect
 	DNSUpstreamDetected       []string `json:"dns_upstream_detected"` // what auto-detection currently sees
+	TrayEnabled               bool     `json:"tray_enabled"`
 }
 
 func handleSettings(w http.ResponseWriter, _ *http.Request) {
@@ -5253,6 +5255,7 @@ func handleSettings(w http.ResponseWriter, _ *http.Request) {
 	idleMinutes := int(config.DefaultIdleSuspendTimeout / time.Minute)
 	dnsEnabled := true
 	startOnOpen := false
+	trayEnabled := true
 	var dnsUpstream []string
 	if cfg != nil {
 		mode = cfg.WorkerExecMode()
@@ -5261,6 +5264,7 @@ func handleSettings(w http.ResponseWriter, _ *http.Request) {
 		dnsEnabled = cfg.DNSManaged()
 		dnsUpstream = cfg.DNS.Upstream
 		startOnOpen = cfg.Autostart.OnDashboardOpen
+		trayEnabled = cfg.IsTrayEnabled()
 	}
 	writeJSON(w, SettingsResponse{
 		AutostartOnLogin:          lerdSystemd.IsAutostartEnabled(),
@@ -5272,6 +5276,7 @@ func handleSettings(w http.ResponseWriter, _ *http.Request) {
 		DNSEnabled:                dnsEnabled,
 		DNSUpstream:               dnsUpstream,
 		DNSUpstreamDetected:       dns.ReadUpstreamDNS(),
+		TrayEnabled:               trayEnabled,
 	})
 }
 
@@ -5447,6 +5452,27 @@ func handleSettingsAutostart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, map[string]any{"ok": true, "autostart_on_login": body.Enabled})
+}
+
+// handleSettingsTray turns the system tray applet on or off, applet and
+// autostart unit included, for desktops that show lerd's state elsewhere.
+func handleSettingsTray(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+	if _, err := cli.ApplyTray(body.Enabled); err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true, "tray_enabled": body.Enabled})
 }
 
 // handleSettingsStartOnOpen records whether opening the dashboard on a stopped

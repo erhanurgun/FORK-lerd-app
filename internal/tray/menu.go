@@ -36,6 +36,7 @@ type menuState struct {
 	mDumps         *systray.MenuItem
 	mNotifications *systray.MenuItem
 	mIconStyle     *systray.MenuItem
+	mTrayOff       *systray.MenuItem
 	mUpdate        *systray.MenuItem
 	mQuit          *systray.MenuItem
 }
@@ -82,6 +83,9 @@ func buildMenu(mono bool) *menuState {
 	if !mono {
 		m.mIconStyle = m.mSettings.AddSubMenuItem("High-contrast icon: Off", "Show an always-visible green running icon instead of the theme-adaptive one")
 	}
+	// One-way on purpose: once the applet is gone there is no menu left to
+	// toggle it back from, so `lerd tray on` and the dashboard own the return.
+	m.mTrayOff = m.mSettings.AddSubMenuItem("Turn off system tray", "Quit the tray applet and stop lerd from launching it again")
 
 	m.mUpdate = systray.AddMenuItem("Check for update...", "Check for a newer version of Lerd")
 	m.mQuit = systray.AddMenuItem("Quit Lerd", "Stop all Lerd processes and containers")
