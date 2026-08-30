@@ -40,7 +40,7 @@ Actions: `list` (discover sites — CALL FIRST), `link`, `unlink`, `domain_add`,
 - certificates renew themselves before they expire; `tls_renew` forces it by hand for one site
 - `php`/`node` take `version`; pass `branch` to pin the override on a worktree's checkout
 - `runtime` switches `fpm` ↔ `frankenphp` (`worker: true` enables frankenphp worker mode)
-- `nginx_write` saves a custom override (runs `nginx -t`, backs up, reloads); `branch` targets a worktree
+- `nginx_write` saves a custom override (runs `nginx -t`, backs up, reloads); `branch` targets a worktree, `scope` picks the file: `server` (default) sits at the end of the server block, `location` inside the block serving the site, the only place a `fastcgi_param` or `proxy_set_header` override takes effect
 - `park` registers a parent dir and auto-registers every PHP project under it; `unpark` reverses it (project files kept)
 
 #### `service` — built-in & custom services

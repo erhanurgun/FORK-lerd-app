@@ -79,7 +79,8 @@ server {
         fastcgi_param HTTP_COOKIE "$http_cookie; SPX_KEY=$spx_key{{if .Profiling}}; SPX_ENABLED=1{{end}}";
 {{if .LerdSite}}        fastcgi_param LERD_SITE {{.LerdSite}};
 {{end}}{{if .LerdBranch}}        fastcgi_param LERD_BRANCH {{.LerdBranch}};
-{{end}}    }
+{{end}}        include /etc/nginx/custom.d/{{.Domain}}.location.conf*;
+    }
 
     location ~ /\.ht {
         deny all;

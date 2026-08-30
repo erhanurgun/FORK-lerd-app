@@ -1,5 +1,5 @@
 import { writable } from "svelte/store";
-import type { Site, EnvProposeEntry } from "./sites";
+import type { Site, EnvProposeEntry, NginxScope } from "./sites";
 
 export type ModalKind =
   | "domain"
@@ -78,6 +78,7 @@ export interface EnvDuplicatesTarget {
 
 export interface NginxSaveTarget {
   domain: string;
+  scope: NginxScope;
   content: string;
   original: string;
   /** True when the live override already exists on disk. When false, the
@@ -88,6 +89,7 @@ export interface NginxSaveTarget {
 
 export interface NginxRestoreTarget {
   domain: string;
+  scope: NginxScope;
   current: string;
   backupName: string;
   backup: string;
@@ -95,6 +97,7 @@ export interface NginxRestoreTarget {
 
 export interface NginxResetTarget {
   domain: string;
+  scope: NginxScope;
   path: string;
 }
 

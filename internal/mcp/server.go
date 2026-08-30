@@ -510,7 +510,11 @@ func execSiteNginxRead(args map[string]any) (any, *rpcError) {
 	if err != nil {
 		return toolErr(err.Error()), nil
 	}
-	got, err := siteops.ReadCustomNginx(domain)
+	scope, err := siteops.ParseNginxScope(strArg(args, "scope"))
+	if err != nil {
+		return toolErr(err.Error()), nil
+	}
+	got, err := siteops.ReadCustomNginx(domain, scope)
 	if err != nil {
 		return toolErr(err.Error()), nil
 	}
@@ -518,7 +522,7 @@ func execSiteNginxRead(args map[string]any) (any, *rpcError) {
 	if !got.Exists {
 		state = "no override yet — showing the template"
 	}
-	return toolOK(fmt.Sprintf("# %s (%s)\n%s", domain, state, got.Body)), nil
+	return toolOK(fmt.Sprintf("# %s (%s scope, %s)\n%s", domain, scope, state, got.Body)), nil
 }
 
 func execSiteNginxWrite(args map[string]any) (any, *rpcError) {
@@ -526,7 +530,11 @@ func execSiteNginxWrite(args map[string]any) (any, *rpcError) {
 	if err != nil {
 		return toolErr(err.Error()), nil
 	}
-	res, err := siteops.SaveCustomNginx(domain, strArg(args, "content"), true)
+	scope, err := siteops.ParseNginxScope(strArg(args, "scope"))
+	if err != nil {
+		return toolErr(err.Error()), nil
+	}
+	res, err := siteops.SaveCustomNginx(domain, scope, strArg(args, "content"), true)
 	if err != nil {
 		return toolErr(err.Error()), nil
 	}
@@ -545,10 +553,14 @@ func execSiteNginxReset(args map[string]any) (any, *rpcError) {
 	if err != nil {
 		return toolErr(err.Error()), nil
 	}
-	if err := siteops.ResetCustomNginx(domain); err != nil {
+	scope, err := siteops.ParseNginxScope(strArg(args, "scope"))
+	if err != nil {
 		return toolErr(err.Error()), nil
 	}
-	return toolOK(fmt.Sprintf("Reset %s to the bundled nginx defaults.", domain)), nil
+	if err := siteops.ResetCustomNginx(domain, scope); err != nil {
+		return toolErr(err.Error()), nil
+	}
+	return toolOK(fmt.Sprintf("Reset the %s scope override for %s to the bundled nginx defaults.", scope, domain)), nil
 }
 
 // QueueStartFn and QueueStopFn are injected by the cli package (which owns the
