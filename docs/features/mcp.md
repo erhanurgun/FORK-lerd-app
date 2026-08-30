@@ -117,6 +117,40 @@ PHP runs inside the container, so the AI agent environment variables your coding
 
 Commands the `exec` MCP tool runs (`artisan`, `composer`, `vendor_run` for Pest/PHPUnit) go a step further: because reaching them through the MCP server proves an agent is driving the command, lerd injects a neutral `AI_AGENT=lerd-mcp` marker when no real agent variable is present. Pao therefore returns JSON for MCP-originated test runs even if the host environment carries nothing, while a real agent variable is still forwarded as-is when it exists. Manual terminal runs are never given the marker, so their output is unchanged.
 
+### Running your framework's own MCP server
+
+This is separate from lerd's MCP server. Some frameworks ship their own local MCP server, started as a console command — Laravel MCP does, and it is what [Laravel Boost](https://github.com/laravel/boost) builds on. Such a server has to run where the application runs: started from the host it resolves `lerd-mysql` or `lerd-redis` against nothing, and you end up maintaining a second set of host-only `.env` values just to keep it alive.
+
+lerd's `php` shim already takes care of that. The installer puts lerd's bin directory ahead of the system one on your PATH, and the `php` there execs into the project's container, so the ordinary registration works unchanged:
+
+```json
+{
+  "mcpServers": {
+    "weather": {
+      "command": "php",
+      "args": ["artisan", "mcp:start", "weather"]
+    }
+  }
+}
+```
+
+The server then runs on the same PHP build, the same extensions and the same container network as the site, and the hostnames in your `.env` resolve exactly as they do for a web request.
+
+A client you launch from a desktop icon rather than a terminal may not inherit your login PATH, in which case it finds the system `php` instead of the shim. Name lerd explicitly there:
+
+```json
+{
+  "mcpServers": {
+    "weather": {
+      "command": "lerd",
+      "args": ["artisan", "mcp:start", "weather"]
+    }
+  }
+}
+```
+
+Either form leaves stdout to the server: anything lerd needs to say while starting a container or a service goes to stderr, so it never lands in the middle of the JSON-RPC stream.
+
 ---
 
 ## Available MCP tools

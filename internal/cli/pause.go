@@ -339,6 +339,10 @@ func ensureServicesForCwd(cwd string) {
 	startServicesForSiteNoticed(cwd, siteName)
 }
 
+// ensureServiceRunningFn is the service-start seam startServicesForSiteNoticed
+// uses, so tests can exercise the notice path without touching podman.
+var ensureServiceRunningFn = ensureServiceRunning
+
 // startServicesForSite reads the site's .env file and ensures every lerd service
 // it references is running. Called when resuming a paused site.
 func startServicesForSite(sitePath string) {
@@ -368,12 +372,14 @@ func startServicesForSiteNoticed(sitePath, siteName string) {
 		if !envfile.ReferencesContainer(envContent, name) {
 			continue
 		}
-		if siteName != "" && !headerPrinted && !lerdSystemd.IsServiceActive("lerd-"+name) {
-			fmt.Printf("[lerd] site %q is paused — starting required services...\n", siteName)
-			headerPrinted = true
+		if siteName != "" && !headerPrinted {
+			if status, _ := podman.UnitStatus("lerd-" + name); status != "active" {
+				fmt.Fprintf(os.Stderr, "[lerd] site %q is paused — starting required services...\n", siteName)
+				headerPrinted = true
+			}
 		}
-		if err := ensureServiceRunning(name); err != nil {
-			feedback.Warn("could not start %s: %v", name, err)
+		if err := ensureServiceRunningFn(name); err != nil {
+			feedback.WarnOn(os.Stderr, "could not start %s: %v", name, err)
 		}
 	}
 }
