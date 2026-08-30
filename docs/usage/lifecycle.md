@@ -65,14 +65,19 @@ Every command that can pull or rebuild a container image says so before a single
 byte moves. The block lists what is being fetched, how big it is, and why:
 
 ```
-lerd will download 2 images (~247.9 MiB total)
-  pull    docker.io/library/mysql:8.0   ~222.8 MiB  missing, needed by mysql
-  rebuild PHP 8.4 image                  ~25.1 MiB  missing, needed by php84-fpm
+ ↓ lerd will download 2 images (~247.9 MiB total)
+    pull    docker.io/library/mysql:8.0  ~222.8 MiB  missing, needed by mysql
+    rebuild PHP 8.4 image                 ~25.1 MiB  missing, needed by php84-fpm
 ```
 
 Sizes come from the registry manifest, so nothing is downloaded to work them
 out. A registry that does not answer in time leaves the line without a number
 rather than holding the command up.
+
+`lerd install` reports the same block for the PHP versions it has to rebuild,
+usually after an upgrade that changed the image recipe. Each version then builds
+behind its own progress line instead of streaming the raw build log; press
+Ctrl+O while it runs to see the output.
 
 To see what a start would fetch without fetching it:
 

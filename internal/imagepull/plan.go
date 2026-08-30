@@ -3,8 +3,9 @@ package imagepull
 import (
 	"fmt"
 	"io"
-	"strings"
 	"sync"
+
+	"github.com/geodro/lerd/internal/feedback"
 )
 
 // Item is one image a command is about to download or build.
@@ -83,7 +84,9 @@ func (p Plan) Report(w io.Writer) {
 	if n := p.Total(); n > 0 {
 		total = fmt.Sprintf(" (~%s total)", Human(n))
 	}
-	fmt.Fprintf(w, "lerd %s %d %s%s%s\n", verb, len(p), noun, total, tail)
+	on := feedback.ColorFor(w)
+	fmt.Fprintf(w, "%s%s lerd %s %d %s%s%s\n", feedback.Prefix,
+		feedback.DimIf(on, feedback.GlyphDownload), verb, len(p), noun, total, tail)
 
 	sizes := make([]string, len(p))
 	labelWidth, sizeWidth := 0, 0
@@ -95,16 +98,21 @@ func (p Plan) Report(w io.Writer) {
 		labelWidth = max(labelWidth, len(it.label()))
 		sizeWidth = max(sizeWidth, len(sizes[i]))
 	}
+	// Painted per cell rather than per line, so the columns are padded on the
+	// plain text and stay aligned once the escapes are in.
 	for i, it := range p {
 		action := "pull"
 		if it.Build {
 			action = "rebuild"
 		}
-		line := fmt.Sprintf("  %-7s %-*s  %*s", action, labelWidth, it.label(), sizeWidth, sizes[i])
+		line := fmt.Sprintf("%s   %s %s  %s", feedback.Prefix,
+			feedback.DimIf(on, fmt.Sprintf("%-7s", action)),
+			feedback.ValIf(on, fmt.Sprintf("%-*s", labelWidth, it.label())),
+			fmt.Sprintf("%*s", sizeWidth, sizes[i]))
 		if it.Reason != "" {
-			line += "  " + it.Reason
+			line += "  " + feedback.DimIf(on, it.Reason)
 		}
-		fmt.Fprintln(w, strings.TrimRight(line, " "))
+		fmt.Fprintln(w, line)
 	}
 }
 

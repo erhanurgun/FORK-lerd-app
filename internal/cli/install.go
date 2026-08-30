@@ -663,34 +663,25 @@ func runInstall(cmd *cobra.Command, _ []string) error {
 	// Then restore quadlets for any additional PHP versions and services from registered sites.
 	{
 		cfg, _ := config.LoadGlobal()
-		seenPHP := map[string]bool{}
 		seenSvc := map[string]bool{}
 
-		if cfg != nil && cfg.PHP.DefaultVersion != "" {
-			seenPHP[cfg.PHP.DefaultVersion] = true
-			if err := ensureFPMQuadlet(cfg.PHP.DefaultVersion); err != nil {
-				fmt.Printf("  WARN: default PHP %s FPM quadlet: %v\n", cfg.PHP.DefaultVersion, err)
-			}
+		defaultPHP := ""
+		if cfg != nil {
+			defaultPHP = cfg.PHP.DefaultVersion
 		}
 
 		reg, regErr := config.LoadSites()
+		var sites []config.Site
+		if regErr == nil {
+			sites = reg.Sites
+		}
+		ensureFPMQuadlets(fpmVersionsToEnsure(defaultPHP, sites))
+
 		if regErr == nil {
 
 			for _, s := range reg.Sites {
 				if s.Paused || s.Ignored {
 					continue
-				}
-
-				// Restore FPM quadlet.
-				v := s.PHPVersion
-				if v == "" && cfg != nil {
-					v = cfg.PHP.DefaultVersion
-				}
-				if v != "" && !seenPHP[v] {
-					seenPHP[v] = true
-					if err := ensureFPMQuadlet(v); err != nil {
-						fmt.Printf("  WARN: PHP %s FPM quadlet: %v\n", v, err)
-					}
 				}
 
 				// Restore service quadlets from .lerd.yaml.

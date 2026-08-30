@@ -131,6 +131,25 @@ func TestReportDisclosesSizeAndReason(t *testing.T) {
 	}
 }
 
+// The disclosure is a lerd feedback block, not a bare printf: the download
+// glyph heads it on the same left margin as the step lines around it, and the
+// items are indented under it.
+func TestReportUsesTheGlyphLayout(t *testing.T) {
+	var buf bytes.Buffer
+	Plan{{Ref: "redis:7-alpine", Reason: "redis is not installed", Bytes: 100}}.Report(&buf)
+
+	lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("report = %d lines, want a headline and one item:\n%s", len(lines), buf.String())
+	}
+	if !strings.HasPrefix(lines[0], " ↓ lerd will download 1 image") {
+		t.Errorf("headline = %q, want the download glyph on the feedback margin", lines[0])
+	}
+	if !strings.HasPrefix(lines[1], "    pull ") {
+		t.Errorf("item = %q, want it indented under the headline", lines[1])
+	}
+}
+
 func TestReportDryRunSaysNothingWasDownloaded(t *testing.T) {
 	SetDryRun(true)
 	t.Cleanup(func() { SetDryRun(false) })
