@@ -493,6 +493,13 @@ func (m *Model) renderDetailInline(w, h int, focused bool) string {
 			content, cursorLine = serviceDetailContentLinesWithCursor(m, m.currentService(), contentW)
 			break
 		}
+		// The Databases tab's detail pane always shows the selected database,
+		// whether focus sits on the list or has moved onto the pane.
+		if m.activeTab == tabDatabases {
+			content = databaseDetailContentLines(m, contentW)
+			cursorLine = -1
+			break
+		}
 		site := m.currentSite()
 		if site == nil {
 			content = []string{

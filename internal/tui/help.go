@@ -13,7 +13,7 @@ var helpReference = []helpSection{
 	{
 		title: "Navigation",
 		rows: [][2]string{
-			{"ctrl+← / ctrl+→", "switch the top tab (Dashboard · Sites · Services); tabs are also clickable"},
+			{"ctrl+← / ctrl+→", "switch the top tab (Dashboard · Sites · Services · Databases); tabs are also clickable"},
 			{"tab / shift+tab", "cycle focus between the list and the detail pane on the current tab"},
 			{"click", "click a tab to switch screens, or a site / service / worker row to open it"},
 			{"↑ ↓  j k", "move the selection in the focused pane or Dashboard card (info cards scroll)"},
@@ -45,6 +45,15 @@ var helpReference = []helpSection{
 			{"O", "open in the browser: the focused site's primary domain, or the focused service's dashboard URL"},
 			{"u", "service update — pull a newer image and restart (services pane)"},
 			{"b", "service rollback — revert to the previously-running image (services pane)"},
+		},
+	},
+	{
+		title: "Databases",
+		rows: [][2]string{
+			{"↑ ↓", "move between the databases of every installed engine"},
+			{"n", "take a snapshot of the focused database"},
+			{"R", "re-list the engines (each listing queries inside its container)"},
+			{"", "restore, drop, import and export overwrite data and stay in the CLI"},
 		},
 	},
 	{
@@ -102,6 +111,7 @@ var helpReference = []helpSection{
 		title: "Panes & overlays",
 		rows: [][2]string{
 			{"Dashboard tab", "six-card overview (Sites · Services · Workers · System Health · Resources · Lerd)"},
+			{"Databases tab", "every engine with its databases, sizes, owning sites and snapshots"},
 			{"S", "swap the detail pane for global Settings (LAN expose, autostart, Xdebug) — Sites tab"},
 			{"Y", "swap the detail pane for the System overview (DNS, Nginx, Watcher, PHP, Node, Lerd) — Sites tab"},
 			{"D", "open the Debug window (dumps, queries with N+1, jobs, mail, …) — Sites tab"},

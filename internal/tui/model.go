@@ -12,6 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/geodro/lerd/internal/config"
+	"github.com/geodro/lerd/internal/dbview"
 	lerddumps "github.com/geodro/lerd/internal/dumps"
 	"github.com/geodro/lerd/internal/eventbus"
 	"github.com/geodro/lerd/internal/podman"
@@ -31,6 +32,7 @@ type focusPane int
 const (
 	paneSites focusPane = iota
 	paneServices
+	paneDatabases
 	paneDetail
 )
 
@@ -57,6 +59,7 @@ const (
 	tabDashboard topTab = iota
 	tabSites
 	tabServices
+	tabDatabases
 )
 
 func (t topTab) label() string {
@@ -65,6 +68,8 @@ func (t topTab) label() string {
 		return "Dashboard"
 	case tabServices:
 		return "Services"
+	case tabDatabases:
+		return "Databases"
 	default:
 		return "Sites"
 	}
@@ -72,7 +77,7 @@ func (t topTab) label() string {
 
 // orderedTabs is the left-to-right order the tab bar renders and the order
 // nextTab cycles through.
-var orderedTabs = []topTab{tabDashboard, tabSites, tabServices}
+var orderedTabs = []topTab{tabDashboard, tabSites, tabServices, tabDatabases}
 
 // Model is the bubbletea root. Panes are all projections of snap plus small
 // per-pane cursor/scroll state, so every refresh cycle rebuilds from a single
@@ -115,9 +120,19 @@ type Model struct {
 	// service currently in flight.
 	svcEntities        map[string][]serviceEntityKind
 	svcEntitiesLoading string
-	settingsRow        int // index into settings rows
-	systemRow          int // index into navigable system rows
-	helpScroll         int // vertical scroll offset for the help view
+
+	// Databases tab state. The engine listing is loaded once on arrival (each
+	// engine is introspected inside its container) and held until a manual
+	// refresh, so navigating the pane costs nothing. dbCursor indexes the
+	// database rows only; engine headers are captions.
+	dbEngines   []dbview.Engine
+	dbLoading   bool
+	dbLoaded    bool
+	dbCursor    int
+	dbScroll    int
+	settingsRow int // index into settings rows
+	systemRow   int // index into navigable system rows
+	helpScroll  int // vertical scroll offset for the help view
 
 	// Active sub-tab within the site detail view (overview / logs / env /
 	// debug / doctor). Only meaningful when detailMode == detailSite; tabs
@@ -387,7 +402,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ActionResult:
 		m.setStatus(formatAction(msg), 5*time.Second)
 		m.enqueueToastForResult(msg)
-		return m, loadCmd()
+		// A finished snapshot has to appear in the listing the Databases tab
+		// holds; nothing else invalidates it until a manual refresh.
+		return m, tea.Batch(loadCmd(), m.reloadDatabases())
 
 	case logLineMsg:
 		if msg.source == m.logTail.Source() {
@@ -419,6 +436,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.doctorChecks = msg.resp.Checks
 			m.doctorLoading = false
 		}
+		return m, nil
+
+	case databasesMsg:
+		m.dbEngines = msg.engines
+		m.dbLoading = false
+		m.dbLoaded = true
 		return m, nil
 
 	case serviceEntitiesMsg:
@@ -793,7 +816,7 @@ func (m *Model) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// A manual refresh re-lists entities too; they are cached until then
 		// because each listing execs in the service container.
 		m.svcEntities = nil
-		return m, tea.Batch(loadCmd(), m.ensureServiceEntities())
+		return m, tea.Batch(loadCmd(), m.ensureServiceEntities(), m.reloadDatabases())
 
 	case "H":
 		return m, m.actionHealWorkers()
@@ -808,6 +831,14 @@ func (m *Model) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, m.cycleTimingScope(1)
 		}
 		return m, m.actionServiceRollback()
+
+	case "n":
+		// Taking a snapshot only adds a file, so it is in scope as a quick
+		// action; every other database operation overwrites or destroys.
+		if m.activeTab == tabDatabases {
+			return m, m.actionDatabaseSnapshot()
+		}
+		return m, nil
 
 	case "O":
 		return m, m.openInBrowserCmd()
@@ -1133,7 +1164,7 @@ func (m *Model) resetFilteredCursor() {
 // request-timing panel. Every key that moves the cursor or changes focus goes
 // through here, so neither surface needs the individual handlers to know about it.
 func (m *Model) afterNav() tea.Cmd {
-	return tea.Batch(m.syncLogs(), m.ensureTiming(), m.ensureServiceEntities())
+	return tea.Batch(m.syncLogs(), m.ensureTiming(), m.ensureServiceEntities(), m.ensureDatabases())
 }
 
 // syncLogs retargets the log tail to match the currently-focused item
@@ -1201,6 +1232,9 @@ func (m *Model) switchTab(t topTab) {
 		m.focus = paneServices
 	case tabSites:
 		m.focus = paneSites
+	case tabDatabases:
+		m.focus = paneDatabases
+		m.detailScroll = 0
 	case tabDashboard:
 		m.focus = paneDetail
 		m.detailScroll = 0
@@ -1273,6 +1307,14 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 				m.focus = paneServices
 				m.svcCursor = i
 				m.svcDetailCursor = 0
+				return m, m.afterNav()
+			}
+		}
+	case tabDatabases:
+		for i := range navigableDBRows(m.dbRows()) {
+			if zone.Get(fmt.Sprintf("db:%d", i)).InBounds(msg) {
+				m.focus = paneDatabases
+				m.dbCursor = i
 				return m, m.afterNav()
 			}
 		}
@@ -1497,6 +1539,8 @@ func (m *Model) nextFocus(dir int) focusPane {
 		if m.currentService() != nil {
 			panes = append(panes, paneDetail)
 		}
+	case tabDatabases:
+		panes = []focusPane{paneDatabases, paneDetail}
 	default: // tabSites
 		panes = []focusPane{paneSites}
 		if m.currentSite() != nil {
@@ -1543,6 +1587,8 @@ func (m *Model) moveCursor(delta int) {
 	case paneServices:
 		m.svcCursor = clamp(m.svcCursor+delta, 0, max(0, len(m.visibleServices())-1))
 		m.svcDetailCursor = 0
+	case paneDatabases:
+		m.dbCursor = clamp(m.dbCursor+delta, 0, max(0, len(navigableDBRows(m.dbRows()))-1))
 	case paneDetail:
 		if m.pickerKind != kindInfo {
 			m.movePickerCursor(delta)
@@ -1610,6 +1656,8 @@ func (m *Model) setCursor(pos int) {
 		m.siteCursor = clamp(pos, 0, max(0, len(m.visibleSites())-1))
 	case paneServices:
 		m.svcCursor = clamp(pos, 0, max(0, len(m.visibleServices())-1))
+	case paneDatabases:
+		m.dbCursor = clamp(pos, 0, max(0, len(navigableDBRows(m.dbRows()))-1))
 	}
 }
 

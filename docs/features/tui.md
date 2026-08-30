@@ -10,11 +10,12 @@ This is the terminal-native counterpart to the [Web UI](/features/web-ui) and th
 
 ## Tabs
 
-A clickable tab strip sits at the top and switches the whole screen between three views: **Dashboard**, **Sites**, and **Services**. The TUI opens on the **Dashboard**. Click a tab to switch, or cycle with `ctrl+←` / `ctrl+→` from the keyboard. The active tab reads as a filled accent pill in the lerd palette; the others sit dim.
+A clickable tab strip sits at the top and switches the whole screen between four views: **Dashboard**, **Sites**, **Services**, and **Databases**. The TUI opens on the **Dashboard**. Click a tab to switch, or cycle with `ctrl+←` / `ctrl+→` from the keyboard. The active tab reads as a filled accent pill in the lerd palette; the others sit dim.
 
 - **Dashboard**: a six-card overview that mirrors the web UI's home page (see [Dashboard tab](#dashboard-tab)).
 - **Sites**: the sites list plus the full-height site detail pane.
 - **Services**: the services list plus the service detail pane.
+- **Databases**: every installed engine with the databases it holds, plus the detail pane for the selected one (see [Databases tab](#databases-tab)).
 
 The version (and an `update <ver>` note when a newer release is available) sits on the far right of the tab row; there is no separate status line. The at-a-glance health that used to live in a header now lives on the Dashboard tab's cards instead.
 
@@ -24,6 +25,7 @@ Mouse support is on: clicking a tab switches screens, clicking a site or service
 
 - **Sites pane (Sites tab, left column)** lists every linked site by its primary domain, with an FPM running dot and worker glyphs (`q` queue, `s` schedule, `v` reverb, `h` horizon, plus a dot per custom framework worker). Paused sites are dimmed and marked. Columns line up across rows regardless of how many workers each site runs. The column is intentionally slim; the Services tab keeps a wider list since its rows carry version and usage metadata.
 - **Services pane (Services tab, left column)** is a compact list of built-in services (mysql, redis, postgres, meilisearch, rustfs, mailpit), custom services, and every site-owned worker (`queue-<site>`, `schedule-<site>`, `horizon-<site>`, `reverb-<site>`, and custom framework workers). Each row shows a running dot, how many sites use it, and `pinned` / `custom` tags where applicable. A service that exposes a browser dashboard (phpMyAdmin, Mailpit, RedisInsight, …) carries a `web` marker, so the list itself answers what there is to open; `O` opens the marked row without stepping into its detail pane.
+- **Databases pane (Databases tab, left column)** lists every installed engine with the databases inside it, each with its size and how many snapshots it holds.
 - **Site detail (Sites tab, right column, full height)** always mirrors the focused site and shows primary domain, the Laravel `APP_NAME` when the site sets a custom one, internal name, disk path, all domains, services used (with live state), workers, git worktrees, HTTPS / LAN share toggles, PHP / Node version pickers, and the [request-timing panel](#request-timing). On the Sites tab, `S` swaps it for global Settings, `?` swaps it for the Keybindings reference. Logs live on their own [tab](#site-detail-tabs) rather than in a pane beneath the detail.
 - **Logs pane** (toggle with `l`) tails the container, worker-journal, or app log file behind the focused item. On the Sites tab `l` opens the Logs tab instead, since the detail column already has room for the tail; on the Dashboard it opens a full-width pane taking at least half the window. Either way it renders a right-edge scrollbar showing position in the buffer.
 - **Status bar** briefly shows the most recent action (e.g. `✓ lerd service stop redis` or `✖ …exit 1`).
@@ -37,7 +39,7 @@ Dots follow the same convention everywhere: green `●` running, grey `○` stop
 
 | Key | Action |
 | --- | --- |
-| `ctrl+←` / `ctrl+→` | Switch the top tab (Dashboard · Sites · Services). Tabs are also clickable |
+| `ctrl+←` / `ctrl+→` | Switch the top tab (Dashboard · Sites · Services · Databases). Tabs are also clickable |
 | click | Click a tab to switch screens, or a site / service row to select it |
 | `tab` / `shift+tab` | Cycle focus between the list and the detail pane on the current tab |
 | `↑` `↓` / `j` `k` | Move selection in the focused pane (scrolls the grid on the Dashboard tab) |
@@ -69,6 +71,7 @@ Dots follow the same convention everywhere: green `●` running, grey `○` stop
 | `u` | Run `lerd service update <name>` for the focused service so a presets bump or version pin lands without leaving the TUI. The action is in-strategy and reversible. |
 | `b` | Run `lerd service rollback <name>` to swap the focused service back to its previous version; pairs with `u` as the symmetric undo |
 | `H` | Run `lerd worker heal` to restart every failing framework worker in one pass. The header pill shows the count and the keybind is most relevant when it's lit |
+| `n` | Take a snapshot of the focused database (Databases tab). Adding a snapshot takes nothing away, which is why it is the one database action the TUI runs |
 
 ### Logs
 
@@ -187,6 +190,16 @@ Sections, top to bottom:
 - **Workers**: queue, schedule, horizon, reverb, and any custom framework workers, each with a running / failing indicator. `space` on a worker row toggles it (calls `lerd queue start/stop`, etc.).
 - **Worktrees**: every git worktree with its branch, domain, and path when the site uses them. Each worktree row carries its own controls, PHP / Node version pickers, LAN-share toggle, isolated-DB toggle, and per-worktree framework worker toggles (e.g. vite), so a branch's runtime can be tuned without affecting the parent. `space` on a worktree-scoped row toggles the matching state via the same CLI commands the parent rows use, just with the worktree's path threaded through.
 - **Toggles**: HTTPS (runs `lerd secure` / `lerd unsecure`), LAN share (runs `lerd lan share` / `unshare`, shows the full `http://<lan-ip>:<port>` URL when enabled), PHP version (opens an inline picker from installed versions → `lerd isolate <ver>`; a FrankenPHP site only lists the versions FrankenPHP publishes an image for, so the picker never offers one that would silently downgrade), Node version (picker backed by `fnm list` → `lerd isolate:node <ver>`; when a host bun is installed the list also carries a `bun` entry that pins the site's JS runtime via `lerd js:runtime bun`, and picking a Node version while pinned to bun clears the pin first so the dev worker actually switches back).
+
+## Databases tab
+
+The **Databases** tab is the terminal counterpart to the web UI's Databases page. The left column lists every installed engine (mysql, mariadb, postgres, mongo, and any store-published engine that declares databases of its own) and, under each, the databases it holds with their size and snapshot count. A stopped engine says so instead of listing; an engine whose listing query failed reads `unreadable`.
+
+The detail pane shows the selected database: the engine it lives in, its size, the site that owns it (with the branch, when it is a worktree's isolated database), and every snapshot with its timestamp, size and the git branch it was taken on.
+
+Listing a database queries inside the engine's container, so the tab loads once on arrival and is then cached; `R` re-lists.
+
+Only one action runs from here. `n` takes a snapshot of the focused database, which adds a file and takes nothing away, the same shape as starting a service. Restore, drop, import and export overwrite or destroy data, so per the TUI scope rule they stay in the CLI as `lerd db:restore`, `lerd db:import` and `lerd db:export`.
 
 ## Dashboard tab
 
