@@ -59,7 +59,7 @@ Dots follow the same convention everywhere: green `●` running, grey `○` stop
 
 | Key | Action |
 | --- | --- |
-| `space` / `enter` | Toggle the focused detail row (worker, HTTPS, LAN share, PHP, Node) |
+| `space` / `enter` | Toggle the focused detail row (worker, HTTPS, LAN share, PHP, Node), or the focused client-tool shim on the Services tab |
 | `s` | Start / resume the focused site or start the focused service / worker |
 | `x` | Stop / pause the focused site or stop the focused service / worker · on a domain row, remove that domain |
 | `r` | Restart the focused site / service / worker |
@@ -127,8 +127,11 @@ When focus is on the Services pane, the right column swaps to a service-focused 
 - **Depends on**: services in `depends_on`, each with its live state so you can confirm a stack is fully up before debugging.
 - **Sites using**: every active site (excluding paused/ignored) whose `.lerd.yaml` references this service.
 - **Env vars**: the preset's `env_vars` template list for default presets, or the merged `env_vars` + `environment` map for custom services. Read-only.
+- **Client tools**: the host shims the service exposes (`mysqldump`, `pg_dump`, `psql`, …) with each one on or off, and a note when turning one on would shadow a tool you already have on `PATH`. `space` toggles the focused row, which writes or removes a file in the bin dir and so is exactly reversible. A tool a different installed service owns is listed for context and says which service manages it.
+- **Tuning**: the in-container path the service's config override is mounted at and the settings actually in effect, comments and blank lines dropped. A whole-file edit is out of quick-action scope, so the section points at `lerd service config <name>`.
+- **Entities**: whatever the preset declares the service holds, buckets, indexes, collections, listed with their declared columns. The listing runs inside the container, so it arrives a moment after you select the service and is then cached until `R`. Creating or dropping one stays in the CLI.
 - **Preset suggestion**: a one-line nudge for the matching admin dashboard preset (e.g. `mysql` → install `phpmyadmin`) when it isn't already on disk. Install is destructive enough to stay CLI-only per the TUI scope rule, so the banner points at `lerd preset install <name>` rather than wiring an in-TUI installer.
-- **Actions**: quick reminder of the reversible verbs the services pane already handles: `s start`, `x stop`, `r restart`, `t shell`, `u update`, `b rollback`, `l logs`.
+- **Actions**: quick reminder of the reversible verbs the services pane already handles: `s start`, `x stop`, `r restart`, `t shell`, `u update`, `b rollback`, `l logs`, and `space` on a client-tool row.
 
 For worker rows (queue-X, schedule-X, custom framework workers) the detail variant skips the env / dependency / sites-using sections and just shows the worker kind, the parent site, the systemd user unit, and the project path, workers run inside the owning site's FPM container, so they have no env or image of their own.
 

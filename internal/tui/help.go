@@ -36,7 +36,7 @@ var helpReference = []helpSection{
 	{
 		title: "Actions",
 		rows: [][2]string{
-			{"space / enter", "toggle the focused detail row (worker, HTTPS, LAN share, PHP, Node)"},
+			{"space / enter", "toggle the focused detail row (worker, HTTPS, LAN share, PHP, Node), or the focused client-tool shim on the Services tab"},
 			{"s", "start / unpause the focused site or start the focused service"},
 			{"x", "stop / pause the focused site or stop / remove the focused domain"},
 			{"r", "restart the focused site or service"},

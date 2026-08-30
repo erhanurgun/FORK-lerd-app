@@ -103,9 +103,21 @@ type Model struct {
 
 	detailCursor int // index into detail rows (workers + toggles)
 	detailScroll int // vertical scroll offset for the site detail view
-	settingsRow  int // index into settings rows
-	systemRow    int // index into navigable system rows
-	helpScroll   int // vertical scroll offset for the help view
+
+	// Client-tool cursor inside the service detail pane, an index into the
+	// shim rows the selected service may toggle. Separate from detailCursor
+	// because the two panes hold different selections at the same time.
+	svcDetailCursor int
+
+	// Entity listings per service, filled by the async listing command since
+	// each declared kind runs a command inside the container. A present entry
+	// (even an empty one) means "already listed"; svcEntitiesLoading names the
+	// service currently in flight.
+	svcEntities        map[string][]serviceEntityKind
+	svcEntitiesLoading string
+	settingsRow        int // index into settings rows
+	systemRow          int // index into navigable system rows
+	helpScroll         int // vertical scroll offset for the help view
 
 	// Active sub-tab within the site detail view (overview / logs / env /
 	// debug / doctor). Only meaningful when detailMode == detailSite; tabs
@@ -409,6 +421,18 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case serviceEntitiesMsg:
+		if m.svcEntities == nil {
+			m.svcEntities = map[string][]serviceEntityKind{}
+		}
+		m.svcEntities[msg.service] = msg.kinds
+		if m.svcEntitiesLoading == msg.service {
+			m.svcEntitiesLoading = ""
+		}
+		// The selection may have moved while this listing was in flight; ask
+		// again so the service now under the cursor gets its own.
+		return m, m.ensureServiceEntities()
+
 	case spinnerTickMsg:
 		// Heartbeat: prune expired toasts, then re-arm at the fast 10Hz
 		// cadence if a "…" status is currently visible (so the spinner
@@ -484,6 +508,12 @@ func (m *Model) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 			if m.detailMode == detailDumps {
 				return m, m.toggleDumpExpand()
+			}
+			// The Services tab's detail pane owns the client-tool rows; on the
+			// Dashboard focus parks here with no list selection, so nothing is
+			// toggled there.
+			if m.activeTab == tabServices {
+				return m, m.toggleServiceShim()
 			}
 			// Row toggling only applies to a site's detail; the Dashboard parks
 			// focus on the detail pane with no list selection, so don't mutate
@@ -760,7 +790,10 @@ func (m *Model) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.actionPauseToggle()
 
 	case "R":
-		return m, loadCmd()
+		// A manual refresh re-lists entities too; they are cached until then
+		// because each listing execs in the service container.
+		m.svcEntities = nil
+		return m, tea.Batch(loadCmd(), m.ensureServiceEntities())
 
 	case "H":
 		return m, m.actionHealWorkers()
@@ -1100,7 +1133,7 @@ func (m *Model) resetFilteredCursor() {
 // request-timing panel. Every key that moves the cursor or changes focus goes
 // through here, so neither surface needs the individual handlers to know about it.
 func (m *Model) afterNav() tea.Cmd {
-	return tea.Batch(m.syncLogs(), m.ensureTiming())
+	return tea.Batch(m.syncLogs(), m.ensureTiming(), m.ensureServiceEntities())
 }
 
 // syncLogs retargets the log tail to match the currently-focused item
@@ -1239,6 +1272,7 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			if zone.Get(fmt.Sprintf("svc:%d", i)).InBounds(msg) {
 				m.focus = paneServices
 				m.svcCursor = i
+				m.svcDetailCursor = 0
 				return m, m.afterNav()
 			}
 		}
@@ -1508,9 +1542,27 @@ func (m *Model) moveCursor(delta int) {
 		m.closePicker()
 	case paneServices:
 		m.svcCursor = clamp(m.svcCursor+delta, 0, max(0, len(m.visibleServices())-1))
+		m.svcDetailCursor = 0
 	case paneDetail:
 		if m.pickerKind != kindInfo {
 			m.movePickerCursor(delta)
+			return
+		}
+		// The service detail's only selectable rows are its client tools; with
+		// none to walk, the pane is a plain scroll surface like the read-only
+		// site tabs.
+		if m.activeTab == tabServices {
+			n := m.serviceShimNavCount()
+			next := clamp(m.svcDetailCursor+delta, 0, max(0, n-1))
+			if n == 0 || next == m.svcDetailCursor {
+				// Once the cursor sits on the last toggleable row, keep
+				// scrolling: the tuning and entity sections below the client
+				// tools would otherwise be unreachable from the keyboard.
+				m.detailScroll = max(0, m.detailScroll+delta)
+				m.followCursor = false
+				return
+			}
+			m.svcDetailCursor = next
 			return
 		}
 		switch m.detailMode {

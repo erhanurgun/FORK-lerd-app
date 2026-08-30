@@ -490,8 +490,7 @@ func (m *Model) renderDetailInline(w, h int, focused bool) string {
 		// whether focus sits on the list or has moved onto the pane itself.
 		// Site detail is only the right answer on the Sites tab.
 		if m.activeTab == tabServices {
-			content = serviceDetailContentLines(m, m.currentService(), contentW)
-			cursorLine = -1
+			content, cursorLine = serviceDetailContentLinesWithCursor(m, m.currentService(), contentW)
 			break
 		}
 		site := m.currentSite()
