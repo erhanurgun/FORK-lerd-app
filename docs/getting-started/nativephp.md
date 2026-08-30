@@ -164,7 +164,7 @@ Three checks are specific to NativePHP, and each is gated on the package, so a p
 |---|---|---|
 | `native:install` | both | Install the native runtime for this machine (mobile is confirm-gated) |
 | `native:build` | desktop | Package the desktop app as a binary |
-| `native:run` | mobile | Build and launch on a simulator, emulator or device (it picks the platform your machine can build for) |
+| `native:run` | mobile | Build and launch on a simulator, emulator or device (it picks the platform your machine can build for), [pinned](../usage/framework-commands.md#pinned-commands) to the site's control row |
 | `native:open` | mobile | Open the Xcode or Android Studio project |
 
 | `native:jump` | mobile | Serve to a phone on your network and draw the QR code |

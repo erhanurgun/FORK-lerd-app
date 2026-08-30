@@ -328,6 +328,11 @@ type FrameworkCommand struct {
 	Icon        string         `yaml:"icon,omitempty" json:"icon,omitempty"`               // icon name from the known set
 	Check       *FrameworkRule `yaml:"check,omitempty" json:"check,omitempty"`             // hide the command when this rule fails
 	CWD         string         `yaml:"cwd,omitempty" json:"cwd,omitempty"`                 // working dir relative to project root (default: ".")
+	// Pinned draws the command as its own button on the site's control row rather
+	// than only inside the commands dropdown. A definition ships it as the default
+	// for the commands a project runs constantly; the user's own choice, kept in
+	// the site registry, overrides it.
+	Pinned bool `yaml:"pinned,omitempty" json:"pinned,omitempty"`
 	// Disabled, in a project .lerd.yaml entry, suppresses the framework default
 	// of the same Name without replacing it. Ignored when read from a framework yaml.
 	Disabled bool `yaml:"disabled,omitempty" json:"disabled,omitempty"`
