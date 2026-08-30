@@ -1150,6 +1150,7 @@
   "system_php_checkUpdatesFailed": "检查失败",
   "system_php_checkUpdatesFound": "有已刷新的基础镜像可用",
   "system_php_checkUpdatesTitle": "向镜像仓库询问基础镜像是否已刷新",
+  "system_php_shellTitle": "在 PHP-FPM 容器中打开 shell",
   "system_php_checkUpdatesUpToDate": "基础镜像已是最新",
   "system_php_ext_cannot": "无法在 PHP {version} 上构建；重新构建也不会改变这一点",
   "system_php_ext_declared": "你的扩展",

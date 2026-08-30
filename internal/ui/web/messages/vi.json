@@ -1150,6 +1150,7 @@
   "system_php_checkUpdatesFailed": "Kiểm tra thất bại",
   "system_php_checkUpdatesFound": "Đã có image nền được làm mới",
   "system_php_checkUpdatesTitle": "Hỏi registry xem image nền đã được làm mới chưa",
+  "system_php_shellTitle": "Mở shell bên trong container PHP-FPM",
   "system_php_checkUpdatesUpToDate": "Image nền đã là bản mới nhất",
   "system_php_ext_cannot": "không dựng được trên PHP {version}; dựng lại cũng không thay đổi điều đó",
   "system_php_ext_declared": "Tiện ích của bạn",

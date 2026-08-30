@@ -35,7 +35,7 @@ If no version is given, the version is resolved from the current directory (`.ph
 
 Versions are written as `major.minor`, but common spellings are accepted everywhere a version is typed: `php8.4`, `84` and `8.4.7` all normalize to `8.4`. Anything that does not resolve to a supported version is rejected up front, so a typo can never end up as the stored default and break image names.
 
-Inside a linked site, the commands that run PHP in a container (`lerd php`, `lerd composer`, `lerd console`, `lerd php:shell`) use the version the site is registered on, which is the version its FPM container serves. That matters when a framework clamps the version at link time: a Laravel 13 project pinning `.php-version` to 8.1 is linked on 8.5, because Laravel 13 supports 8.3 to 8.5, and composer then runs on 8.5 too rather than resolving 8.1 from the file and quietly using a different PHP than the site itself.
+Inside a linked site, the commands that run PHP in a container (`lerd php`, `lerd composer`, `lerd console`, `lerd shell`) use the version the site is registered on, which is the version its FPM container serves. That matters when a framework clamps the version at link time: a Laravel 13 project pinning `.php-version` to 8.1 is linked on 8.5, because Laravel 13 supports 8.3 to 8.5, and composer then runs on 8.5 too rather than resolving 8.1 from the file and quietly using a different PHP than the site itself.
 
 A git worktree resolves ahead of the site it belongs to. A worktree inherits its parent site's version until you pin one with `lerd isolate` from inside the checkout, and from then on the whole toolchain follows that pin: the worktree's own vhost, `lerd php`, `lerd composer`, and everything else that runs PHP in a container. This holds wherever the checkout lives, including inside the parent site's own directory, so a worktree on 8.3 under a site on 8.5 runs composer on 8.3 rather than picking up the parent's version.
 
@@ -271,7 +271,7 @@ Toggling never restarts FPM or its workers. The bridge auto-prepend file and its
 
 ## Pre-built images
 
-lerd ships pre-built PHP-FPM base images on ghcr.io for all supported versions (7.4 and 8.0–8.5), covering both `amd64` and `arm64`. When you run `lerd fetch` or `lerd php:rebuild`, lerd pulls the matching base image and layers just your mkcert CA certificate on top, bringing first-time build time from ~5 minutes down to ~30 seconds.
+lerd ships pre-built PHP-FPM base images on ghcr.io for all supported versions (7.4 and 8.0–8.6), covering both `amd64` and `arm64`. When you run `lerd fetch` or `lerd php:rebuild`, lerd pulls the matching base image and layers just your mkcert CA certificate on top, bringing first-time build time from ~5 minutes down to ~30 seconds.
 
 The base image tag is derived from the embedded Containerfile, so lerd always pulls the exact image that matches the version of lerd you have installed. If the pull fails (no internet, image not yet published) lerd falls back to a full local build transparently.
 
@@ -314,6 +314,25 @@ Use them like any other version:
 lerd use 7.4
 lerd isolate 8.0
 lerd fetch 7.4 8.0
+```
+
+---
+
+## Prerelease PHP versions
+
+PHP 8.6 is still in beta upstream, and lerd builds it so a project can run its test suite against it before release. It is offered as a prerelease everywhere a version is picked, in the dashboard's version cards and both PHP dropdowns, so it is never chosen in the belief that it behaves like a released version:
+
+- It builds from the `8.6-rc` image the PHP Docker library publishes through beta and RC, because there is no plain `8.6-fpm-alpine` tag until release. That switches to the released tag when 8.6 ships, with nothing to change on your side.
+- `lerd fetch` with no arguments builds the released versions only. A prerelease builds when you name it.
+- FrankenPHP publishes no image for it, so an 8.6 site is served by FPM. Switching a site to the FrankenPHP runtime on 8.6 is refused rather than quietly run on a different PHP, and a site already on FrankenPHP falls back to FPM when it moves to 8.6.
+- PHP 8.6 removed PEAR, so `pecl` is gone from the upstream image and lerd installs PECL extensions from their release tarballs instead. `redis`, `imagick` and `mongodb` still build; `igbinary`, `pcov` and `xdebug` do not compile against 8.6 yet, so they are absent from the image and lerd does not advertise them on that version. They come back as their upstreams catch up. The profiler needs `php-spx`, which is in the same position, so it is unavailable on 8.6.
+- Upstream behaviour still changes between builds, so it is a place to test rather than a default to develop on.
+
+Use it like any other version:
+
+```bash
+lerd fetch 8.6
+lerd isolate 8.6
 ```
 
 ---
@@ -470,13 +489,14 @@ Each custom-image PHP site runs its own FPM container rather than sharing the pe
 
 ## PHP shell
 
-`lerd shell` opens an interactive shell inside the PHP-FPM container for the current project:
+`lerd shell` opens an interactive shell inside the PHP-FPM container for the current project. With a version it opens one in that version's shared container instead, from anywhere, which is what the dashboard's **Terminal** button on a PHP version runs:
 
 ```bash
 lerd shell
+lerd shell 8.4
 ```
 
-The PHP version is resolved the same way as every other lerd command (`.php-version`, `composer.json`, global default). The shell's working directory is set to the project root.
+The PHP version is resolved the same way as every other lerd command (`.php-version`, `composer.json`, global default). The shell's working directory is set to the project root. A version shell has no project behind it, so it opens on the container's own directory, and it starts a stopped container but never offers to build a missing one.
 
 If the container is not running, lerd prints the platform-appropriate command (`launchctl kickstart` on macOS, `systemctl --user start` on Linux) to bring it back up rather than silently failing.
 

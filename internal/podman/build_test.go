@@ -598,3 +598,21 @@ func sliceContainsPair(haystack []string, flag, value string) bool {
 	}
 	return false
 }
+
+// A prerelease has no plain <version>-fpm-alpine tag upstream until GA, so the
+// FROM lines must resolve to the -rc tag the registry actually publishes.
+func TestPhpFpmContainerfile_PrereleaseBuildsFromPrereleaseTag(t *testing.T) {
+	tmpl, err := GetQuadletTemplate("lerd-php-fpm.Containerfile")
+	if err != nil {
+		t.Fatalf("read containerfile: %v", err)
+	}
+	for _, v := range config.PrereleasePHPVersions {
+		cf := strings.ReplaceAll(tmpl, "{{.Version}}", config.UpstreamPHPTag(v))
+		if strings.Contains(cf, "php:"+v+"-fpm-alpine") {
+			t.Errorf("PHP %s builds FROM php:%s-fpm-alpine, a tag upstream does not publish yet", v, v)
+		}
+		if !strings.Contains(cf, "php:"+v+"-rc-fpm-alpine") {
+			t.Errorf("PHP %s does not build FROM the prerelease tag", v)
+		}
+	}
+}

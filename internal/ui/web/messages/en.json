@@ -1150,6 +1150,7 @@
   "system_php_checkUpdatesFailed": "Check failed",
   "system_php_checkUpdatesFound": "A refreshed base image is available",
   "system_php_checkUpdatesTitle": "Ask the registry whether the base image has been refreshed",
+  "system_php_shellTitle": "Open a shell inside the PHP-FPM container",
   "system_php_checkUpdatesUpToDate": "Base image is current",
   "system_php_ext_cannot": "did not build on PHP {version}; a rebuild will not change that",
   "system_php_ext_declared": "Your extensions",

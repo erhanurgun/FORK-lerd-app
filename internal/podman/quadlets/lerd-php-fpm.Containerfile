@@ -5,6 +5,22 @@ FROM docker.io/library/composer:latest AS composer-bin
 # the runtime stage via COPY at the bottom.
 FROM docker.io/library/php:{{.Version}}-fpm-alpine AS builder
 
+# PHP 8.6 removed PEAR, so `pecl` is gone from the upstream image. Where it is
+# missing, the release tarball on pecl.php.net is the same source pecl fetches,
+# so every PECL install below goes through one wrapper instead of branching.
+RUN printf '%s\n' \
+      '#!/bin/sh' \
+      'set -e' \
+      'spec="$1"' \
+      'if command -v pecl >/dev/null 2>&1; then yes "" | pecl install "$spec"; exit 0; fi' \
+      'dir=$(mktemp -d)' \
+      'wget -qO- "https://pecl.php.net/get/$spec" | tar xz -C "$dir"' \
+      'cd "$dir"/*/' \
+      'phpize && ./configure && make -j"$(nproc)" && make install' \
+      'rm -rf "$dir"' \
+    > /usr/local/bin/lerd-pecl-install \
+    && chmod +x /usr/local/bin/lerd-pecl-install
+
 RUN apk update && apk add --no-cache \
         autoconf \
         make \
@@ -71,21 +87,21 @@ RUN apk update && apk add --no-cache \
         xsl \
     && (docker-php-ext-enable opcache || true) \
     && if [ "$PHP_ID" -lt 70400 ]; then REDIS_PKG=redis-5.3.7; else REDIS_PKG=redis; fi \
-    && { (yes '' | pecl install "$REDIS_PKG" && docker-php-ext-enable redis) \
+    && { (lerd-pecl-install "$REDIS_PKG" && docker-php-ext-enable redis) \
          || (git clone --depth 1 https://github.com/phpredis/phpredis /tmp/phpredis \
              && cd /tmp/phpredis && phpize && ./configure && make -j$(nproc) && make install \
              && docker-php-ext-enable redis \
              && rm -rf /tmp/phpredis) \
          || true; } \
-    && { (yes '' | pecl install imagick && docker-php-ext-enable imagick) \
+    && { (lerd-pecl-install imagick && docker-php-ext-enable imagick) \
          || (git clone --depth 1 https://github.com/Imagick/imagick /tmp/imagick \
              && cd /tmp/imagick && phpize && ./configure && make -j$(nproc) && make install \
              && docker-php-ext-enable imagick \
              && rm -rf /tmp/imagick) \
          || true; } \
-    && { (yes '' | pecl install igbinary && docker-php-ext-enable igbinary) || true; } \
-    && { (yes '' | pecl install mongodb && docker-php-ext-enable mongodb) || true; } \
-    && { (yes '' | pecl install pcov && docker-php-ext-enable pcov) || true; } \
+    && { (lerd-pecl-install igbinary && docker-php-ext-enable igbinary) || true; } \
+    && { (lerd-pecl-install mongodb && docker-php-ext-enable mongodb) || true; } \
+    && { (lerd-pecl-install pcov && docker-php-ext-enable pcov) || true; } \
     && { (git clone --depth 1 --branch release/latest https://github.com/NoiseByNorthwest/php-spx /tmp/php-spx \
           && cd /tmp/php-spx && phpize && ./configure && make -j$(nproc) && make install \
           && docker-php-ext-enable spx) || true; } \
@@ -100,7 +116,7 @@ RUN PHPVER="$(php -r 'echo PHP_MAJOR_VERSION,".",PHP_MINOR_VERSION;')" \
         8.0) XDEBUG_PKG="xdebug-3.3.2" ;; \
         *)   XDEBUG_PKG="xdebug" ;; \
     esac \
-    && yes '' | pecl install "$XDEBUG_PKG" && docker-php-ext-enable xdebug \
+    && { (lerd-pecl-install "$XDEBUG_PKG" && docker-php-ext-enable xdebug) || true; } \
     && rm -rf /tmp/pear /var/cache/apk/*
 
 # lerd_devtools: lerd's engine-level Debug-window capture (queries, mail, views,

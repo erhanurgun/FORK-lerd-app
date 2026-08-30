@@ -7,6 +7,10 @@ import type { SiteNginxBackup, LoadNginxBackupsResult, ResetNginxResult, SaveNgi
 
 export const phpVersions = writable<string[]>([]);
 
+// Shown wherever a prerelease version is offered, so it never reads as an
+// ordinary choice. Short enough to sit inside the version card.
+export const PRERELEASE_LABEL = 'beta';
+
 export interface PhpOption {
   value: string;
   disabled?: boolean;
@@ -36,13 +40,16 @@ function outOfFrameworkRange(v: string, min?: string, max?: string): boolean {
 // kept in the list but disabled, so the constraint is visible rather than
 // silently hidden. The site's current version is never disabled. min/max are
 // empty when the framework version was guessed, leaving every version enabled.
+// A version upstream has not released is marked, so a beta is never picked in
+// the belief it gets security updates.
 export function phpOptionsForSite(
   runtime: string | undefined,
   installed: string[],
   frankenphpVersions: string[],
   current: string,
   min?: string,
-  max?: string
+  max?: string,
+  prerelease: string[] = []
 ): PhpOption[] {
   const base =
     runtime === 'frankenphp'
@@ -50,9 +57,8 @@ export function phpOptionsForSite(
       : installed;
   return base.map((v) => {
     const disabled = v !== current && outOfFrameworkRange(v, min, max);
-    return disabled
-      ? { value: v, disabled: true, description: `needs PHP ${min || '*'} to ${max || '*'}` }
-      : { value: v };
+    if (disabled) return { value: v, disabled: true, description: `needs PHP ${min || '*'} to ${max || '*'}` };
+    return prerelease.includes(v) ? { value: v, description: PRERELEASE_LABEL } : { value: v };
   });
 }
 
@@ -166,6 +172,22 @@ export async function checkPhpUpdates(
     return { ok: true, status: data };
   } catch {
     return { ok: false, status: null };
+  }
+}
+
+// openPhpShell asks the server to spawn a host terminal running an interactive
+// shell inside the version's FPM container, the same session `lerd php:shell`
+// gives. Returns the server's error so a missing terminal emulator is reported
+// rather than looking like a click that did nothing.
+export async function openPhpShell(v: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await apiFetch('/api/php-versions/' + encodeURIComponent(v) + '/shell', {
+      method: 'POST'
+    });
+    const data = await decodeJSONResult<{ ok?: boolean; error?: string }>(res);
+    return { ok: Boolean(data.ok), error: data.error };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : m.common_requestFailed() };
   }
 }
 

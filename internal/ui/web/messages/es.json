@@ -1150,6 +1150,7 @@
   "system_php_checkUpdatesFailed": "Fallo la comprobación",
   "system_php_checkUpdatesFound": "Hay una imagen base renovada disponible",
   "system_php_checkUpdatesTitle": "Preguntar al registro si la imagen base se ha renovado",
+  "system_php_shellTitle": "Abrir una shell dentro del contenedor PHP-FPM",
   "system_php_checkUpdatesUpToDate": "La imagen base está al día",
   "system_php_ext_cannot": "no se pudo construir en PHP {version}; reconstruir no lo cambiará",
   "system_php_ext_declared": "Tus extensiones",
