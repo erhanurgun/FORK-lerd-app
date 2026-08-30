@@ -13,6 +13,26 @@ Lerd can run framework-defined workers as persistent systemd user services. Work
 
 These commands are generated from the framework definition, so they exist for any framework that defines a `queue` worker: Laravel (`php artisan queue:work`) and CodeIgniter (`php spark queue:work`, once `codeigniter4/queue` is installed). The flags come from the definition too and are rendered into each framework's own syntax, so `lerd queue:start --queue emails --tries 5` runs the right command either way. The same holds for every other worker a framework declares, `schedule`, `reverb`, `horizon` and whatever the store adds next.
 
+### Worker options
+
+A project that runs several queues sets them once rather than on every start. Whatever you pass to a worker's start command is written to `worker_options` in the project's `.lerd.yaml`, and every later start reads it back: the dashboard toggle, the restore `lerd start` performs after a reinstall, and a colleague who clones the repository and runs `lerd link`.
+
+```bash
+lerd queue:start --queue high,default,low --tries 5
+```
+
+```yaml
+# .lerd.yaml
+worker_options:
+  queue:
+    queue: high,default,low
+    tries: "5"
+```
+
+The keys are the placeholders the framework definition declares in the worker's `tune_command`, so Laravel's queue worker offers `queue`, `tries` and `timeout` while CodeIgniter's offers `queue` and `tries`. A value that matches the definition's own default is not stored, which keeps a later store update to that default in play. Values are interpolated into the command the worker's unit runs, so whitespace is refused; a list of queues is comma separated, exactly as the framework expects it.
+
+The dashboard offers the same knobs: a worker whose definition declares options gets a gear next to its toggle, with one field per option prefilled with what the project committed and showing the definition's default as the placeholder. Saving writes `.lerd.yaml` and restarts the worker when it is running, so the new command takes effect without touching the toggle. `lerd_worker` and the MCP `queue_start` tool write to the same place; arguments they leave out keep whatever the project already runs.
+
 ---
 
 ## Laravel Horizon

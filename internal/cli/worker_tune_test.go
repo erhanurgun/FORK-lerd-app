@@ -69,12 +69,12 @@ var codeigniterQueue = config.FrameworkWorker{
 
 func TestWorkerTuneFlags(t *testing.T) {
 	t.Run("defaults come back from the plain command", func(t *testing.T) {
-		want := []workerTuneFlag{
+		want := []config.WorkerTuneFlag{
 			{Name: "queue", Default: "default"},
 			{Name: "tries", Default: "3"},
 			{Name: "timeout", Default: "60"},
 		}
-		got := workerTuneFlags(laravelQueue)
+		got := config.WorkerTuneFlags(laravelQueue)
 		if len(got) != len(want) {
 			t.Fatalf("got %v, want %v", got, want)
 		}
@@ -86,7 +86,7 @@ func TestWorkerTuneFlags(t *testing.T) {
 	})
 
 	t.Run("a placeholder the command does not spell has no default", func(t *testing.T) {
-		got := workerTuneFlags(codeigniterQueue)
+		got := config.WorkerTuneFlags(codeigniterQueue)
 		if len(got) != 2 {
 			t.Fatalf("got %v, want two flags", got)
 		}
@@ -99,7 +99,7 @@ func TestWorkerTuneFlags(t *testing.T) {
 	})
 
 	t.Run("a worker without a tune command declares no flags", func(t *testing.T) {
-		if got := workerTuneFlags(config.FrameworkWorker{Command: "php artisan schedule:work"}); got != nil {
+		if got := config.WorkerTuneFlags(config.FrameworkWorker{Command: "php artisan schedule:work"}); got != nil {
 			t.Errorf("got %v, want none", got)
 		}
 	})
@@ -107,7 +107,7 @@ func TestWorkerTuneFlags(t *testing.T) {
 
 func TestRenderTuneCommand(t *testing.T) {
 	t.Run("nothing overridden runs the declared command", func(t *testing.T) {
-		got, err := renderTuneCommand(laravelQueue, nil)
+		got, err := config.RenderTuneCommand(laravelQueue, nil)
 		if err != nil {
 			t.Fatalf("render: %v", err)
 		}
@@ -117,7 +117,7 @@ func TestRenderTuneCommand(t *testing.T) {
 	})
 
 	t.Run("an override keeps the other defaults", func(t *testing.T) {
-		got, err := renderTuneCommand(laravelQueue, map[string]string{"queue": "emails"})
+		got, err := config.RenderTuneCommand(laravelQueue, map[string]string{"queue": "emails"})
 		if err != nil {
 			t.Fatalf("render: %v", err)
 		}
@@ -128,7 +128,7 @@ func TestRenderTuneCommand(t *testing.T) {
 	})
 
 	t.Run("a framework with its own syntax renders that syntax", func(t *testing.T) {
-		got, err := renderTuneCommand(codeigniterQueue, map[string]string{"queue": "emails", "tries": "5"})
+		got, err := config.RenderTuneCommand(codeigniterQueue, map[string]string{"queue": "emails", "tries": "5"})
 		if err != nil {
 			t.Fatalf("render: %v", err)
 		}
@@ -139,14 +139,14 @@ func TestRenderTuneCommand(t *testing.T) {
 	})
 
 	t.Run("a placeholder with no default and no value is refused", func(t *testing.T) {
-		_, err := renderTuneCommand(codeigniterQueue, map[string]string{"queue": "emails"})
-		if err == nil || !strings.Contains(err.Error(), "--tries") {
-			t.Fatalf("got %v, want an error naming --tries", err)
+		_, err := config.RenderTuneCommand(codeigniterQueue, map[string]string{"queue": "emails"})
+		if err == nil || !strings.Contains(err.Error(), "tries") {
+			t.Fatalf("got %v, want an error naming tries", err)
 		}
 	})
 
 	t.Run("whitespace in a value is refused", func(t *testing.T) {
-		_, err := renderTuneCommand(laravelQueue, map[string]string{"queue": "a b"})
+		_, err := config.RenderTuneCommand(laravelQueue, map[string]string{"queue": "a b"})
 		if err == nil || !strings.Contains(err.Error(), "whitespace") {
 			t.Fatalf("got %v, want a whitespace error", err)
 		}
@@ -154,12 +154,56 @@ func TestRenderTuneCommand(t *testing.T) {
 
 	t.Run("a worker without a tune command is never rewritten", func(t *testing.T) {
 		plain := config.FrameworkWorker{Command: "php spark queue:work default"}
-		got, err := renderTuneCommand(plain, map[string]string{"queue": "emails"})
+		got, err := config.RenderTuneCommand(plain, map[string]string{"queue": "emails"})
 		if err != nil {
 			t.Fatalf("render: %v", err)
 		}
 		if got != plain.Command {
 			t.Errorf("got %q, want %q", got, plain.Command)
+		}
+	})
+}
+
+// siteWithWorkerOptions returns a temp site dir whose .lerd.yaml persists the
+// given tune options for the queue worker, with HOME and the XDG roots pointed
+// at a temp dir so nothing reads the developer's real machine.
+func siteWithWorkerOptions(t *testing.T, options map[string]string) string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(home, "data"))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
+	site := t.TempDir()
+	cfg := &config.ProjectConfig{}
+	if len(options) > 0 {
+		cfg.WorkerOptions = map[string]map[string]string{"queue": options}
+	}
+	if err := config.SaveProjectConfig(site, cfg); err != nil {
+		t.Fatalf("write .lerd.yaml: %v", err)
+	}
+	return site
+}
+
+func TestResolveWorkerCommand_ProjectOptions(t *testing.T) {
+	t.Run("the project's options are what the worker runs", func(t *testing.T) {
+		site := siteWithWorkerOptions(t, map[string]string{"queue": "high,default,low"})
+		want := "php artisan queue:work --queue=high,default,low --tries=3 --timeout=60"
+		if got := resolveWorkerCommand(site, "queue", laravelQueue); got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	})
+
+	t.Run("a project with no options runs the declared command", func(t *testing.T) {
+		site := siteWithWorkerOptions(t, nil)
+		if got := resolveWorkerCommand(site, "queue", laravelQueue); got != laravelQueue.Command {
+			t.Errorf("got %q, want %q", got, laravelQueue.Command)
+		}
+	})
+
+	t.Run("a value that cannot be substituted falls back to the declared command", func(t *testing.T) {
+		site := siteWithWorkerOptions(t, map[string]string{"queue": "high default"})
+		if got := resolveWorkerCommand(site, "queue", laravelQueue); got != laravelQueue.Command {
+			t.Errorf("got %q, want the declared command", got)
 		}
 	})
 }

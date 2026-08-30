@@ -13,6 +13,14 @@ export interface FrameworkWorker {
   unreachable?: boolean;
 }
 
+// One value a worker's framework definition lets a project change, with the
+// value committed to .lerd.yaml and the default the definition itself runs.
+export interface WorkerOption {
+  name: string;
+  value?: string;
+  default?: string;
+}
+
 export interface Site {
   name?: string;
   // Display-only grouping; a group secondary reports its main's workspace.
@@ -114,6 +122,7 @@ export interface Site {
   tunnel_tool?: string;
   tunnel_external?: boolean;
   framework_workers?: FrameworkWorker[];
+  worker_options?: Record<string, WorkerOption[]>;
   last_request_at?: number;
   request_count?: number;
   [k: string]: unknown;
@@ -743,6 +752,27 @@ export const toggleStripe = (s: Site) =>
   postAction(site(s.domain, s.stripe_running ? 'stripe:stop' : 'stripe:start'));
 export const setStripeConfig = (s: Site, path: string) =>
   postAction(site(s.domain, 'stripe:config') + '?path=' + encodeURIComponent(path));
+// Saves the values for a worker's tunable options to the project's .lerd.yaml.
+// The backend drops what matches the framework default and restarts the worker
+// when it is running, so the new command takes effect without a manual toggle.
+export async function saveWorkerOptions(
+  s: Site,
+  worker: string,
+  values: Record<string, string>
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await apiFetch(site(s.domain, `worker:${worker}:options`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values })
+    });
+    const data = (await res.json()) as { ok?: boolean; error?: string };
+    return { ok: Boolean(data.ok), error: data.error };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : m.common_requestFailed() };
+  }
+}
+
 export const toggleWorker = (s: Site, w: FrameworkWorker, branch: string = '') =>
   postAction(
     site(s.domain, 'worker:' + w.name + (w.running ? ':stop' : ':start')) +

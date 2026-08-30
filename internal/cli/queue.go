@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/geodro/lerd/internal/config"
@@ -31,12 +30,8 @@ func queueSiteName(cwd string) (string, error) {
 // Laravel's queue worker takes, to the generic tuned start. The names match the
 // placeholders a framework's tune_command declares; a definition that declares
 // fewer (CodeIgniter has no per-job timeout) ignores the rest.
-func queueStartTuned(siteName, sitePath, phpVersion, queue string, tries, timeout int) error {
-	return StartFrameworkWorkerTuned(siteName, sitePath, phpVersion, "queue", map[string]string{
-		"queue":   queue,
-		"tries":   strconv.Itoa(tries),
-		"timeout": strconv.Itoa(timeout),
-	})
+func queueStartTuned(siteName, sitePath, phpVersion string, options map[string]string) error {
+	return StartFrameworkWorkerTuned(siteName, sitePath, phpVersion, "queue", options)
 }
 
 // QueueRestartForSite gracefully restarts the queue worker by running the

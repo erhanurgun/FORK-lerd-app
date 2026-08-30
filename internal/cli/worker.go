@@ -152,9 +152,12 @@ func resolveSiteAndFramework(cwd string) (*config.Site, *config.Framework, strin
 	return site, fw, phpVersion, nil
 }
 
-// resolveWorkerCommand returns the command to run for a worker, substituting the
-// worker's reload variant (restart on file changes) when the project opted the
-// worker into reload mode and the framework declares the variant. The variant
+// resolveWorkerCommand returns the command to run for a worker, substituting
+// the options the project persisted for the worker's tune_command placeholders
+// and the worker's reload variant (restart on file changes) when the project
+// opted the worker into reload mode and the framework declares the variant.
+// Every start path lands here, so a project that committed its own queues gets
+// them from the dashboard toggle and the post-reinstall restore too. The variant
 // text comes from the framework definition (FrameworkWorker.ReloadCommand), so
 // the store stays the single source of truth and core never rewrites command
 // strings.
@@ -179,6 +182,7 @@ func resolveWorkerCommand(sitePath, workerName string, w config.FrameworkWorker)
 	// cli_ini has to be folded in here too. Magento cannot even bootstrap at
 	// PHP's 128M default, so a worker without it simply crash-loops.
 	ini := phpIniArgsForDir(sitePath)
+	w.Command = projectTunedCommand(sitePath, workerName, w)
 	if w.ReloadCommand == "" || !config.ProjectReloadsWorker(sitePath, workerName) {
 		return injectPHPIniIntoCommand(w.Command, ini)
 	}
