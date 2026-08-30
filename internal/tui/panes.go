@@ -827,6 +827,14 @@ func renderServiceRow(selected bool, s ServiceRow, paneW int) string {
 	if s.Version != "" {
 		meta = dimStyle.Render(s.Version)
 	}
+	// A service that exposes a browser dashboard is marked here, so the list
+	// itself answers "what can I open?" without walking into every detail pane.
+	if s.Dashboard != "" {
+		if meta != "" {
+			meta += "  "
+		}
+		meta += accentStyle.Render("web")
+	}
 	if s.Pinned {
 		meta += "  " + accentStyle.Render("pinned")
 	}
