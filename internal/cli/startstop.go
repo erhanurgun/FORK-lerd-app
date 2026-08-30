@@ -213,7 +213,7 @@ func NewStartCmd() *cobra.Command {
 func ReportPendingDownloads(w io.Writer) {
 	work := pendingImageWork()
 	if len(work) == 0 {
-		fmt.Fprintln(w, "Nothing to download: every image lerd needs is already in the local store.")
+		feedback.LineOn(w, "Nothing to download: every image lerd needs is already in the local store.")
 		return
 	}
 	plan := make(imagepull.Plan, len(work))
