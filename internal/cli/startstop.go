@@ -761,25 +761,11 @@ func startLerd(emit func(StartEvent), skip []string) error {
 
 	autoStopUnusedFPMs()
 
-	// Restart the tray applet, stopping any existing instance first.
-	// Prefer the systemd service when enabled; otherwise launch directly.
-	tray := feedback.Start("starting lerd-tray")
-	if services.Mgr.IsEnabled("lerd-tray") {
-		// Use Start (bootout+bootstrap) instead of Restart (kickstart -k) to
-		// avoid launchctl hanging while waiting for the tray process to die.
-		killTray()
-		if err := services.Mgr.Start("lerd-tray"); err != nil {
-			tray.Fail(err)
-		} else {
-			tray.OK("")
-		}
-	} else {
-		killTray()
-		exe, err := os.Executable()
-		if err == nil {
-			err = exec.Command(exe, "tray").Start()
-		}
-		if err != nil {
+	// Both launch paths below bring the tray back, which is why masking the
+	// unit never kept it away; the preference has to be checked here instead.
+	if trayEnabled() {
+		tray := feedback.Start("starting lerd-tray")
+		if err := launchTray(); err != nil {
 			tray.Fail(err)
 		} else {
 			tray.OK("")
@@ -876,10 +862,33 @@ func startRestoredServices() {
 	RunParallel(workerJobs) //nolint:errcheck
 }
 
-// killTray kills any running lerd tray process (launched directly or as lerd-tray binary).
+// launchTray restarts the tray applet, stopping any existing instance first.
+// Prefers the systemd service when enabled, otherwise launches the helper
+// directly. Start (bootout+bootstrap) rather than Restart (kickstart -k), or
+// launchctl hangs waiting for the tray process to die.
+func launchTray() error {
+	killTray()
+	if services.Mgr.IsEnabled("lerd-tray") {
+		return services.Mgr.Start("lerd-tray")
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	return exec.Command(exe, "tray").Start()
+}
+
+// trayProcessPatterns match a running tray applet, launched directly or as the
+// lerd-tray binary, and nothing else. Anchored at the end because `lerd tray
+// off` has to kill the applet from a command line that contains those very
+// words, and an unanchored match takes out the command and its shell with it.
+var trayProcessPatterns = []string{`lerd tray( --mono)?$`, `lerd-tray$`}
+
+// killTray kills any running lerd tray process.
 func killTray() {
-	exec.Command("pkill", "-f", "lerd tray").Run()
-	exec.Command("pkill", "-f", "lerd-tray").Run()
+	for _, pattern := range trayProcessPatterns {
+		exec.Command("pkill", "-f", pattern).Run() //nolint:errcheck
+	}
 }
 
 // reconcileCustomServices heals custom-service drift on start (issue #678).

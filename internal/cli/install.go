@@ -950,7 +950,7 @@ func runInstall(cmd *cobra.Command, _ []string) error {
 		if missing := tray.MissingLibs(tray.HelperPath()); len(missing) > 0 {
 			disableTrayUnit()
 			feedback.Note("system tray unavailable: this host has no " + strings.Join(missing, ", "))
-		} else if autostartOn {
+		} else if autostartOn && trayEnabled() {
 			if err := services.Mgr.Enable("lerd-tray"); err != nil {
 				fmt.Printf("    WARN: %v\n", err)
 			}
@@ -1067,12 +1067,8 @@ func runInstall(cmd *cobra.Command, _ []string) error {
 	}
 
 	killTray()
-	if services.Mgr.IsEnabled("lerd-tray") {
-		_ = services.Mgr.Start("lerd-tray")
-	} else {
-		if exe, err := os.Executable(); err == nil {
-			_ = exec.Command(exe, "tray").Start()
-		}
+	if trayEnabled() {
+		_ = launchTray()
 	}
 
 	installAutostart()

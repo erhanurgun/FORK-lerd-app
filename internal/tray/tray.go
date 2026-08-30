@@ -244,6 +244,7 @@ func onReady(mono bool) {
 	go handleLANServices(menu.mLANServices, refresh)
 	go handleDumps(menu.mDumps, refresh)
 	go handleNotifications(menu.mNotifications, refresh)
+	go handleTrayOff(menu.mTrayOff)
 	if menu.mIconStyle != nil {
 		go handleIconStyle(menu.mIconStyle, refresh)
 	}
@@ -562,6 +563,14 @@ func handleNotifications(item *systray.MenuItem, refresh func()) {
 			enabled = cfg.IsNotificationsEnabled()
 		}
 		runAndRefresh(lerdCmd("notify", offOn(enabled)), refresh)
+	}
+}
+
+// handleTrayOff turns the tray off for good. The command kills this very
+// process, so there is nothing to refresh afterwards.
+func handleTrayOff(item *systray.MenuItem) {
+	for range item.ClickedCh {
+		_ = lerdCmd("tray", "off").Run()
 	}
 }
 
