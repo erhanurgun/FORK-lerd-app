@@ -3611,6 +3611,17 @@ type SiteNginxRestoreResponse struct {
 	Content  string `json:"content,omitempty"`
 }
 
+// nginxScopeParam reads the ?scope= query param. Absent means the server-scope
+// override, so older clients and bookmarked URLs keep hitting the same file.
+func nginxScopeParam(w http.ResponseWriter, r *http.Request) (siteops.NginxScope, bool) {
+	scope, err := siteops.ParseNginxScope(r.URL.Query().Get("scope"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return "", false
+	}
+	return scope, true
+}
+
 // handleSiteNginx reads (GET) or saves (POST) a site's custom.d nginx override.
 // The override is bind-mounted into lerd-nginx and included at the end of the
 // site's server block; saving reloads nginx so the change takes effect. The
@@ -3621,8 +3632,12 @@ func handleSiteNginx(w http.ResponseWriter, r *http.Request, domain string) {
 		http.Error(w, "site not found", http.StatusNotFound)
 		return
 	}
+	scope, ok := nginxScopeParam(w, r)
+	if !ok {
+		return
+	}
 	if r.Method == http.MethodGet {
-		got, err := siteops.ReadCustomNginx(domain)
+		got, err := siteops.ReadCustomNginx(domain, scope)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -3637,7 +3652,7 @@ func handleSiteNginx(w http.ResponseWriter, r *http.Request, domain string) {
 		writeJSON(w, SiteNginxWriteResponse{OK: false, Error: "invalid body: " + err.Error()})
 		return
 	}
-	res, err := siteops.SaveCustomNginx(domain, req.Content, req.Backup)
+	res, err := siteops.SaveCustomNginx(domain, scope, req.Content, req.Backup)
 	if err != nil {
 		writeJSON(w, SiteNginxWriteResponse{OK: false, Error: err.Error()})
 		return
@@ -3656,7 +3671,11 @@ func handleSiteNginxBackups(w http.ResponseWriter, r *http.Request, domain strin
 		http.NotFound(w, r)
 		return
 	}
-	list, err := siteops.ListCustomNginxBackups(domain)
+	scope, ok := nginxScopeParam(w, r)
+	if !ok {
+		return
+	}
+	list, err := siteops.ListCustomNginxBackups(domain, scope)
 	if err != nil {
 		http.Error(w, "listing backups: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -3679,7 +3698,11 @@ func handleSiteNginxBackupContent(w http.ResponseWriter, r *http.Request, domain
 		http.NotFound(w, r)
 		return
 	}
-	data, err := siteops.ReadCustomNginxBackup(domain, name)
+	scope, ok := nginxScopeParam(w, r)
+	if !ok {
+		return
+	}
+	data, err := siteops.ReadCustomNginxBackup(domain, scope, name)
 	if err != nil {
 		if os.IsNotExist(err) {
 			http.NotFound(w, r)
@@ -3715,7 +3738,11 @@ func handleSiteNginxReset(w http.ResponseWriter, r *http.Request, domain string)
 		http.NotFound(w, r)
 		return
 	}
-	if err := siteops.ResetCustomNginx(domain); err != nil {
+	scope, ok := nginxScopeParam(w, r)
+	if !ok {
+		return
+	}
+	if err := siteops.ResetCustomNginx(domain, scope); err != nil {
 		writeJSON(w, SiteNginxResetResponse{OK: false, Error: err.Error()})
 		return
 	}
@@ -3739,6 +3766,10 @@ func handleSiteNginxRestore(w http.ResponseWriter, r *http.Request, domain strin
 		http.NotFound(w, r)
 		return
 	}
+	scope, ok := nginxScopeParam(w, r)
+	if !ok {
+		return
+	}
 	var req SiteNginxRestoreRequest
 	// Body is optional (empty name means newest); only a malformed envelope
 	// is refused.
@@ -3748,7 +3779,7 @@ func handleSiteNginxRestore(w http.ResponseWriter, r *http.Request, domain strin
 			return
 		}
 	}
-	res, err := siteops.RestoreCustomNginx(domain, req.Name)
+	res, err := siteops.RestoreCustomNginx(domain, scope, req.Name)
 	if err != nil {
 		writeJSON(w, SiteNginxRestoreResponse{OK: false, Error: err.Error()})
 		return

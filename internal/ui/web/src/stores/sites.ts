@@ -519,17 +519,30 @@ export interface LoadNginxBackupsResult {
   error?: string;
 }
 
-export async function getSiteNginx(domain: string): Promise<SiteNginx> {
-  return apiJson<SiteNginx>(site(domain, 'nginx'));
+/** NginxScope picks which of a site's two custom.d override files a call
+ *  targets: the one included at the end of the server block, or the one
+ *  included inside the block that serves the site. Only the latter can
+ *  override fastcgi_param and proxy_set_header, which nginx resolves per
+ *  location and never inherits once a location declares its own. */
+export type NginxScope = 'server' | 'location';
+
+/** Server scope is the default on the backend, so its URL stays unqualified
+ *  and every previously bookmarked nginx URL keeps hitting the same file. */
+const nginxURL = (domain: string, scope: NginxScope, sub = '') =>
+  site(domain, 'nginx') + sub + (scope === 'location' ? '?scope=location' : '');
+
+export async function getSiteNginx(domain: string, scope: NginxScope): Promise<SiteNginx> {
+  return apiJson<SiteNginx>(nginxURL(domain, scope));
 }
 
 export async function saveSiteNginx(
   domain: string,
+  scope: NginxScope,
   content: string,
   backup: boolean = false
 ): Promise<SaveNginxResult> {
   try {
-    const res = await apiFetch(site(domain, 'nginx'), {
+    const res = await apiFetch(nginxURL(domain, scope), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content, backup })
@@ -555,9 +568,12 @@ export async function saveSiteNginx(
   }
 }
 
-export async function loadSiteNginxBackups(domain: string): Promise<LoadNginxBackupsResult> {
+export async function loadSiteNginxBackups(
+  domain: string,
+  scope: NginxScope
+): Promise<LoadNginxBackupsResult> {
   try {
-    const res = await apiFetch(site(domain, 'nginx') + '/backups');
+    const res = await apiFetch(nginxURL(domain, scope, '/backups'));
     if (!res.ok) {
       return { ok: false, list: [], error: m.common_backupsLoadFailed({ status: res.status }) };
     }
@@ -568,8 +584,12 @@ export async function loadSiteNginxBackups(domain: string): Promise<LoadNginxBac
   }
 }
 
-export async function loadSiteNginxBackupContent(domain: string, name: string): Promise<string> {
-  const res = await apiFetch(site(domain, 'nginx') + '/backups/' + encodeURIComponent(name));
+export async function loadSiteNginxBackupContent(
+  domain: string,
+  scope: NginxScope,
+  name: string
+): Promise<string> {
+  const res = await apiFetch(nginxURL(domain, scope, '/backups/' + encodeURIComponent(name)));
   if (!res.ok) throw new Error(m.common_backupLoadFailed({ status: res.status }));
   return await res.text();
 }
@@ -579,9 +599,12 @@ export interface ResetNginxResult {
   error?: string;
 }
 
-export async function resetSiteNginx(domain: string): Promise<ResetNginxResult> {
+export async function resetSiteNginx(
+  domain: string,
+  scope: NginxScope
+): Promise<ResetNginxResult> {
   try {
-    const res = await apiFetch(site(domain, 'nginx') + '/reset', { method: 'POST' });
+    const res = await apiFetch(nginxURL(domain, scope, '/reset'), { method: 'POST' });
     const data = (await res.json()) as { ok?: boolean; error?: string };
     return { ok: Boolean(data.ok), error: data.error };
   } catch (e) {
@@ -591,10 +614,11 @@ export async function resetSiteNginx(domain: string): Promise<ResetNginxResult> 
 
 export async function restoreSiteNginx(
   domain: string,
+  scope: NginxScope,
   name: string = ''
 ): Promise<RestoreNginxResult> {
   try {
-    const res = await apiFetch(site(domain, 'nginx') + '/restore', {
+    const res = await apiFetch(nginxURL(domain, scope, '/restore'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name })

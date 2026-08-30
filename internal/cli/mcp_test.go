@@ -600,9 +600,11 @@ func TestIsLerdBuiltImage_matchers(t *testing.T) {
 // 33200 for the env contract, which is what stops an assistant hand-editing a
 // settings.php or reading Laravel's key names on a project that declares none,
 // plus sqlite as a wiring rather than a service, and the doctor fixes that run
-// on the host rather than in the container.
+// on the host rather than in the container, then 33200 → 33450 for the nginx
+// `scope`: a site has two override files and an assistant that does not know
+// the location one writes fastcgi_param into the file nginx ignores.
 func TestLerdReference_underSizeCeiling(t *testing.T) {
-	const ceiling = 33200
+	const ceiling = 33450
 	if got := len(lerdReference); got > ceiling {
 		t.Errorf("lerd-reference.md is %d bytes, ceiling is %d — trim before raising", got, ceiling)
 	}
