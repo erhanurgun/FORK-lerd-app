@@ -5699,45 +5699,73 @@ func buildUpdateScript(executable string) string {
 	return podman.ShellQuote(executable) + ` update; echo; read -rp "Press Enter to close..."`
 }
 
-// openTerminalCommand opens the user's terminal emulator and runs the given
-// shell script in it. Mirrors openTerminalAt's candidate list — the two
-// could merge later but the arg shapes diverge enough that keeping them
-// separate is clearer for now.
-func openTerminalCommand(script string) error {
-	type termCmd struct {
-		bin  string
-		args []string
-	}
+// knownTerminalCommands is the fallback list for running a script, and the
+// source of the flags namedTerminalCommand reuses when the chosen terminal is
+// one of them.
+func knownTerminalCommands(script string) []terminalCmd {
 	combined := "sh -c " + podman.ShellQuote(script)
-	candidates := []termCmd{}
-	// $TERMINAL leads, matching openTerminalAt and the error message below.
-	if t := os.Getenv("TERMINAL"); t != "" {
-		candidates = append(candidates, termCmd{t, []string{"-e", "sh", "-c", script}})
+	return []terminalCmd{
+		{"kitty", []string{"sh", "-c", script}},
+		{"foot", []string{"sh", "-c", script}},
+		{"alacritty", []string{"-e", "sh", "-c", script}},
+		{"wezterm", []string{"start", "--", "sh", "-c", script}},
+		{"ghostty", []string{"-e", combined}},
+		{"ptyxis", []string{"--", "sh", "-c", script}},
+		{"konsole", []string{"--separate", "-e", "sh", "-c", script}},
+		{"gnome-terminal", []string{"--", "sh", "-c", script}},
+		{"xfce4-terminal", []string{"-e", combined}},
+		{"tilix", []string{"-e", combined}},
+		{"terminator", []string{"-e", combined}},
+		{"xterm", []string{"-e", "sh", "-c", script}},
 	}
-	candidates = append(candidates,
-		termCmd{"kitty", []string{"sh", "-c", script}},
-		termCmd{"foot", []string{"sh", "-c", script}},
-		termCmd{"alacritty", []string{"-e", "sh", "-c", script}},
-		termCmd{"wezterm", []string{"start", "--", "sh", "-c", script}},
-		termCmd{"ghostty", []string{"-e", combined}},
-		termCmd{"ptyxis", []string{"--", "sh", "-c", script}},
-		termCmd{"konsole", []string{"--separate", "-e", "sh", "-c", script}},
-		termCmd{"gnome-terminal", []string{"--", "sh", "-c", script}},
-		termCmd{"xfce4-terminal", []string{"-e", combined}},
-		termCmd{"tilix", []string{"-e", combined}},
-		termCmd{"terminator", []string{"-e", combined}},
-		termCmd{"xterm", []string{"-e", "sh", "-c", script}},
-	)
+}
+
+// namedTerminalCommand builds the invocation for a terminal named by the user
+// or the desktop, the script counterpart of namedTerminal. The flags lerd
+// already knows win over the generic `-e sh -c`, which kitty and foot reject.
+func namedTerminalCommand(name, script string) terminalCmd {
+	for _, t := range knownTerminalCommands(script) {
+		if t.bin == filepath.Base(name) {
+			return terminalCmd{name, t.args}
+		}
+	}
+	return terminalCmd{name, []string{"-e", "sh", "-c", script}}
+}
+
+// defaultTerminal is the seam tests replace to stand in for the desktop's own
+// setting, which is read off the host.
+var defaultTerminal = linuxDefaultTerminal
+
+// terminalScriptCandidates returns the ordered emulator candidates for running
+// a script. Same precedence as terminalDirCandidates: $TERMINAL, then the
+// terminal the desktop is set to use, then the fixed list. macOS is absent from
+// the middle step because its chosen terminal is a bundle id, and `open -b`
+// takes a file rather than a command to run.
+func terminalScriptCandidates(script string) []terminalCmd {
+	candidates := []terminalCmd{}
+	if t := os.Getenv("TERMINAL"); t != "" {
+		candidates = append(candidates, namedTerminalCommand(t, script))
+	}
+	if t := defaultTerminal(); t != "" {
+		candidates = append(candidates, namedTerminalCommand(t, script))
+	}
+	candidates = append(candidates, knownTerminalCommands(script)...)
 
 	if runtime.GOOS == "darwin" {
 		if _, err := os.Stat("/Applications/iTerm.app"); err == nil {
 			as := "tell application \"iTerm2\"\n\tcreate window with default profile\n\ttell current session of current window\n\t\twrite text " + appleScriptStr(script) + "\n\tend tell\nend tell"
-			candidates = append(candidates, termCmd{"osascript", []string{"-e", as}})
+			candidates = append(candidates, terminalCmd{"osascript", []string{"-e", as}})
 		}
 		as := "tell application \"Terminal\"\n\tdo script " + appleScriptStr(script) + "\n\tactivate\nend tell"
-		candidates = append(candidates, termCmd{"osascript", []string{"-e", as}})
+		candidates = append(candidates, terminalCmd{"osascript", []string{"-e", as}})
 	}
-	for _, t := range candidates {
+	return candidates
+}
+
+// openTerminalCommand opens the user's terminal emulator and runs the given
+// shell script in it.
+func openTerminalCommand(script string) error {
+	for _, t := range terminalScriptCandidates(script) {
 		bin, err := exec.LookPath(t.bin)
 		if err != nil {
 			continue
