@@ -4991,10 +4991,10 @@ func handlePHPInstall(w http.ResponseWriter, r *http.Request) {
 		done(map[string]any{"ok": false, "error": err.Error(), "version": version})
 		return
 	}
-	// Refresh the container cache before signalling done so the client's
-	// follow-up status load (and the publishAfter broadcast) report the
-	// freshly-started FPM as running instead of a stale not-running snapshot.
-	podman.Cache.PollNow()
+	// Refresh before signalling done so the client's follow-up status load
+	// (and the publishAfter broadcast) report the freshly-started FPM as
+	// running, with the patch read out of the image it just built.
+	refreshAfterPHPBuild(version)
 	done(map[string]any{"ok": true, "version": version})
 }
 
@@ -5003,12 +5003,12 @@ var (
 	refreshPHPPatchFn = podman.RefreshFPMPHPVersion
 )
 
-// refreshAfterPHPRebuild brings back what a finished rebuild made stale: the
-// container states, the PHP patch probed out of the old image, and the cached
-// status snapshot built from both. It runs before the done event because the
-// client loads status the moment the modal closes, ahead of publishAfter's own
-// invalidation.
-func refreshAfterPHPRebuild(version string) {
+// refreshAfterPHPBuild brings back what a finished install or rebuild made
+// stale: the container states, the PHP patch probed out of the image that was
+// replaced, and the cached status snapshot built from both. It runs before the
+// done event because the client loads status the moment the modal closes,
+// ahead of publishAfter's own invalidation.
+func refreshAfterPHPBuild(version string) {
 	pollContainersFn()
 	refreshPHPPatchFn(version)
 	snapshots.Invalidate(eventbus.KindStatus)
@@ -5047,7 +5047,7 @@ func handlePHPRebuild(w http.ResponseWriter, r *http.Request, version string) {
 		done(map[string]any{"ok": false, "error": err.Error(), "version": version})
 		return
 	}
-	refreshAfterPHPRebuild(version)
+	refreshAfterPHPBuild(version)
 	done(map[string]any{"ok": true, "version": version})
 }
 

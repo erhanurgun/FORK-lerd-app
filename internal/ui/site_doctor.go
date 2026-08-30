@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	lerdcli "github.com/geodro/lerd/internal/cli"
 	"github.com/geodro/lerd/internal/config"
 	"github.com/geodro/lerd/internal/imagepull"
 	"github.com/geodro/lerd/internal/serviceops"
@@ -72,6 +73,13 @@ func handleDoctorFixRun(w http.ResponseWriter, r *http.Request, site *config.Sit
 	// than the request sitting silent until it finishes.
 	if key == sitedoctor.FixInstallServices || key == sitedoctor.FixStartServices {
 		handleDoctorServiceFix(w, r, site, key)
+		return
+	}
+	// Removing a stale worker unit touches the user's systemd units, which no
+	// container shell can reach, so it is a host action like the vhost one.
+	if key == sitedoctor.FixStaleWorkers {
+		n, err := lerdcli.RemoveStaleWorkerUnits(*site)
+		streamHostAction(w, fmt.Sprintf("removed %d stale worker unit(s) for %s", n, site.Name), err)
 		return
 	}
 	// Creating a schema runs in the engine's container, not the site's, so it is

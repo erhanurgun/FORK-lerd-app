@@ -97,6 +97,27 @@ describe('SiteDoctorModal', () => {
     expect(launchCommand).not.toHaveBeenCalled();
   });
 
+  // A unit left behind by a worker the definition dropped is removed on the
+  // host, not in the site container, so it goes through the fix endpoint like
+  // the vhost one rather than looking for a framework command.
+  it('removes stale worker units through the fix endpoint', async () => {
+    loadDoctor.mockResolvedValue({
+      checks: [
+        { name: 'stale_workers', label: 'Worker Units', status: 'warn', detail: 'unit files are still installed for a worker this site no longer declares (jump)', fix: 'stale_workers_remove' }
+      ],
+      failures: 0,
+      warnings: 1
+    });
+    loadCommands.mockResolvedValue([]);
+
+    render(SiteDoctorModal, { props: { open: true, site: site(), branch: '', onclose: () => {} } });
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Fix' }));
+
+    expect(executeDoctorFix).toHaveBeenCalledWith('acme.test', 'stale_workers_remove', 'Remove the stale worker units', '');
+    expect(launchCommand).not.toHaveBeenCalled();
+  });
+
   it('omits the Fix button when no matching command is available', async () => {
     loadDoctor.mockResolvedValue({
       checks: [{ name: 'storage_link', status: 'warn', detail: 'symlink missing', fix: 'storage:link' }],
