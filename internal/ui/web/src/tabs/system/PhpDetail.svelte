@@ -7,7 +7,13 @@
   import PhpExtensionsTab from './PhpExtensionsTab.svelte';
   import SitesPopover from '$components/SitesPopover.svelte';
   import { status, loadStatus } from '$stores/status';
-  import { setDefaultPhp, startPhp, stopPhp, checkPhpUpdates } from '$stores/phpVersions';
+  import {
+    setDefaultPhp,
+    startPhp,
+    stopPhp,
+    checkPhpUpdates,
+    confirmPhpDownload
+  } from '$stores/phpVersions';
   import { sites, sitesByPhp } from '$stores/sites';
   import { xdebugOn, xdebugOff, XDEBUG_MODES, type XdebugMode } from '$stores/xdebug';
   import { openPhpRemoveModal, openPhpRebuildModal } from '$stores/modals';
@@ -158,7 +164,9 @@
     icon: rebuildIcon,
     label: baseUpdate ? m.system_php_rebuildUpdate() : m.system_php_rebuild(),
     title: baseUpdate ? m.system_php_baseUpdateHint() : m.system_php_rebuildHint(),
-    onclick: () => openPhpRebuildModal(version)
+    onclick: async () => {
+      if (await confirmPhpDownload(version)) openPhpRebuildModal(version);
+    }
   });
 
   const versionActions = $derived.by<ButtonMenuAction[]>(() => {

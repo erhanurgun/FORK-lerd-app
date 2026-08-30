@@ -2,6 +2,7 @@ import { m } from '../paraglide/messages.js';
 import { writable } from 'svelte/store';
 import { apiJson, apiFetch, decodeJSONResult } from '$lib/api';
 import { readSSE } from '$lib/sse';
+import { confirmDownload } from './downloadConfirm';
 import type { SiteNginxBackup, LoadNginxBackupsResult, ResetNginxResult, SaveNginxResult, RestoreNginxResult } from './sites';
 
 export const phpVersions = writable<string[]>([]);
@@ -106,6 +107,13 @@ export async function streamPhpInstall(
       onEvent({ line: data });
     }
   });
+}
+
+// confirmPhpDownload asks before a PHP build spends bandwidth on the prebuilt
+// base image it starts from. Resolves true with no prompt when that base is
+// already on the machine, which is the common case for a repeat rebuild.
+export function confirmPhpDownload(version: string): Promise<boolean> {
+  return confirmDownload('PHP ' + version, { php: version });
 }
 
 // streamPhpRebuild force-rebuilds a version's image against the current base,

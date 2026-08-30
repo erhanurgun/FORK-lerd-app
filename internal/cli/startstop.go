@@ -17,6 +17,7 @@ import (
 	"github.com/geodro/lerd/internal/dns"
 	"github.com/geodro/lerd/internal/feedback"
 	gitpkg "github.com/geodro/lerd/internal/git"
+	"github.com/geodro/lerd/internal/imagepull"
 	"github.com/geodro/lerd/internal/lifecycle"
 	"github.com/geodro/lerd/internal/nginx"
 	phpPkg "github.com/geodro/lerd/internal/php"
@@ -45,12 +46,39 @@ func quadletImage(unit string) string {
 	return ""
 }
 
-// ensureImages checks all images required by units that are about to start and
-// builds or pulls any that are missing, using the parallel spinner UI.
+// imageWork pairs the job that produces an image with the disclosure of what
+// that job downloads, so a new case can never add a silent download.
+type imageWork struct {
+	job  BuildJob
+	item imagepull.Item
+}
+
+// ensureImages checks all images required by units that are about to start,
+// discloses everything it is about to download, and then builds or pulls any
+// that are missing using the parallel spinner UI.
 func ensureImages() {
+	work := pendingImageWork()
+	if len(work) == 0 {
+		return
+	}
+	plan := make(imagepull.Plan, len(work))
+	jobs := make([]BuildJob, len(work))
+	for i, w := range work {
+		plan[i], jobs[i] = w.item, w.job
+	}
+	plan.Fill().Report(os.Stdout)
+	if imagepull.DryRun() {
+		return
+	}
+	RunParallel(jobs) //nolint:errcheck
+}
+
+// pendingImageWork lists every image a start would have to build or pull
+// because it is not in the local store.
+func pendingImageWork() []imageWork {
 	units := append(lifecycle.CoreUnits(), lifecycle.InstalledServiceUnits()...)
 	units = append(units, lifecycle.InstalledCustomContainerUnits()...)
-	var jobs []BuildJob
+	var work []imageWork
 	seen := map[string]bool{}
 
 	for _, unit := range units {
@@ -74,13 +102,17 @@ func ensureImages() {
 		}
 
 		img := image
+		reason := "missing, needed by " + strings.TrimPrefix(unit, "lerd-")
 		switch {
 		case img == podman.DNSMasqImage:
-			jobs = append(jobs, BuildJob{
-				Label: "Building dnsmasq",
-				Run: func(w io.Writer) error {
-					return podman.BuildDNSMasqImage(w, dns.ReadUpstreamDNS())
+			work = append(work, imageWork{
+				job: BuildJob{
+					Label: "Building dnsmasq",
+					Run: func(w io.Writer) error {
+						return podman.BuildDNSMasqImage(w, dns.ReadUpstreamDNS())
+					},
 				},
+				item: imagepull.Build("dnsmasq image", podman.DNSMasqBaseImage, reason),
 			})
 
 		case strings.HasPrefix(img, "lerd-php") && strings.HasSuffix(img, "-fpm:local"):
@@ -88,12 +120,15 @@ func ensureImages() {
 			short := strings.TrimSuffix(strings.TrimPrefix(img, "lerd-php"), "-fpm:local")
 			ver := short[:1] + "." + short[1:]
 			v := ver
-			jobs = append(jobs, BuildJob{
-				Label: "PHP " + v,
-				Run: func(w io.Writer) error {
-					_, err := podman.BuildFPMImageTo(v, false, w)
-					return err
+			work = append(work, imageWork{
+				job: BuildJob{
+					Label: "PHP " + v,
+					Run: func(w io.Writer) error {
+						_, err := podman.BuildFPMImageTo(v, false, w)
+						return err
+					},
 				},
+				item: imagepull.Build("PHP "+v+" image", podman.PHPBaseImageRef(v), reason),
 			})
 
 		case strings.HasPrefix(img, "localhost/lerd-frankenphp") && strings.HasSuffix(img, ":local"):
@@ -104,57 +139,88 @@ func ensureImages() {
 				continue // malformed tag with no version digits; skip rather than panic
 			}
 			v := short[:1] + "." + short[1:]
-			jobs = append(jobs, BuildJob{
-				Label: "FrankenPHP " + v,
-				Run:   func(w io.Writer) error { return podman.BuildFrankenPHPImage(v, false, w) },
+			work = append(work, imageWork{
+				job: BuildJob{
+					Label: "FrankenPHP " + v,
+					Run:   func(w io.Writer) error { return podman.BuildFrankenPHPImage(v, false, w) },
+				},
+				item: imagepull.Build("FrankenPHP "+v+" image", podman.FrankenPHPBaseImage(v), reason),
 			})
 
 		case strings.HasPrefix(img, "lerd-custom-") && strings.HasSuffix(img, ":local"):
 			// Rebuild custom container from the site's Containerfile.
 			siteName := strings.TrimSuffix(strings.TrimPrefix(img, "lerd-custom-"), ":local")
 			sn := siteName
-			jobs = append(jobs, BuildJob{
-				Label: "Custom: " + sn,
-				Run: func(w io.Writer) error {
-					site, err := config.FindSite(sn)
-					if err != nil {
-						return err
-					}
-					proj, err := config.LoadProjectConfig(site.Path)
-					if err != nil {
-						return err
-					}
-					return podman.BuildCustomImageTo(sn, site.Path, proj.Container, w)
+			work = append(work, imageWork{
+				job: BuildJob{
+					Label: "Custom: " + sn,
+					Run: func(w io.Writer) error {
+						site, err := config.FindSite(sn)
+						if err != nil {
+							return err
+						}
+						proj, err := config.LoadProjectConfig(site.Path)
+						if err != nil {
+							return err
+						}
+						return podman.BuildCustomImageTo(sn, site.Path, proj.Container, w)
+					},
 				},
+				// The site's own Containerfile decides what this downloads, so
+				// there is no single base image to size up.
+				item: imagepull.Build("Custom container: "+sn, "", reason),
 			})
 
 		default:
 			label := podman.PlatformImage(img)
-			jobs = append(jobs, BuildJob{
-				Label: "Pulling " + label,
-				Run: func(w io.Writer) error {
-					args := append(append([]string{"pull"}, podman.PlatformPullArgs(label)...), label)
-					cmd := podman.Cmd(args...)
-					cmd.Stdout = w
-					cmd.Stderr = w
-					return cmd.Run()
+			work = append(work, imageWork{
+				job: BuildJob{
+					Label: "Pulling " + label,
+					Run: func(w io.Writer) error {
+						return podman.PullImageTo(label, w)
+					},
 				},
+				item: imagepull.Pull(label, reason),
 			})
 		}
 	}
 
-	if len(jobs) > 0 {
-		RunParallel(jobs) //nolint:errcheck
-	}
+	return work
 }
 
 // NewStartCmd returns the start command.
 func NewStartCmd() *cobra.Command {
-	return &cobra.Command{
+	var dryRun bool
+	cmd := &cobra.Command{
 		Use:   "start",
 		Short: "Start Lerd (DNS, nginx, PHP-FPM, and installed services)",
-		RunE:  func(*cobra.Command, []string) error { return startLerd(nil, nil) },
+		RunE: func(*cobra.Command, []string) error {
+			if dryRun {
+				imagepull.SetDryRun(true)
+				ReportPendingDownloads(os.Stdout)
+				return nil
+			}
+			return startLerd(nil, nil)
+		},
 	}
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false,
+		"Report the images a start would pull or rebuild, with their sizes, and exit")
+	return cmd
+}
+
+// ReportPendingDownloads discloses everything a start would download without
+// downloading or starting anything.
+func ReportPendingDownloads(w io.Writer) {
+	work := pendingImageWork()
+	if len(work) == 0 {
+		fmt.Fprintln(w, "Nothing to download: every image lerd needs is already in the local store.")
+		return
+	}
+	plan := make(imagepull.Plan, len(work))
+	for i, it := range work {
+		plan[i] = it.item
+	}
+	plan.Fill().Report(w)
 }
 
 // NewStopCmd returns the stop command.
@@ -719,8 +785,9 @@ func startRestoredServices() {
 		return
 	}
 
-	// Pull missing images first.
+	// Pull missing images first, disclosing the download before it starts.
 	var pullJobs []BuildJob
+	var plan imagepull.Plan
 	seen := map[string]bool{}
 	for _, unit := range units {
 		// PlatformImage covers a quadlet still on the upstream image from before
@@ -734,18 +801,14 @@ func startRestoredServices() {
 			continue
 		}
 		img := image
+		plan = append(plan, imagepull.Pull(img, "missing, needed by "+strings.TrimPrefix(unit, "lerd-")))
 		pullJobs = append(pullJobs, BuildJob{
 			Label: "Pulling " + img,
-			Run: func(w io.Writer) error {
-				args := append(append([]string{"pull"}, podman.PlatformPullArgs(img)...), img)
-				cmd := podman.Cmd(args...)
-				cmd.Stdout = w
-				cmd.Stderr = w
-				return cmd.Run()
-			},
+			Run:   func(w io.Writer) error { return podman.PullImageTo(img, w) },
 		})
 	}
 	if len(pullJobs) > 0 {
+		plan.Fill().Report(os.Stdout)
 		RunParallel(pullJobs) //nolint:errcheck
 	}
 

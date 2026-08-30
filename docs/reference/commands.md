@@ -5,7 +5,9 @@
 | Command | Description |
 |---|---|
 | `lerd install` | One-time setup: directories, network, binaries, DNS, nginx, watcher |
-| `lerd start` | Start DNS, nginx, PHP-FPM containers, and all installed services; warns about port conflicts and builds or pulls any missing images first |
+| `lerd start` | Start DNS, nginx, PHP-FPM containers, and all installed services; warns about port conflicts, and discloses every image it is about to pull or rebuild with its download size before building or pulling any that are missing |
+| `lerd start --dry-run` | Report the images a start would pull or rebuild, with their sizes, and exit without downloading or starting anything |
+| `lerd --no-pull <command>` | Global flag: skip image pulls and rebuilds unless the image is missing outright, so a metered connection is never spent refreshing something that already works. `LERD_OFFLINE=1` does the same for the dashboard, the watcher and the MCP server. Deferred PHP image rebuilds are picked up by the next `lerd php:rebuild` |
 | `lerd stop` | Stop nginx, PHP-FPM containers, and all running services; leaves the `lerd-dns` forwarder running as install-level plumbing so `.test` keeps resolving |
 | `lerd quit` | Stop all Lerd processes and containers including the UI, watcher, tray, and the `lerd-dns` forwarder; on macOS also stops the Podman Machine VM |
 | `lerd update` | Check for updates and update after confirmation; a package-managed install (apt, dnf, Homebrew) is deferred to that package manager |

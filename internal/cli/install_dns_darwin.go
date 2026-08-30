@@ -13,6 +13,7 @@ import (
 	"github.com/geodro/lerd/internal/config"
 	"github.com/geodro/lerd/internal/dns"
 	"github.com/geodro/lerd/internal/feedback"
+	"github.com/geodro/lerd/internal/imagepull"
 	"github.com/geodro/lerd/internal/podman"
 	"github.com/geodro/lerd/internal/services"
 )
@@ -137,6 +138,9 @@ func ensureDNSImageForStart() {}
 
 // pullDNSImages is a no-op on macOS — DNS runs natively.
 func pullDNSImages() []BuildJob { return nil }
+
+// dnsImagePlan is empty on macOS: native DNS downloads nothing.
+func dnsImagePlan() imagepull.Plan { return nil }
 
 // isDNSContainerUnit returns false on macOS since DNS uses a native service.
 func isDNSContainerUnit() bool { return false }

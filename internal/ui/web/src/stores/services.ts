@@ -2,6 +2,8 @@ import { m } from '../paraglide/messages.js';
 import { writable, derived, get } from 'svelte/store';
 import { apiJson, apiFetch } from '$lib/api';
 import { wsMessage } from '$lib/ws';
+import { pullSize } from '$lib/bytes';
+import { confirmDownload } from './downloadConfirm';
 import { sites } from './sites';
 import { groupByCategory, type CategoryGroup } from '$lib/presetCategories';
 
@@ -103,6 +105,7 @@ export interface PhaseEvent {
   state?: string;
   unit?: string;
   error?: string;
+  bytes?: number;
 }
 
 export interface UpdateProgress {
@@ -389,6 +392,12 @@ export async function streamServiceAction(
   action: UpdateAction,
   opts: { tag?: string; resetData?: boolean } = {}
 ): Promise<{ ok: boolean; error?: string }> {
+  // Every service action that can pull goes through here, so one confirmation
+  // covers update, migrate, rollback and reinstall.
+  if (!(await confirmDownload(serviceLabel(name), { service: name, action, tag: opts.tag || '' }))) {
+    return { ok: false };
+  }
+
   const params = new URLSearchParams();
   if (opts.tag) params.set('tag', opts.tag);
   if (action === 'reinstall' && opts.resetData) params.set('resetData', 'true');
@@ -433,7 +442,7 @@ export async function streamServiceAction(
         if (evt.phase === 'restore_warnings') finalWarning = evt.message || phaseLabel(evt.phase);
         const message =
           evt.phase === 'pulling_image' && evt.image
-            ? 'Pulling ' + evt.image
+            ? 'Pulling ' + evt.image + pullSize(evt.bytes)
             : evt.message || phaseLabel(evt.phase);
         setProgress(name, { phase: evt.phase, message });
       }

@@ -28,6 +28,7 @@ import (
 	"github.com/geodro/lerd/internal/eventbus"
 	"github.com/geodro/lerd/internal/feedback"
 	gitpkg "github.com/geodro/lerd/internal/git"
+	"github.com/geodro/lerd/internal/imagepull"
 	"github.com/geodro/lerd/internal/lifecycle"
 	"github.com/geodro/lerd/internal/nginx"
 	nodeDet "github.com/geodro/lerd/internal/node"
@@ -62,6 +63,10 @@ func notifyLerdUI(_ string) {
 	resp.Body.Close()
 }
 
+// noPull is bound to the root --no-pull flag and read once the flags are
+// parsed, in PersistentPreRunE.
+var noPull bool
+
 func main() {
 	// Cross-process bridge from CLI unit mutations to the running lerd-ui.
 	// ui.Start reassigns this in its own process for a direct in-process
@@ -90,6 +95,9 @@ func main() {
 		// this runs for every command.
 		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
+			if noPull {
+				imagepull.SetOffline(true)
+			}
 			// A package manager that upgraded lerd swapped the binary and ran
 			// nothing else, so the environment step `lerd update` performs for a
 			// self-updating install happens here instead. No-op otherwise.
@@ -104,6 +112,9 @@ func main() {
 			}
 		},
 	}
+
+	root.PersistentFlags().BoolVar(&noPull, "no-pull", false,
+		"Skip image pulls and rebuilds unless the image is missing outright (same as LERD_OFFLINE=1)")
 
 	// Register all subcommands
 	root.AddCommand(cli.NewInstallCmd())

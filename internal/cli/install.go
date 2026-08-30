@@ -16,6 +16,7 @@ import (
 	"github.com/geodro/lerd/internal/desktopapp"
 	"github.com/geodro/lerd/internal/dns"
 	"github.com/geodro/lerd/internal/feedback"
+	"github.com/geodro/lerd/internal/imagepull"
 	"github.com/geodro/lerd/internal/lifecycle"
 	"github.com/geodro/lerd/internal/nginx"
 	nodeDet "github.com/geodro/lerd/internal/node"
@@ -753,20 +754,22 @@ func runInstall(cmd *cobra.Command, _ []string) error {
 	// resolver. On macOS ConfigureResolver() redirects .test queries through
 	// lerd-dns; doing pulls first ensures the system DNS is intact for all
 	// registry traffic (docker.io, ghcr.io, etc.).
+	// The nginx image is declared once, in the quadlet template.
+	nginxImage := podman.ServiceImage("lerd-nginx")
 	pullJobs := []BuildJob{
 		{
-			Label: "Pulling nginx:alpine",
+			Label: "Pulling " + nginxImage,
 			Run: func(w io.Writer) error {
-				cmd := podman.Cmd("pull", "docker.io/library/nginx:alpine")
-				cmd.Stdout = w
-				cmd.Stderr = w
-				return cmd.Run()
+				return podman.PullImageTo(nginxImage, w)
 			},
 		},
 	}
+	plan := imagepull.Plan{imagepull.Pull(nginxImage, "the lerd web server image")}
 	if wantDNS {
 		pullJobs = append(pullJobs, pullDNSImages()...)
+		plan = append(plan, dnsImagePlan()...)
 	}
+	plan.Fill().Report(os.Stdout)
 	for _, job := range pullJobs {
 		step(job.Label)
 		if err := job.Run(io.Discard); err != nil {

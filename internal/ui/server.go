@@ -231,6 +231,7 @@ func Start(currentVersion string) error {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
+	mux.HandleFunc("/api/image-estimate", withCORS(handleImageEstimate))
 	mux.HandleFunc("/api/services/presets", withCORS(handleServicePresets))
 	mux.HandleFunc("/api/services/icons", withCORS(handleServiceIcons))
 	mux.HandleFunc("/api/frameworks/marks", withCORS(handleFrameworkMarks))
@@ -1902,6 +1903,38 @@ func handleWorkerMarks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, config.WorkerMarks())
 }
 
+// handleImageEstimate reports what a service or PHP operation would download,
+// so the
+// dashboard can disclose the size and let the user decline before any bytes
+// move. An operation that downloads nothing answers with an empty image.
+func handleImageEstimate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	q := r.URL.Query()
+	var (
+		out podman.PendingDownload
+		err error
+	)
+	switch {
+	case q.Get("preset") != "":
+		out, err = serviceops.PresetDownload(q.Get("preset"), q.Get("version"))
+	case q.Get("service") != "":
+		out, err = serviceops.ActionDownload(q.Get("service"), q.Get("action"), q.Get("tag"))
+	case q.Get("php") != "":
+		out = podman.PHPDownload(q.Get("php"))
+	default:
+		http.Error(w, "preset, service or php is required", http.StatusBadRequest)
+		return
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, out)
+}
+
 // handleServicePresetInstall installs a bundled preset and streams per-phase
 // progress as NDJSON so the UI can show what step is active and surface the
 // podman pull output instead of one opaque spinner.
@@ -2412,11 +2445,7 @@ func handleServiceAction(w http.ResponseWriter, r *http.Request) {
 		var targetImage string
 		if targetTag != "" {
 			if avail, err := serviceops.CheckUpdateAvailable(name); err == nil && avail.CurrentImage != "" {
-				if at := strings.LastIndex(avail.CurrentImage, ":"); at > 0 {
-					targetImage = avail.CurrentImage[:at] + ":" + targetTag
-				} else {
-					targetImage = avail.CurrentImage + ":" + targetTag
-				}
+				targetImage = serviceops.RetagImage(avail.CurrentImage, targetTag)
 			}
 		}
 		writeLine, _ := startNDJSONStream(w, r)
