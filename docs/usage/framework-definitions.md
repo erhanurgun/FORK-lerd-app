@@ -10,8 +10,9 @@ Lerd resolves framework definitions from multiple sources. Higher priority wins:
 |----------|--------|----------|---------|
 | 1 | User overlay | `~/.config/lerd/frameworks/<name>.yaml` | Manual overrides (merged on top) |
 | 2 | Project embedded | `.lerd.yaml` `framework_def` | Portability for user-defined frameworks |
-| 3 | Store-installed | `~/.local/share/lerd/frameworks/<name>@<version>.yaml` | Community definitions (auto-fetched) |
-| 4 | Built-in | Compiled into lerd binary | Laravel fallback only |
+| 3 | Store package layer | `~/.local/share/lerd/packages/<vendor>-<name>.yaml` | A composer package's own workers, commands and checks (merged on top, see below) |
+| 4 | Store-installed | `~/.local/share/lerd/frameworks/<name>@<version>.yaml` | Community definitions (auto-fetched) |
+| 5 | Built-in | Compiled into lerd binary | Laravel fallback only |
 
 Workers from the user overlay and project `.lerd.yaml` are merged on top of store or built-in definitions. See [Framework workers](framework-workers.md) for the worker lifecycle and how custom workers are added and managed.
 
@@ -22,6 +23,73 @@ A `.lerd.yaml` ships inside a project, so its embedded `framework_def` is treate
 
 A project's own host extensions still work, just with consent: a `host: true` entry in top-level `custom_workers`, and any top-level `commands:` you run via `lerd run` or the dashboard, prompt once showing the exact command before they run on your host, and the approval is remembered per site. Set `host_commands.skip_confirmation: true` (or `host_commands.disabled: true` to refuse them outright) in the global config to change that.
 :::
+
+## Package definitions
+
+Most of what a definition declares is not really the framework's. A Horizon worker belongs to `laravel/horizon`, a fixtures command to `doctrine/doctrine-fixtures-bundle`, and NativePHP's worker, commands and checks to `nativephp/electron` and `nativephp/mobile`. Written into the version files, each one has to be repeated in every major of every framework that can carry the package, and corrected in all of them at once.
+
+A package definition is that declaration written once, in the same store, as `packages/<vendor>-<name>.yaml`, a sibling of the `frameworks/` directory rather than something inside it, since a package is not a version of a framework. The composer name becomes the file name, the slash it carries being the only thing standing between it and a flat directory:
+
+```yaml
+package: nativephp/electron
+frameworks:                       # optional: which frameworks, and which majors
+  - name: laravel
+    min: "11"                     # inclusive; max: works the same way, either may be omitted
+workers:
+  native:
+    label: NativePHP
+    command: vendor/nativephp/electron/resources/js/resources/php/php artisan native:serve
+    host: true
+commands:
+  - name: native:build
+    label: Build desktop app
+    command: vendor/nativephp/electron/resources/js/resources/php/php artisan native:build
+setup:
+  - label: php artisan native:install
+    command: php artisan native:install
+    default: false
+doctor:
+  checks:
+    - name: nativephp_runtime
+      type: command
+      command: test -x vendor/nativephp/electron/resources/js/resources/php/php
+```
+
+Workers, commands, post-link setup steps and doctor checks are the whole schema, because that is what the duplication was made of. A `removes:` block takes entries away again, which is what a new major of the package needs (see below). Env wiring, detection and services stay with the framework, which is where they belong.
+
+The layer is merged onto the resolved definition when the project requires the package in its `composer.json`, and only for the frameworks the `frameworks:` list names. An empty list means every framework, which is right for a queue driver and wrong for `nativephp/electron`; `min` and `max` bound the framework majors it applies to, and are compared against the project's own major, so a Laravel 14 project still gets a package that declares `min: "11"`. The package wins any name collision: it is where the entry is maintained now, so a copy left behind in a version file is replaced rather than shadowing it, and the replacement keeps the position the definition listed it in. Your user overlay and a project's `.lerd.yaml` are merged after the package layer and still sit above it.
+
+### When a package major changes what lerd runs
+
+A package that has kept its interface is one file and says nothing about versions. When a major renames a command, moves a binary, or changes what a worker should run, that major gets a file of its own, `<vendor>-<name>@<major>.yaml`, and the index entry lists it:
+
+```json
+{"name": "drush/drush", "versions": ["13", "11"], "latest": "13"}
+```
+
+A versioned file serves its own major and every later one until the next versioned file, and the unversioned file serves everything below the first of them. So `drush-drush.yaml` keeps answering for Drush 10 and older, `@11` covers 11 and 12, `@13` covers 13 and up. Adding a major is adding one file: nothing that already worked has to be restated, and no project is moved onto a definition written for a version it does not have. A constraint no major can be read out of (`dev-main`, `*`) takes the latest, since a project tracking a branch is on the newest thing published.
+
+Publishing a major for a package that had one file asks every install for a file it has never fetched. Online that is one fetch, cached like any other. Offline, the newest cached file at or below that version answers instead, down to the unversioned one, so a worker a machine has been running for months does not disappear the day the store gains a version it cannot reach.
+
+Each file is the whole answer for the versions it serves, not a patch on the one before it, so a command that survived the major is repeated in the new file. What a new major *removes* has to be said out loud, because the copy the declaration was lifted out of is still sitting in the framework's own version files and silence there means keep it:
+
+```yaml
+package: laravel/horizon
+version: "6"
+removes:
+  commands:
+    - horizon:snapshot          # by name
+  workers:
+    - horizon-metrics
+  setup:
+    - Publish Horizon assets    # a setup step by its label, the only name it has
+  doctor:
+    - horizon_supervisor
+```
+
+Removals run after the merge, so a package can replace an entry and drop another in the same file.
+
+Only the packages listed under `packages` in the store index are ever looked up, so a project's dependency list never turns into a request for a file the store does not have. They are cached in `~/.local/share/lerd/packages/`, under the same file name the store serves, seeded by `lerd install`, refreshed by `lerd framework update` and on the same 24 hour window as a definition, so a package's worker resolves offline exactly like a framework's.
 
 ## Version resolution
 
