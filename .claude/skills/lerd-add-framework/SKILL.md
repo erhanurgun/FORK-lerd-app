@@ -23,7 +23,9 @@ and test against, but the pull request goes to **lerd-env/frameworks**.
    adjust. The existing YAML is the schema of record — do not invent fields.
 
 2. **Fill the sections that apply** (all keyed by real examples in the store):
-   - `name`, `version`, `label`, `public_dir`, `create` (scaffold command)
+   - `name`, `version`, `label`, `public_dir`, `create` (scaffold command,
+     which must constrain its package to the file's own major, e.g.
+     `composer create-project laravel/laravel:^12.0`)
    - `php.min` / `php.max` — the versions the framework supports
    - `detect` — marker file, lockfile, or `composer:` package that identifies it,
      including the major version
