@@ -1274,7 +1274,9 @@ func ensureServiceRunning(name string) error {
 	unit := "lerd-" + name
 	status, _ := podman.UnitStatus(unit)
 	if status != "active" {
-		envInterrupt(func() { fmt.Printf("  Starting %s...\n", name) })
+		// stderr: a passthrough child (php/console, e.g. a framework MCP server)
+		// owns stdout, and a progress line there corrupts its protocol stream.
+		envInterrupt(func() { fmt.Fprintf(os.Stderr, "  Starting %s...\n", name) })
 	}
 	return serviceops.EnsureServiceRunning(name)
 }
