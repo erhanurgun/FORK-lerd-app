@@ -661,36 +661,57 @@ func updateAllFrameworks(client *store.Client, showDiff bool) error {
 		return err
 	}
 
-	local := config.ListFrameworksDetailed()
+	// Refresh the same version that's cached; previously this fetched
+	// entry.Latest for every entry, so users with multiple versions
+	// (laravel@10..@13) ended up only refreshing the latest file and the others
+	// stayed stale forever.
+	var installed []config.FrameworkInfo
+	for _, info := range config.ListFrameworksDetailed() {
+		if info.Source == config.SourceBuiltIn || !frameworkInIndex(idx, info.Name) {
+			continue
+		}
+		installed = append(installed, info)
+	}
+	packages := packageRefreshTargets(idx)
+	total := len(installed) + len(packages)
+	if total == 0 {
+		feedback.Line("no frameworks to update")
+		return nil
+	}
+
+	// A diff per definition is the point of --check, so that run keeps its lines
+	// and only the plain update collapses into one.
+	var bar *feedback.Progress
+	if !showDiff {
+		bar = feedback.StartProgress(fmt.Sprintf("updating %d definition%s", total, pluralS(total)), total)
+	}
 	updated := 0
-	for _, info := range local {
-		if info.Source == config.SourceBuiltIn {
-			continue
+	report := func(label string, err error) {
+		switch {
+		case bar != nil && err != nil:
+			bar.Failed(label, err.Error())
+		case bar != nil:
+			bar.Step(label)
+			updated++
+		case err != nil:
+			feedback.Warn("%s: %v", label, err)
+		default:
+			feedback.Note("updated " + label)
+			updated++
 		}
-		// Refresh the same version that's cached; previously this fetched
-		// entry.Latest for every entry, so users with multiple versions
-		// (laravel@10..@13) ended up only refreshing the latest file and
-		// the others stayed stale forever.
-		inIndex := false
-		for _, entry := range idx.Frameworks {
-			if entry.Name == info.Name {
-				inIndex = true
-				break
-			}
-		}
-		if !inIndex {
-			continue
-		}
+	}
+
+	for _, info := range installed {
+		label := info.Name + "@" + info.Version
 		remote, fetchErr := client.FetchFramework(info.Name, info.Version)
 		if fetchErr != nil {
-			feedback.Warn("%s@%s: %v", info.Name, info.Version, fetchErr)
+			report(label, fetchErr)
 			continue
 		}
-
 		if showDiff {
 			changed, diffErr := showFrameworkDiff(info.Name, info.Framework, remote)
 			if diffErr != nil {
-				feedback.Warn("%s@%s: %v", info.Name, info.Version, diffErr)
+				report(label, diffErr)
 				continue
 			}
 			if !changed {
@@ -698,21 +719,38 @@ func updateAllFrameworks(client *store.Client, showDiff bool) error {
 				continue
 			}
 		}
-
 		if saveErr := config.SaveStoreFramework(remote); saveErr != nil {
-			feedback.Warn("%s@%s: %v", info.Name, info.Version, saveErr)
+			report(label, saveErr)
 			continue
 		}
 		config.RemoveUserFramework(info.Name)
-		feedback.Note(fmt.Sprintf("updated %s@%s", remote.Name, versionOrLatest(remote)))
-		updated++
+		report(info.Name+"@"+versionOrLatest(remote), nil)
+	}
+
+	for _, t := range packages {
+		report(t.label, t.fetch(client))
+	}
+
+	if bar != nil {
+		bar.Done(storeRefreshTally(bar.Completed(), bar.Failures()))
+		return nil
 	}
 	if updated == 0 {
 		feedback.Line("no frameworks to update")
 	} else {
-		feedback.Done(fmt.Sprintf("updated %d framework(s)", updated))
+		feedback.Done(fmt.Sprintf("updated %d definition(s)", updated))
 	}
 	return nil
+}
+
+// frameworkInIndex reports whether the store still publishes a framework.
+func frameworkInIndex(idx *store.Index, name string) bool {
+	for _, entry := range idx.Frameworks {
+		if entry.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func versionOrLatest(fw *config.Framework) string {

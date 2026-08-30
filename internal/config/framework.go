@@ -1116,6 +1116,12 @@ func copyBuiltin(name string) *Framework {
 		workers[k] = v
 	}
 	fw.Workers = workers
+	fw.Commands = append([]FrameworkCommand(nil), src.Commands...)
+	if src.Doctor != nil {
+		doctor := *src.Doctor
+		doctor.Checks = append([]DoctorCheck(nil), src.Doctor.Checks...)
+		fw.Doctor = &doctor
+	}
 	return &fw
 }
 
@@ -1314,24 +1320,26 @@ func GetFrameworkForDir(name, projectDir string) (*Framework, bool) {
 		if version != "" && version != base.Version {
 			base.DetectedVersion = version
 		}
-		base = mergeUserOverlay(base)
 		base = mergeBuiltinFrankenPHP(base)
 		base = mergeBuiltinTinker(base)
 		base = mergeBuiltinDoctor(base)
+		// Packages before the overlay: a package replaces what a version file
+		// declares, and the overlay is the user's last word over both.
+		base = mergeStorePackages(base, projectDir)
+		base = mergeUserOverlay(base)
 		return mergeProjectWorkers(base, projectDir), true
 	}
 
 	// 4. For built-ins (Laravel, Symfony), fall back to the built-in definition.
-	if builtinFramework(name) != nil {
-		fw, ok := GetFramework(name)
-		if ok {
-			return mergeProjectWorkers(fw, projectDir), true
-		}
+	if base := copyBuiltin(name); base != nil {
+		base = mergeStorePackages(base, projectDir)
+		base = mergeBuiltinTinker(mergeBuiltinFrankenPHP(mergeUserOverlay(base)))
+		return mergeProjectWorkers(base, projectDir), true
 	}
 
 	// 5. No store definition — check user-only definition (custom framework).
 	if fw := loadFrameworkYAML(filepath.Join(FrameworksDir(), name+".yaml")); fw != nil {
-		return mergeProjectWorkers(fw, projectDir), true
+		return mergeProjectWorkers(mergeStorePackages(fw, projectDir), projectDir), true
 	}
 
 	return nil, false
@@ -1441,10 +1449,13 @@ func loadFrameworkYAML(path string) *Framework {
 }
 
 // cloneFrameworkMutable returns a copy where the maps and slices that
-// mergeUserOverlay/mergeProjectWorkers/mergeBuiltinFrankenPHP touch are freshly
-// allocated. Inner FrameworkWorker/Setup/Log values are copied by value;
-// pointer fields inside them aren't cloned because the merges only replace
-// whole entries, never mutate them in place.
+// mergeUserOverlay/mergeProjectWorkers/mergeBuiltinFrankenPHP/mergeStorePackages
+// touch are freshly allocated. Inner FrameworkWorker/Setup/Log values are copied
+// by value; pointer fields inside them aren't cloned because the merges only
+// replace whole entries, never mutate them in place. Commands and the doctor's
+// checks are cloned for the same reason the rest are: yaml decodes a sequence
+// into a slice with room to spare, so appending a package's command to the
+// value this hands back would otherwise write into the cache two callers share.
 func cloneFrameworkMutable(in *Framework) *Framework {
 	if in == nil {
 		return nil
@@ -1465,6 +1476,14 @@ func cloneFrameworkMutable(in *Framework) *Framework {
 	if in.FrankenPHP != nil {
 		cp := *in.FrankenPHP
 		out.FrankenPHP = &cp
+	}
+	if in.Commands != nil {
+		out.Commands = append([]FrameworkCommand(nil), in.Commands...)
+	}
+	if in.Doctor != nil {
+		cp := *in.Doctor
+		cp.Checks = append([]DoctorCheck(nil), in.Doctor.Checks...)
+		out.Doctor = &cp
 	}
 	return &out
 }

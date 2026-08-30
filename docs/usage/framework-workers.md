@@ -132,6 +132,10 @@ Some plugin middleware registers itself ahead of the tool's own base handling an
 
 When [idle-suspend](/usage/idle-suspend) is enabled it stops every one of a site's workers once the site has been idle, so workers carry no special configuration for it. A worker marked `per_worktree: true` (Vite is the only one by default) is suspended per worktree, on each worktree's own idle timer.
 
+## Workers a package brings
+
+A worker gated on a composer package belongs to the package, not to the framework major it happens to be written in, so the store lets it be declared once in `packages/<vendor>-<name>.yaml` and merges it onto whatever definition the project resolved. It behaves like any other framework worker from there: same commands, same tuning flags, same lifecycle. See [package definitions](framework-definitions.md#package-definitions) for the schema and how a package narrows itself to a framework and a range of its majors.
+
 ## Project-specific custom workers
 
 Add workers to `.lerd.yaml` for project-specific needs that don't belong in the framework definition:
