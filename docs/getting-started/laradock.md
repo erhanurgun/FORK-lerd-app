@@ -1,10 +1,7 @@
 ---
 title: Laradock alternative
-description: 'Laradock gives every project its own Docker Compose stack and a workspace container. Lerd replaces it with one shared rootless Podman environment: automatic .test domains, HTTPS, per-project PHP 7.4 to 8.5, and no docker-compose.yml in the repo.'
+description: 'Laradock puts a submodule in your repo and a workspace container between you and artisan. Lerd removes both: composer and artisan run from your own shell, images are pulled rather than built from source, and one shared nginx and service layer serves every project on its own .test domain.'
 head:
-  - - meta
-    - name: keywords
-      content: laradock alternative, laradock replacement, laradock linux, laradock too slow, laradock vs, migrate from laradock, laradock without docker, local php development linux, laradock laravel alternative
   - - script
     - type: application/ld+json
     - |
@@ -17,7 +14,7 @@ head:
             "name": "What is the best Laradock alternative?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Lerd, if the part of Laradock you want to keep is having every service available and the part you want to lose is a Compose stack and a workspace container per project. Lerd runs one shared nginx, PHP-FPM and service layer as rootless Podman containers, gives each project a .test domain and HTTPS automatically, and needs no files committed to the repo. DDEV and Lando are the alternatives if you would rather stay on per-project Docker."
+              "text": "Lerd, if what you want to keep from Laradock is having every service on tap and what you want to lose is the workspace container and the submodule in the repo. Lerd pulls prebuilt images instead of building them from source, runs composer and artisan from your own shell rather than through docker compose exec, and lets the project directory live wherever you keep it instead of beside a laradock checkout. DDEV and Lando are the alternatives if you would rather stay on a per-project Docker stack."
             }
           },
           {
@@ -58,17 +55,21 @@ head:
 
 # Laradock alternative
 
-[Laradock](https://laradock.io) solved a real problem: every service a PHP project might want, prebuilt, behind one `docker-compose.yml`. The cost is the shape it leaves behind. A `laradock/` submodule inside the repo, a Compose file and an `.env` to keep in sync, a `workspace` container you have to shell into before you can run `artisan` or `composer`, images that build from source the first time, and one full stack per project when you have four projects open.
-
-**Lerd keeps the useful half and drops the rest.** One shared nginx, one PHP-FPM per version and one instance of each service, all as rootless Podman containers under your own user. Every project gets a `.test` domain and a trusted certificate automatically. Nothing is committed to the repo, nothing is built from source, and `composer` and `artisan` run from your own shell.
+**Laradock puts two things between you and your project: a `laradock/` checkout inside the repo, and a `workspace` container you have to shell into before `artisan` will run.** Lerd removes both. Tooling runs from your own shell, in your own directory, against your own files.
 
 ```bash
 curl -fsSL https://lerd.sh/install.sh | bash
 cd ~/code/myapp
 lerd link
+lerd composer install
+lerd artisan migrate
 ```
 
-Your project is live at `https://myapp.test`. No Compose file, no workspace container, no port to remember.
+No `docker compose exec workspace bash` first, no Compose file in the repo, no port to remember. The project is live at `https://myapp.test` with a trusted certificate.
+
+[Laradock](https://laradock.io) solved a real problem, and solved it early: every service a PHP project might want, behind one `docker-compose.yml`. What dates it is the shape it leaves behind. A submodule and an `.env` to keep in sync, a parent folder the project has to sit inside because `APP_CODE_PATH_HOST` points at it, images that compile from source on first run, and one full stack per project once four repos are open at the same time.
+
+Lerd keeps the part that was worth having, every service one command away, and drops the rest. Images are pulled, not built. One nginx, one PHP-FPM per version and one instance of each service are shared across every site, as rootless Podman containers under your own user, so the memory cost stops scaling with how many projects you have open.
 
 ## Every Laradock habit, and the Lerd equivalent
 
@@ -165,7 +166,7 @@ Full detail lives in the [quick start](/getting-started/quick-start) and the [si
 
 These are the places where the mental model changes, worth knowing before you commit to the move:
 
-- **Services are shared, not per project.** One MySQL, one Redis, one Mailpit across every site. That is where the memory saving comes from, and it is also the one thing Laradock does that Lerd does not: pinning a different MySQL major version per project.
+- **Services are shared, not per project.** One MySQL, one Redis, one Mailpit across every site, which is where the memory saving comes from. It is also the one thing Laradock does that Lerd does not: uncommenting a second database service and pinning a different MySQL major version for one project.
 - **No workspace container.** PHP tooling runs through `lerd php`, `lerd composer` and `lerd artisan`, which execute in the project's PHP container but from your own shell, in your own directory, with your own files. There is nothing to `exec` into first.
 - **The environment is not in the repo.** Instead of a committed Compose file, you commit an optional [`.lerd.yaml`](/configuration#per-project-config-lerd-yaml) describing the PHP version, Node version, services and workers. A teammate with Lerd installed gets the same environment from it; a teammate without Lerd is unaffected, since nothing else in the project changed.
 - **Nginx, not Apache.** If a project leaned on Laradock's Apache container and `.htaccess` rules, translate them into an [nginx override](/usage/nginx-overrides).
