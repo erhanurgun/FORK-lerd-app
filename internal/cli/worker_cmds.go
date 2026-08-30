@@ -2,8 +2,8 @@ package cli
 
 import (
 	"fmt"
+	"maps"
 	"os"
-	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -153,7 +153,7 @@ func workerDisplayName(name string, w config.FrameworkWorker) string {
 }
 
 func newGeneratedWorkerStartCmd(use, name string, w config.FrameworkWorker) *cobra.Command {
-	flags := workerTuneFlags(w)
+	flags := config.WorkerTuneFlags(w)
 	values := make(map[string]*string, len(flags))
 
 	cmd := &cobra.Command{
@@ -271,11 +271,9 @@ func runWorkerStart(name string, tuned map[string]string) error {
 	if err != nil {
 		return err
 	}
-	command, err := renderTuneCommand(w, tuned)
-	if err != nil {
+	if err := persistWorkerOptions(cwd, name, w, tuned); err != nil {
 		return err
 	}
-	w.Command = command
 
 	if err := WorkerStartForSite(site.Name, cwd, phpVersion, name, w, true); err != nil {
 		return err
@@ -332,7 +330,9 @@ func StartFrameworkWorker(siteName, sitePath, phpVersion, workerName string) err
 }
 
 // StartFrameworkWorkerTuned starts the worker with values substituted into its
-// tune_command placeholders. An empty map runs the plain command.
+// tune_command placeholders, persisting them to the project's .lerd.yaml first
+// so the next start runs the same command. An empty map keeps whatever the
+// project already committed.
 func StartFrameworkWorkerTuned(siteName, sitePath, phpVersion, workerName string, values map[string]string) error {
 	fw, ok := config.GetFrameworkForDir(siteFrameworkName(siteName), sitePath)
 	if !ok {
@@ -342,11 +342,9 @@ func StartFrameworkWorkerTuned(siteName, sitePath, phpVersion, workerName string
 	if err != nil {
 		return err
 	}
-	command, err := renderTuneCommand(w, values)
-	if err != nil {
+	if err := persistWorkerOptions(sitePath, workerName, w, values); err != nil {
 		return err
 	}
-	w.Command = command
 	return WorkerStartForSite(siteName, sitePath, phpVersion, workerName, w, true)
 }
 
@@ -383,6 +381,46 @@ func ApplyWorkerReload(siteName, sitePath, phpVersion, workerName string, enable
 	return nil
 }
 
+// ApplyWorkerOptions replaces the values a project persists for a worker's
+// tune_command placeholders and, when the worker is running, restarts it so the
+// new command takes effect immediately. A value left empty or equal to the
+// definition's default is dropped, so .lerd.yaml carries only what the project
+// actually changed and a later store update to the default still lands.
+func ApplyWorkerOptions(siteName, sitePath, phpVersion, workerName string, values map[string]string) error {
+	fw, ok := config.GetFrameworkForDir(siteFrameworkName(siteName), sitePath)
+	if !ok {
+		return fmt.Errorf("no framework found for site %q", siteName)
+	}
+	w, err := frameworkWorkerFrom(fw, workerName)
+	if err != nil {
+		return err
+	}
+	kept := map[string]string{}
+	for _, f := range config.WorkerTuneFlags(w) {
+		v := strings.TrimSpace(values[f.Name])
+		if v == "" || v == f.Default {
+			continue
+		}
+		kept[f.Name] = v
+	}
+	if _, err := config.RenderTuneCommand(w, kept); err != nil {
+		return err
+	}
+	if err := config.SetProjectWorkerOptions(sitePath, workerName, kept); err != nil {
+		return err
+	}
+	if !workerRunningForSite(siteName, workerName) {
+		return nil
+	}
+	if err := StopFrameworkWorker(siteName, workerName); err != nil {
+		return fmt.Errorf("stop %s: %w", workerName, err)
+	}
+	if err := StartFrameworkWorker(siteName, sitePath, phpVersion, workerName); err != nil {
+		return fmt.Errorf("restart %s: %w", workerName, err)
+	}
+	return nil
+}
+
 // workerRunningForSite reports whether the named site currently runs the worker.
 func workerRunningForSite(siteName, workerName string) bool {
 	site, err := config.FindSite(siteName)
@@ -392,96 +430,38 @@ func workerRunningForSite(siteName, workerName string) bool {
 	return slices.Contains(CollectRunningWorkerNames(site), workerName)
 }
 
-// workerTuneFlag is one flag a worker declares through its tune_command.
-type workerTuneFlag struct {
-	Name    string
-	Default string
-}
-
-var tunePlaceholderRe = regexp.MustCompile(`\{([a-zA-Z][a-zA-Z0-9_-]*)\}`)
-
-// workerTuneFlags reads the flags a worker declares through its tune_command
-// placeholders, in the order they appear. Each default is recovered by matching
-// the template against the plain command, so --queue offers whatever the
-// definition already runs without the value being repeated anywhere. A
-// placeholder the plain command has no counterpart for gets no default and has
-// to be passed.
-func workerTuneFlags(w config.FrameworkWorker) []workerTuneFlag {
-	if w.TuneCommand == "" {
+// persistWorkerOptions writes the values a start passed for a worker's
+// tune_command placeholders to the project's .lerd.yaml, on top of the ones
+// already there, so a start that tunes only --queue keeps the tries the project
+// committed earlier. Nothing passed leaves the file alone. The values are
+// rendered here first so an unusable one is refused at the point it is given,
+// rather than persisted and warned about on every later start.
+func persistWorkerOptions(sitePath, workerName string, w config.FrameworkWorker, values map[string]string) error {
+	if len(values) == 0 {
 		return nil
 	}
-	var names, segments []string
-	rest := w.TuneCommand
-	for {
-		loc := tunePlaceholderRe.FindStringSubmatchIndex(rest)
-		if loc == nil {
-			segments = append(segments, rest)
-			break
-		}
-		segments = append(segments, rest[:loc[0]])
-		names = append(names, rest[loc[2]:loc[3]])
-		rest = rest[loc[1]:]
+	merged := map[string]string{}
+	maps.Copy(merged, config.ProjectWorkerOptions(sitePath, workerName))
+	maps.Copy(merged, values)
+	if _, err := config.RenderTuneCommand(w, merged); err != nil {
+		return err
 	}
-
-	flags := make([]workerTuneFlag, 0, len(names))
-	pos := 0
-	for i, name := range names {
-		var def string
-		def, pos = tuneDefault(w.Command, segments[i], segments[i+1], pos)
-		flags = append(flags, workerTuneFlag{Name: name, Default: def})
-	}
-	return flags
+	return config.SetProjectWorkerOptions(sitePath, workerName, merged)
 }
 
-// tuneDefault recovers one placeholder's value from the plain command by
-// locating the literal text the template puts around it. Returns "" and -1 when
-// that text isn't there, which ends the scan: without a fixed point the later
-// placeholders can't be located either.
-func tuneDefault(command, before, after string, from int) (string, int) {
-	if from < 0 || from > len(command) {
-		return "", -1
+// projectTunedCommand renders the worker's command with the options the project
+// persisted in .lerd.yaml. A set of options the definition can't substitute
+// (a value with whitespace, a placeholder with neither value nor default) warns
+// and runs the declared command rather than a half-rendered one.
+func projectTunedCommand(sitePath, workerName string, w config.FrameworkWorker) string {
+	values := config.ProjectWorkerOptions(sitePath, workerName)
+	if len(values) == 0 {
+		return w.Command
 	}
-	idx := strings.Index(command[from:], before)
-	if idx < 0 {
-		return "", -1
+	command, err := config.RenderTuneCommand(w, values)
+	if err != nil {
+		feedback.Warn("worker %s: %v, running %s", workerName, err, w.Command)
+		return w.Command
 	}
-	start := from + idx + len(before)
-	if after == "" {
-		return command[start:], len(command)
-	}
-	end := strings.Index(command[start:], after)
-	if end < 0 {
-		// The template says more than the plain command does (CodeIgniter takes
-		// the queue positionally and never spells its -tries= default), so the
-		// rest of the command is this placeholder's value and the ones after it
-		// have no default.
-		return command[start:], len(command)
-	}
-	return command[start : start+end], start + end
-}
-
-// renderTuneCommand substitutes values into the worker's tune_command. With
-// nothing overridden the plain command is returned verbatim, so a start with no
-// flags runs exactly what the definition declares.
-func renderTuneCommand(w config.FrameworkWorker, values map[string]string) (string, error) {
-	if w.TuneCommand == "" || len(values) == 0 {
-		return w.Command, nil
-	}
-	command := w.TuneCommand
-	for _, f := range workerTuneFlags(w) {
-		value := values[f.Name]
-		if value == "" {
-			value = f.Default
-		}
-		if value == "" {
-			return "", fmt.Errorf("--%s must be given: the framework definition declares no default for {%s}", f.Name, f.Name)
-		}
-		// The value is interpolated into the command the worker's unit runs, so
-		// whitespace or a newline could add an argument or a systemd directive.
-		if strings.ContainsAny(value, " \t\r\n") {
-			return "", fmt.Errorf("invalid --%s value: must not contain whitespace", f.Name)
-		}
-		command = strings.ReplaceAll(command, "{"+f.Name+"}", value)
-	}
-	return command, nil
+	return command
 }

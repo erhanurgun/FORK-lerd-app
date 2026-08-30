@@ -121,6 +121,40 @@ func removeWorkerName(names []string, name string) []string {
 	return slices.DeleteFunc(names, func(w string) bool { return w == name })
 }
 
+// SetProjectWorkerOptions persists the values for a worker's tune_command
+// placeholders, replacing whatever that worker had. Empty values drop the
+// worker's entry. Setting creates .lerd.yaml when it does not exist, so the
+// options survive a restart the way the flags that produced them could not;
+// clearing on a project with no file is a no-op, since there is nothing to
+// forget.
+func SetProjectWorkerOptions(dir, name string, values map[string]string) error {
+	if len(values) == 0 {
+		return updateProjectConfig(dir, func(cfg *ProjectConfig) {
+			delete(cfg.WorkerOptions, name)
+			if len(cfg.WorkerOptions) == 0 {
+				cfg.WorkerOptions = nil
+			}
+		})
+	}
+
+	cfg, err := LoadProjectConfig(dir)
+	if err != nil {
+		return err
+	}
+	if cfg == nil {
+		cfg = &ProjectConfig{}
+	}
+	if cfg.WorkerOptions == nil {
+		cfg.WorkerOptions = make(map[string]map[string]string)
+	}
+	opts := make(map[string]string, len(values))
+	for k, v := range values {
+		opts[k] = v
+	}
+	cfg.WorkerOptions[name] = opts
+	return SaveProjectConfig(dir, cfg)
+}
+
 // SetProjectDomains replaces the domains list. No-op if .lerd.yaml does not exist.
 func SetProjectDomains(dir string, domains []string) error {
 	return updateProjectConfig(dir, func(cfg *ProjectConfig) {

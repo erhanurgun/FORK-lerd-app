@@ -152,6 +152,7 @@ A portable, self-contained description of a project's local environment. Created
 | `env_overrides` | Map of env var names to templated or static values applied to `.env` on `lerd setup` and to per-worktree `.env` files when worktrees are created. Values may use <code v-pre>{{domain}}</code>, <code v-pre>{{scheme}}</code>, <code v-pre>{{site}}</code>, <code v-pre>{{branch}}</code>, and <code v-pre>{{parent}}</code> placeholders, or be plain strings. When `APP_URL` is in `env_overrides` it takes precedence over the default rewrite; declared keys override defaults, undeclared defaults still apply. The one exception is `DB_DATABASE` on a worktree whose `db_isolated` is true: the isolation flow owns that key and the watcher won't re-render it from the parent's template until isolation is turned back off. See [Env overrides](./features/git-worktrees.md#env-overrides) |
 | `services` | Services to start on apply. Accepts built-in names, custom service names, or full inline definitions |
 | `workers` | Active worker names for the site (e.g. `queue`, `horizon`, `schedule`, `reverb`, `stripe`). Automatically kept in sync by start/stop commands. Used by `lerd start` to restore workers after reinstall |
+| `worker_options` | Values for a worker's tunable options, keyed by worker name then option (e.g. `queue: {queue: high,default,low}`). Written by `lerd queue:start --queue …` and by the dashboard's worker gear; read by every later start, so the project's own queues and limits survive a restart, a reinstall and a fresh clone. See [Worker options](./usage/queue-workers.md#worker-options) |
 | `container` | Custom container config for non-PHP sites. When present, lerd builds a dedicated container from the project's Containerfile and nginx reverse-proxies to it. See below and [Custom Containers](./usage/custom-containers.md) |
 | `custom_workers` | Custom worker definitions (name to config map). Works for both PHP and custom container sites. See below |
 | `db` | Database targeting for non-PHP projects: `service` (e.g. `mysql`, `postgres`) and `database` name |
@@ -246,6 +247,19 @@ custom_workers:
 | `replaces_build` | no | `false` | While running, the worker provides the asset manifest so the static `npm run build` step is unnecessary. `lerd worktree add` skips its build prompt when an opted-in `replaces_build` worker is present |
 
 Worker definitions stay in `custom_workers` permanently. The `workers` field (a separate list of names) tracks which are currently active and is synced automatically by start/stop commands.
+
+#### Worker options
+
+A framework worker that declares a `tune_command` exposes the values a project may want to change (Laravel's queue worker: `queue`, `tries`, `timeout`). They are persisted per worker under `worker_options` and applied on every start, so tuning survives the restart that produced it:
+
+```yaml
+worker_options:
+  queue:
+    queue: high,default,low
+    tries: "5"
+```
+
+A value equal to the framework's own default is not written, values may not contain whitespace, and an option the definition does not declare is ignored. See [Worker options](./usage/queue-workers.md#worker-options).
 
 Framework yamls (under `lerd-frameworks/frameworks/<framework>/<version>.yaml`) declare workers under a sibling `workers:` block with the same shape, so `host`, `per_worktree`, and `replaces_build` apply there too. Every framework yaml that builds assets with vite (Laravel 9+, Statamic 4+, Symfony 5+, CakePHP 4+, Tempest) uses this for `vite` (`host: true`, `per_worktree: true`, `replaces_build: true`), gated on `node_modules/vite` so the worker only appears once the project actually installs a dev server, and any custom framework can do the same to teach lerd about per-branch dev servers.
 

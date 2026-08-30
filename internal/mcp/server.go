@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/geodro/lerd/internal/agentenv"
@@ -554,7 +555,7 @@ func execSiteNginxReset(args map[string]any) (any, *rpcError) {
 // cross-platform worker lifecycle) so the queue tools reuse it without a
 // cli -> mcp -> cli import cycle.
 var (
-	QueueStartFn func(siteName, sitePath, phpVersion, queue string, tries, timeout int) error
+	QueueStartFn func(siteName, sitePath, phpVersion string, options map[string]string) error
 	QueueStopFn  func(siteName string) error
 )
 
@@ -574,25 +575,35 @@ func execQueueStart(args map[string]any) (any, *rpcError) {
 		phpVersion = detected
 	}
 
-	queue := strArg(args, "queue")
-	if queue == "" {
-		queue = "default"
+	// Only the arguments the caller passed are sent on: they are persisted to
+	// the project's .lerd.yaml, so filling in defaults here would overwrite the
+	// queues a project committed every time a plain queue_start ran.
+	options := map[string]string{}
+	if queue := strArg(args, "queue"); queue != "" {
+		// The queue name is interpolated into the worker command; whitespace or a
+		// newline could inject extra arguments or a systemd directive.
+		if strings.ContainsAny(queue, " \t\r\n") {
+			return toolErr("invalid queue name: must not contain whitespace"), nil
+		}
+		options["queue"] = queue
 	}
-	// The queue name is interpolated into the worker command; whitespace or a
-	// newline could inject extra arguments or a systemd directive.
-	if strings.ContainsAny(queue, " \t\r\n") {
-		return toolErr("invalid queue name: must not contain whitespace"), nil
+	if tries := intArg(args, "tries", 0); tries > 0 {
+		options["tries"] = strconv.Itoa(tries)
 	}
-	tries := intArg(args, "tries", 3)
-	timeout := intArg(args, "timeout", 60)
+	if timeout := intArg(args, "timeout", 0); timeout > 0 {
+		options["timeout"] = strconv.Itoa(timeout)
+	}
 
 	if QueueStartFn == nil {
 		return toolErr("queue control unavailable"), nil
 	}
-	if err := QueueStartFn(siteName, site.Path, phpVersion, queue, tries, timeout); err != nil {
+	if err := QueueStartFn(siteName, site.Path, phpVersion, options); err != nil {
 		return toolErr(err.Error()), nil
 	}
-	return toolOK(fmt.Sprintf("Queue worker started for %s (queue: %s)", siteName, queue)), nil
+	if q, ok := options["queue"]; ok {
+		return toolOK(fmt.Sprintf("Queue worker started for %s (queue: %s)", siteName, q)), nil
+	}
+	return toolOK("Queue worker started for " + siteName), nil
 }
 
 func execQueueStop(args map[string]any) (any, *rpcError) {

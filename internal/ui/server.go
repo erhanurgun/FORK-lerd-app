@@ -902,10 +902,14 @@ type SiteResponse struct {
 	HasQueueWorker     bool           `json:"has_queue_worker"`
 	HasScheduleWorker  bool           `json:"has_schedule_worker"`
 	FrameworkWorkers   []WorkerStatus `json:"framework_workers,omitempty"`
-	HasAppLogs         bool           `json:"has_app_logs"`
-	HasFavicon         bool           `json:"has_favicon"`
-	HasEnv             bool           `json:"has_env"`
-	Paused             bool           `json:"paused"`
+	// WorkerOptions maps a worker name to the values its framework definition
+	// lets a project change, so the dashboard can offer the same knobs the
+	// `lerd <worker>:start` flags expose. Only tunable workers appear.
+	WorkerOptions map[string][]config.WorkerTuneOption `json:"worker_options,omitempty"`
+	HasAppLogs    bool                                 `json:"has_app_logs"`
+	HasFavicon    bool                                 `json:"has_favicon"`
+	HasEnv        bool                                 `json:"has_env"`
+	Paused        bool                                 `json:"paused"`
 	// Pinned excludes the site from idle-suspend (kept always-warm).
 	Pinned bool `json:"pinned,omitempty"`
 	// LastActive is the unix-seconds time the site last saw a request, from the
@@ -1178,6 +1182,7 @@ func buildSites() ([]SiteResponse, error) {
 			HasQueueWorker:       e.HasQueueWorker,
 			HasScheduleWorker:    e.HasScheduleWorker,
 			FrameworkWorkers:     fwWorkers,
+			WorkerOptions:        e.WorkerOptions,
 			HasAppLogs:           e.HasAppLogs,
 			HasFavicon:           e.HasFavicon,
 			HasEnv:               siteHasEnv(e.FrameworkName, e.Path),
@@ -4626,6 +4631,27 @@ func handleSiteAction(w http.ResponseWriter, r *http.Request) {
 		// lerd-<wname>-<site>-<wtBase> instead of the parent's lerd-<wname>-<site>.
 		if strings.HasPrefix(action, "worker:") {
 			parts := strings.SplitN(action, ":", 3)
+			// worker:{name}:options saves the values for the worker's
+			// tune_command placeholders to .lerd.yaml and restarts it if running.
+			if len(parts) == 3 && parts[2] == "options" {
+				var body struct {
+					Values map[string]string `json:"values"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					writeJSON(w, SiteActionResponse{Error: "invalid request body"})
+					return
+				}
+				phpVersion := site.PHPVersion
+				if detected, err := phpPkg.DetectVersion(site.Path); err == nil && detected != "" {
+					phpVersion = detected
+				}
+				if err := cli.ApplyWorkerOptions(site.Name, site.Path, phpVersion, parts[1], body.Values); err != nil {
+					writeJSON(w, SiteActionResponse{Error: err.Error()})
+					return
+				}
+				writeJSON(w, SiteActionResponse{OK: true})
+				return
+			}
 			if len(parts) == 3 && (parts[2] == "start" || parts[2] == "stop") {
 				workerName := parts[1]
 				branch := r.URL.Query().Get("branch")
