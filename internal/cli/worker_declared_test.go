@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/geodro/lerd/internal/config"
+	"github.com/geodro/lerd/internal/services"
 )
 
 // listUnitsMgr answers the unit-file listing off a fixed set, which is what
@@ -18,6 +19,15 @@ type listUnitsMgr struct {
 
 func (l *listUnitsMgr) ListServiceUnits(string) []string { return slices.Clone(l.units) }
 func (l *listUnitsMgr) ListTimerUnits(string) []string   { return nil }
+
+// useServiceMgr installs m for the duration of the test. The linux-only test
+// files have their own swap helper; this one has to build on macOS too.
+func useServiceMgr(t *testing.T, m services.ServiceManager) {
+	t.Helper()
+	prev := services.Mgr
+	services.Mgr = m
+	t.Cleanup(func() { services.Mgr = prev })
+}
 
 // writeWorkerFrameworkFixture puts a store definition carrying the named
 // workers where GetFrameworkForDir will resolve it for a site on that framework.
@@ -52,7 +62,7 @@ func TestCollectDeclaredWorkerNames_keepsAWorkerThatIsNotRunning(t *testing.T) {
 
 	sitePath := filepath.Join(t.TempDir(), "app")
 	writeWorkerFrameworkFixture(t, sitePath, "queue", "horizon")
-	swapServiceMgr(t, &listUnitsMgr{units: []string{"lerd-queue-app", "lerd-horizon-app"}})
+	useServiceMgr(t, &listUnitsMgr{units: []string{"lerd-queue-app", "lerd-horizon-app"}})
 
 	got := CollectDeclaredWorkerNames(&config.Site{Name: "app", Path: sitePath, Framework: "laravel"})
 	for _, want := range []string{"queue", "horizon"} {
@@ -70,7 +80,7 @@ func TestCollectDeclaredWorkerNames_dropsAWorkerWithNoUnit(t *testing.T) {
 
 	sitePath := filepath.Join(t.TempDir(), "app")
 	writeWorkerFrameworkFixture(t, sitePath, "queue", "horizon")
-	swapServiceMgr(t, &listUnitsMgr{units: []string{"lerd-queue-app"}})
+	useServiceMgr(t, &listUnitsMgr{units: []string{"lerd-queue-app"}})
 
 	got := CollectDeclaredWorkerNames(&config.Site{Name: "app", Path: sitePath, Framework: "laravel"})
 	if slices.Contains(got, "horizon") {
