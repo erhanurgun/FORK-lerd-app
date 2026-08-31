@@ -9,7 +9,7 @@
 | Platforms | Linux (systemd), macOS | macOS, Windows |
 | License | Open source (MIT) | Proprietary, freemium (Herd Pro subscription) |
 | PHP runtime | Rootless Podman containers | Native binaries on macOS and Windows |
-| PHP versions | 8.1, 8.2, 8.3, 8.4, 8.5 (shared FPM containers) | 7.4 through 8.5 (native) |
+| PHP versions | 8.1, 8.2, 8.3, 8.4, 8.5, the 8.6 prerelease, plus legacy 7.4 and 8.0 (shared FPM containers) | 7.4 through 8.5 (native) |
 | FrankenPHP / Octane | Built in: `lerd runtime frankenphp [--worker]` per site, free | Not built in; Octane runs manually alongside Herd |
 | `.test` domains | Automatic via dnsmasq container | Automatic via native dnsmasq resolver |
 | HTTPS | `lerd secure` + mkcert, trusted system-wide | Built-in "Secure Site" toggle |
@@ -69,7 +69,7 @@ See [Laragon for Linux](/getting-started/laragon-linux) for the feature-by-featu
 | License | Open source (MIT) | Open source (MIT) |
 | Container runtime | Rootless Podman | Docker Desktop / Orbstack / Colima |
 | Architecture | One shared nginx + PHP-FPM + services across every site | Per-project Docker Compose stack |
-| PHP versions | 8.1, 8.2, 8.3, 8.4, 8.5 (shared FPM containers) | Per-project Sail image (8.2, 8.3, 8.4) |
+| PHP versions | 8.1, 8.2, 8.3, 8.4, 8.5, the 8.6 prerelease, plus legacy 7.4 and 8.0 (shared FPM containers) | Per-project Sail image (8.2, 8.3, 8.4) |
 | Services (MySQL, Redis…) | One shared instance | Per-project (or manually shared) |
 | `.test` domains | Automatic, zero config | Manual `/etc/hosts` or `localhost:${APP_PORT}` per project |
 | HTTPS | `lerd secure` for trusted mkcert cert instantly | Manual or roll your own mkcert |
@@ -108,7 +108,7 @@ See [Laravel Sail alternative](/getting-started/sail) for the full migration gui
 | License | Open source (MIT) | Open source (Apache 2.0) |
 | Container runtime | Rootless Podman | Docker / Podman / Orbstack / Colima |
 | Architecture | Shared nginx + PHP-FPM across all projects | Per-project containers behind a shared reverse proxy |
-| PHP versions | 8.1, 8.2, 8.3, 8.4, 8.5 (shared FPM containers) | 5.6 through 8.4+ (per-project Docker image) |
+| PHP versions | 8.1, 8.2, 8.3, 8.4, 8.5, the 8.6 prerelease, plus legacy 7.4 and 8.0 (shared FPM containers) | 5.6 through 8.4+ (per-project Docker image) |
 | Services (MySQL, Redis…) | One shared instance | Per-project (isolated by default) |
 | Domains | `.test`, automatic | `.ddev.site` or custom, automatic via the built-in proxy |
 | HTTPS | `lerd secure` for trusted mkcert cert instantly | Built-in via mkcert |
@@ -137,7 +137,7 @@ See [Laravel Sail alternative](/getting-started/sail) for the full migration gui
 | License | Open source (MIT) | Open source (GPL-3.0) |
 | Container runtime | Rootless Podman | Docker |
 | Architecture | Shared nginx + PHP-FPM across all projects | Per-project containers behind a shared proxy |
-| PHP versions | 8.1, 8.2, 8.3, 8.4, 8.5 (shared FPM containers) | Per-project, set in the recipe or `.lando.yml` |
+| PHP versions | 8.1, 8.2, 8.3, 8.4, 8.5, the 8.6 prerelease, plus legacy 7.4 and 8.0 (shared FPM containers) | Per-project, set in the recipe or `.lando.yml` |
 | Services (MySQL, Redis…) | One shared instance | Per-project (isolated by default) |
 | Domains | `.test`, automatic | `*.lndo.site`, automatic via the proxy |
 | HTTPS | `lerd secure` for a trusted mkcert cert instantly | Built-in, per-project certificate |

@@ -22,6 +22,7 @@
 | `lerd path:enable` | Put lerd's shims back on your shell PATH (the default) |
 | `lerd tray` | Launch the system tray applet (detaches from terminal) |
 | `lerd tray icon [default\|high-contrast]` | Choose the running-icon style; high-contrast shows an always-visible green icon for mixed themes like KDE Breeze Twilight; no argument prints the current style |
+| `lerd tray on` / `lerd tray off` | Turn the tray applet on or off. `off` quits the running applet, takes `lerd-tray.service` out of the autostart set, and stops `lerd start` and `lerd install` from launching it again; the preference lives in `config.yaml` under `tray.disabled` and the dashboard's System page carries the same switch |
 | `lerd dns:check` | Walk the DNS chain (container, dnsmasq config, port 5300, dig at 5300, resolver hookup, interface routing, system lookup) and print the layered status with a remediation hint per failure |
 | `lerd status` | Health summary: DNS, nginx, PHP-FPM containers, watcher, services, cert expiry, LAN exposure and dashboard remote access; shows a notice if an update is available |
 | `lerd which` | Show resolved PHP version, Node version, document root, and nginx config for the current site |
@@ -89,6 +90,10 @@ Setup steps include common tasks (composer install, npm install, lerd env) plus 
 | `lerd unpause [name]` | Resume a paused site: start container, restore vhost, restart workers |
 | `lerd restart [name]` | Restart the container for the current or named site (custom container or PHP-FPM) |
 | `lerd rebuild [name]` | Rebuild the custom container image from Containerfile and restart |
+| `lerd nginx show [site]` | Print the site's custom nginx override; `--path` prints the file path instead of its content |
+| `lerd nginx edit [site]` | Open the override in `$EDITOR`, then validate it with `nginx -t` and reload on save |
+| `lerd nginx reset [site]` | Delete the override and reload nginx; the backups are kept |
+| `lerd nginx … --location` | Target the override included inside the block that serves the site instead of the one at the end of the server block, which is the only place a `fastcgi_param` or `proxy_set_header` override takes effect. `--branch <name>` targets a worktree's override on all three. See [Nginx overrides](../usage/nginx-overrides.md) |
 | `lerd group add <main> <label>` | Group the current site under `<main>` (name or domain) at `<label>.<main-domain>`; add `--share-db` to share the main's database. See [Site Groups](../usage/site-groups.md) |
 | `lerd group label <label>` | Change the current secondary's subdomain label |
 | `lerd group db <share\|separate>` | Switch the current secondary between sharing the main's database and keeping its own |

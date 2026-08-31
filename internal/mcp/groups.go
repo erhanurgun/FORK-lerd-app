@@ -539,7 +539,7 @@ func frameworkTool() mcpTool {
 func diagTool() mcpTool {
 	return mcpTool{
 		Name:        "diag",
-		Description: "Diagnostics & observability. action: status, doctor (lerd environment), doctor_fix, site_doctor (app-level checks for a site: env, dependencies, security audit, framework specifics), which, check, dns_diagnose, bug_report, analyze_queries (N+1/slow queries), route_timing (response-time table + slow routes), optimize_route (slow routes joined with their N+1/slow queries, plus CPU hotspots when profiling was on), dumps_recent, dumps_status, dumps_clear, dumps_toggle, profiler_toggle, profiler_status, profiler_clear, profiler_report (flat CPU profile of a command), xdebug_on, xdebug_off, xdebug_status. (Reading logs moved to the `logs` tool.)",
+		Description: "Diagnostics & observability. action: status, doctor (lerd environment, ending with a sweep of every linked site), doctor_fix, site_doctor (app-level checks for a site: env, dependencies, audits, framework specifics), which, check, dns_diagnose, bug_report, analyze_queries (N+1/slow queries), route_timing (response-time table + slow routes), optimize_route (slow routes joined with their N+1/slow queries, plus CPU hotspots when profiling was on), dumps_recent, dumps_status, dumps_clear, dumps_toggle, profiler_toggle, profiler_status, profiler_clear, profiler_report (flat CPU profile of a command), xdebug_on, xdebug_off, xdebug_status. (Reading logs moved to the `logs` tool.)",
 		InputSchema: mcpSchema{
 			Type: "object",
 			Properties: map[string]mcpProp{

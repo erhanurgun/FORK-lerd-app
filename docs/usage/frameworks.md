@@ -143,7 +143,7 @@ lerd new myapp -- --no-interaction      # pass extra flags to the scaffold comma
 ```
 
 On a terminal it asks which framework to scaffold rather than assuming one,
-offering the catalogue [`lerd framework list`](#lerd-framework-list) shows, which
+offering the catalogue [`lerd framework list`](#available-frameworks) shows, which
 your install seeds from the store. When the framework you pick has more than one
 major published it asks which, defaulting to the current release and pulling that
 major's definition before scaffolding. Called with no name at all it asks for
