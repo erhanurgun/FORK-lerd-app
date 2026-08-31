@@ -26,14 +26,6 @@ func queueSiteName(cwd string) (string, error) {
 	return name, nil
 }
 
-// queueStartTuned adapts the MCP queue_start tool, which offers the three knobs
-// Laravel's queue worker takes, to the generic tuned start. The names match the
-// placeholders a framework's tune_command declares; a definition that declares
-// fewer (CodeIgniter has no per-job timeout) ignores the rest.
-func queueStartTuned(siteName, sitePath, phpVersion string, options map[string]string) error {
-	return StartFrameworkWorkerTuned(siteName, sitePath, phpVersion, "queue", options)
-}
-
 // QueueRestartForSite gracefully restarts the queue worker by running the
 // framework's RestartCommand in the FPM container. No-op when the site has no
 // queue unit or the framework declares no restart command (e.g. CodeIgniter).

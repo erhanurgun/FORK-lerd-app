@@ -13,7 +13,6 @@ import (
 	"regexp"
 	"slices"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/geodro/lerd/internal/agentenv"
@@ -561,75 +560,6 @@ func execSiteNginxReset(args map[string]any) (any, *rpcError) {
 		return toolErr(err.Error()), nil
 	}
 	return toolOK(fmt.Sprintf("Reset the %s scope override for %s to the bundled nginx defaults.", scope, domain)), nil
-}
-
-// QueueStartFn and QueueStopFn are injected by the cli package (which owns the
-// cross-platform worker lifecycle) so the queue tools reuse it without a
-// cli -> mcp -> cli import cycle.
-var (
-	QueueStartFn func(siteName, sitePath, phpVersion string, options map[string]string) error
-	QueueStopFn  func(siteName string) error
-)
-
-func execQueueStart(args map[string]any) (any, *rpcError) {
-	siteName := strArg(args, "site")
-	if siteName == "" {
-		return toolErr("site is required"), nil
-	}
-
-	site, err := config.FindSite(siteName)
-	if err != nil {
-		return toolErr("site not found: " + siteName), nil
-	}
-
-	phpVersion := site.PHPVersion
-	if detected, err := phpDet.DetectVersion(site.Path); err == nil && detected != "" {
-		phpVersion = detected
-	}
-
-	// Only the arguments the caller passed are sent on: they are persisted to
-	// the project's .lerd.yaml, so filling in defaults here would overwrite the
-	// queues a project committed every time a plain queue_start ran.
-	options := map[string]string{}
-	if queue := strArg(args, "queue"); queue != "" {
-		// The queue name is interpolated into the worker command; whitespace or a
-		// newline could inject extra arguments or a systemd directive.
-		if strings.ContainsAny(queue, " \t\r\n") {
-			return toolErr("invalid queue name: must not contain whitespace"), nil
-		}
-		options["queue"] = queue
-	}
-	if tries := intArg(args, "tries", 0); tries > 0 {
-		options["tries"] = strconv.Itoa(tries)
-	}
-	if timeout := intArg(args, "timeout", 0); timeout > 0 {
-		options["timeout"] = strconv.Itoa(timeout)
-	}
-
-	if QueueStartFn == nil {
-		return toolErr("queue control unavailable"), nil
-	}
-	if err := QueueStartFn(siteName, site.Path, phpVersion, options); err != nil {
-		return toolErr(err.Error()), nil
-	}
-	if q, ok := options["queue"]; ok {
-		return toolOK(fmt.Sprintf("Queue worker started for %s (queue: %s)", siteName, q)), nil
-	}
-	return toolOK("Queue worker started for " + siteName), nil
-}
-
-func execQueueStop(args map[string]any) (any, *rpcError) {
-	siteName := strArg(args, "site")
-	if siteName == "" {
-		return toolErr("site is required"), nil
-	}
-	if QueueStopFn == nil {
-		return toolErr("queue control unavailable"), nil
-	}
-	if err := QueueStopFn(siteName); err != nil {
-		return toolErr(err.Error()), nil
-	}
-	return toolOK("Queue worker stopped for " + siteName), nil
 }
 
 func execReverbStart(args map[string]any) (any, *rpcError) {
@@ -3225,7 +3155,22 @@ func execWorkerStart(args map[string]any) (any, *rpcError) {
 	if errResp != nil {
 		return errResp, nil
 	}
-	out, err := runIn(cwd, lerdSelf(), "worker", "start", workerName)
+	argv := []string{"worker", "start", workerName}
+	if options := strSliceArg(args, "options"); len(options) > 0 {
+		w, ok := siteWorkers(site, cwd)[workerName]
+		if !ok {
+			return toolErr(fmt.Sprintf("site %q has no worker named %q; worker(action: \"list\") reports the ones it has", siteName, workerName)), nil
+		}
+		flags, err := workerTuneArgs(w, workerName, options)
+		if err != nil {
+			return toolErr(err.Error()), nil
+		}
+		// The generated `<worker>:start` is where the CLI renders one flag per
+		// tune_command placeholder, so the tuning goes through that surface
+		// rather than a second implementation of it.
+		argv = append([]string{workerName + ":start"}, flags...)
+	}
+	out, err := runIn(cwd, lerdSelf(), argv...)
 	if err != nil {
 		msg := strings.TrimSpace(out)
 		if msg == "" {
@@ -3275,22 +3220,19 @@ func execWorkerList(args map[string]any) (any, *rpcError) {
 		return toolErr("site not found: " + siteName), nil
 	}
 
-	fwName := site.Framework
-	if fwName == "" {
-		data, _ := json.MarshalIndent([]struct{}{}, "", "  ")
-		return toolOK(string(data)), nil
-	}
-	fw, ok := config.GetFrameworkForDir(fwName, site.Path)
-	if !ok || len(fw.Workers) == 0 {
+	workers := siteWorkers(site, site.Path)
+	if len(workers) == 0 {
 		data, _ := json.MarshalIndent([]struct{}{}, "", "  ")
 		return toolOK(string(data)), nil
 	}
 
 	branchArg := strArg(args, "branch")
 	var unitSuffix string
+	optionsDir := site.Path
 	if branchArg != "" {
 		sanitized := gitpkg.SanitizeBranch(branchArg)
-		if worktreePathFor(site, sanitized) == "" {
+		optionsDir = worktreePathFor(site, sanitized)
+		if optionsDir == "" {
 			return toolErr(fmt.Sprintf("worktree branch %q not found on site %q", branchArg, siteName)), nil
 		}
 		unitSuffix = "-" + sanitized
@@ -3308,11 +3250,16 @@ func execWorkerList(args map[string]any) (any, *rpcError) {
 		PerWorktree   bool   `json:"per_worktree,omitempty"`
 		ReplacesBuild bool   `json:"replaces_build,omitempty"`
 		Orphaned      bool   `json:"orphaned,omitempty"`
+		// Options are the values the worker's tune_command declares, each with
+		// the default the definition runs and what the project committed, so an
+		// assistant sees what it may pass to start without any of them being
+		// written into this tool's schema by hand.
+		Options []config.WorkerTuneOption `json:"options,omitempty"`
 	}
 
-	known := make(map[string]bool, len(fw.Workers))
+	known := make(map[string]bool, len(workers))
 	var result []workerInfo
-	for wname, w := range fw.Workers {
+	for wname, w := range workers {
 		known[wname] = true
 		unitName := "lerd-" + wname + "-" + siteName + unitSuffix
 		status, _ := podman.UnitStatus(unitName)
@@ -3335,6 +3282,7 @@ func execWorkerList(args map[string]any) (any, *rpcError) {
 			Host:          w.Host,
 			PerWorktree:   w.IsPerWorktree(),
 			ReplacesBuild: w.ReplacesBuild,
+			Options:       config.WorkerTuneOptions(optionsDir, wname, w),
 		})
 	}
 

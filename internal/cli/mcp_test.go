@@ -602,9 +602,12 @@ func TestIsLerdBuiltImage_matchers(t *testing.T) {
 // plus sqlite as a wiring rather than a service, and the doctor fixes that run
 // on the host rather than in the container, then 33200 → 33450 for the nginx
 // `scope`: a site has two override files and an assistant that does not know
-// the location one writes fastcgi_param into the file nginx ignores.
+// the location one writes fastcgi_param into the file nginx ignores, then
+// 33450 → 33650 for the worker options an assistant reads off the framework
+// definition, which replace the three queue arguments the tool used to name
+// itself and cover every worker a definition makes tunable.
 func TestLerdReference_underSizeCeiling(t *testing.T) {
-	const ceiling = 33450
+	const ceiling = 33650
 	if got := len(lerdReference); got > ceiling {
 		t.Errorf("lerd-reference.md is %d bytes, ceiling is %d — trim before raising", got, ceiling)
 	}

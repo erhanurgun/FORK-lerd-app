@@ -176,10 +176,12 @@ var groupDispatch = map[string]map[string]handlerFn{
 		"heal":   execWorkersHeal,
 		// execWorkersMode switches on args["action"] (get/set) itself, so translate
 		// the group action into the selector it expects.
-		"mode_get":       func(a map[string]any) (any, *rpcError) { a["action"] = "get"; return execWorkersMode(a) },
-		"mode_set":       func(a map[string]any) (any, *rpcError) { a["action"] = "set"; return execWorkersMode(a) },
-		"queue_start":    execQueueStart,
-		"queue_stop":     execQueueStop,
+		"mode_get": func(a map[string]any) (any, *rpcError) { a["action"] = "get"; return execWorkersMode(a) },
+		"mode_set": func(a map[string]any) (any, *rpcError) { a["action"] = "set"; return execWorkersMode(a) },
+		// queue_start/queue_stop are the queue worker's own spelling of
+		// start/stop, kept because assistants reach for them by name.
+		"queue_start":    func(a map[string]any) (any, *rpcError) { a["worker"] = "queue"; return execWorkerStart(a) },
+		"queue_stop":     func(a map[string]any) (any, *rpcError) { a["worker"] = "queue"; return execWorkerStop(a) },
 		"horizon_start":  execHorizonStart,
 		"horizon_stop":   execHorizonStop,
 		"reverb_start":   execReverbStart,
@@ -441,7 +443,7 @@ func runtimeTool() mcpTool {
 func workerTool() mcpTool {
 	return mcpTool{
 		Name:        "worker",
-		Description: "Manage workers. action: list (CALL FIRST), start, stop, add, remove, health, heal, mode_get, mode_set. Framework workers: queue_start, queue_stop, horizon_start, horizon_stop, reverb_start, reverb_stop, schedule_start, schedule_stop, stripe_start, stripe_stop, stripe_config. Use horizon_* instead of queue_* when laravel/horizon is installed.",
+		Description: "Manage workers. action: list (CALL FIRST), start, stop, add, remove, health, heal, mode_get, mode_set. Framework workers: queue_*, horizon_*, reverb_*, schedule_*, stripe_* (start/stop, plus stripe_config). Use horizon_* instead of queue_* when laravel/horizon is installed. list reports each worker's tunable options; start takes them back.",
 		InputSchema: mcpSchema{
 			Type: "object",
 			Properties: map[string]mcpProp{
@@ -462,9 +464,7 @@ func workerTool() mcpTool {
 				"global":             {Type: "boolean", Description: "add/remove: target the user overlay."},
 				"unit":               {Type: "string", Description: "heal: full unit name. Omit to heal all."},
 				"mode":               {Type: "string", Enum: []string{"exec", "container"}, Description: "mode_set: macOS worker runtime."},
-				"queue":              {Type: "string", Description: "queue_start: queue name(s), comma separated. Saved to .lerd.yaml; omit to keep."},
-				"tries":              {Type: "integer", Description: "queue_start: max attempts. Saved to .lerd.yaml."},
-				"timeout":            {Type: "integer", Description: "queue_start: job timeout seconds. Saved to .lerd.yaml."},
+				"options":            {Type: "array", Items: stringItems, Description: `start/queue_start: tuning as ["name=value", ...], names from list (e.g. ["queue=emails"]). Saved to .lerd.yaml; omit to keep.`},
 				"api_key":            {Type: "string", Description: "stripe_start: defaults to the .env secret."},
 				"webhook_path":       {Type: "string", Description: "stripe_start/stripe_config: forward path (default /stripe/webhook)."},
 				"secret_env_key":     {Type: "string", Description: "stripe_config: which .env key holds the secret."},

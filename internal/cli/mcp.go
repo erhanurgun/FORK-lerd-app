@@ -31,10 +31,6 @@ the MCP configuration injected by 'lerd mcp:inject'.`,
 			// Lives as long as the assistant session that spawned it, and a user
 			// with several sessions open gets one of these per session.
 			daemon.TuneRuntime()
-			// Inject the cross-platform queue lifecycle so the MCP queue tools
-			// derive the command from the framework instead of hardcoding artisan.
-			mcp.QueueStartFn = queueStartTuned
-			mcp.QueueStopFn = func(siteName string) error { return StopFrameworkWorker(siteName, "queue") }
 			return mcp.Serve()
 		},
 	}
