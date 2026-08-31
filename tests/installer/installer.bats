@@ -40,7 +40,9 @@ run_without_tty() {
 # EOF before the prompt is printed.
 run_with_tty() {
   if script --version 2>/dev/null | grep -qi util-linux; then
-    ( printf 'y\n'; sleep 1 ) | script -qec "$1" /dev/null
+    # script -c runs the command through $SHELL, and install.sh only skips main
+    # when BASH_SOURCE says it was sourced, which no other shell sets.
+    ( printf 'y\n'; sleep 1 ) | SHELL=/bin/bash script -qec "$1" /dev/null
   else
     ( printf 'y\n'; sleep 1 ) | script -q /dev/null bash -c "$1"
   fi
