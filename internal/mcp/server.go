@@ -3772,14 +3772,24 @@ func execProjectNew(args map[string]any) (any, *rpcError) {
 		return toolErr("path is required — provide an absolute path for the new project directory"), nil
 	}
 	frameworkName := strArg(args, "framework")
+	frameworkVersion := strArg(args, "version")
 	if frameworkName == "" {
+		if frameworkVersion != "" {
+			return toolErr("version needs a framework to apply it to — pass framework alongside it"), nil
+		}
 		frameworkName = "laravel"
 	}
 	extraArgs := strSliceArg(args, "args")
 
-	fw, ok := config.GetFrameworkForScaffold(frameworkName, "")
+	fw, ok := config.GetFrameworkForScaffold(frameworkName, frameworkVersion)
 	if !ok {
 		return toolErr(fmt.Sprintf("unknown framework %q — use framework_list to see available frameworks", frameworkName)), nil
+	}
+	// A major nothing publishes resolves to the current one rather than failing,
+	// which is right for a person who picked from a list and wrong here: the
+	// caller asked for a major and would otherwise be handed another one.
+	if frameworkVersion != "" && fw.Version != frameworkVersion {
+		return toolErr(fmt.Sprintf("framework %q does not publish major %q (the store serves %q) — use framework_list to see the majors it publishes", frameworkName, frameworkVersion, fw.Version)), nil
 	}
 	if fw.Create == "" {
 		return toolErr(fmt.Sprintf("framework %q has no create command — add a 'create' field to its YAML definition", frameworkName)), nil
