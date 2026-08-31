@@ -507,16 +507,16 @@ func execTool() mcpTool {
 func frameworkTool() mcpTool {
 	return mcpTool{
 		Name:        "framework",
-		Description: "Framework definitions and scaffolding. action: list, add (bare name installs from store, else authors custom; laravel merges built-in), remove (force=true overrides in-use guard), prune (remove unused), search (store), update (fetch a definition from the store), project_new (scaffold), setup (post-install steps, MANDATORY after env setup).",
+		Description: "Framework definitions and scaffolding. action: list, add (bare name installs from store, else authors custom; laravel merges built-in), remove (force=true overrides in-use guard), prune (remove unused), search (store), update (fetch from the store), project_new (scaffold), setup (post-install steps, MANDATORY after env setup).",
 		InputSchema: mcpSchema{
 			Type: "object",
 			Properties: map[string]mcpProp{
 				"action":              {Type: "string", Enum: []string{"list", "add", "remove", "prune", "search", "update", "project_new", "setup"}},
 				"name":                {Type: "string", Description: "add/remove/update: framework slug."},
-				"force":               {Type: "boolean", Description: "remove: delete even if a site uses it."},
+				"force":               {Type: "boolean", Description: "remove: delete even if in use."},
 				"label":               {Type: "string", Description: "add: human-readable name."},
 				"public_dir":          {Type: "string", Description: "add: document root."},
-				"detect_files":        {Type: "array", Items: stringItems, Description: "add: filenames that signal this framework."},
+				"detect_files":        {Type: "array", Items: stringItems, Description: "add: filenames that signal it."},
 				"detect_packages":     {Type: "array", Items: stringItems, Description: "add: composer packages that signal it."},
 				"env_file":            {Type: "string", Description: `add: primary env file (default ".env").`},
 				"env_format":          {Type: "string", Description: "add: dotenv (default) or php-const."},
@@ -525,7 +525,7 @@ func frameworkTool() mcpTool {
 				"workers":             {Type: "object", Description: "add: map name → {label, command, restart, check?}."},
 				"setup":               {Type: "array", Items: objectItems, Description: "add: {label, command, default?, check?} entries."},
 				"logs":                {Type: "array", Items: objectItems, Description: `add: {path, format?} entries.`},
-				"version":             {Type: "string", Description: "remove/install: version (omit to auto)."},
+				"version":             {Type: "string", Description: "remove/install/project_new: framework version or major (omit to auto)."},
 				"query":               {Type: "string", Description: "search: name/label query."},
 				"path":                {Type: "string", Description: "project_new: new project dir. setup: project root."},
 				"framework":           {Type: "string", Description: `project_new: framework (default "laravel").`},
