@@ -366,6 +366,14 @@ func RebuildFPMImageTo(version string, local bool, w io.Writer) error {
 	return err
 }
 
+// mysqlClientCompatBlock keeps the image's MariaDB client able to talk to MySQL.
+// connector-c carries the caching_sha2_password plugin MySQL 8.4+ authenticates
+// root with, and ssl=0 skips MySQL's self-signed certs on the trusted lerd
+// network. The guard makes the apk a no-op on bases that already ship the
+// plugin, so a fast-path build stays offline-safe once the base catches up.
+const mysqlClientCompatBlock = "RUN [ -e /usr/lib/mariadb/plugin/caching_sha2_password.so ] || apk add --no-cache mariadb-connector-c\n" +
+	"RUN mkdir -p /etc/my.cnf.d && printf '[client]\\nssl=0\\n' > /etc/my.cnf.d/lerd-no-ssl.cnf\n"
+
 // baseContainerfileHash returns a 12-character SHA-256 prefix of the Containerfile
 // with user-specific sections stripped. This is used as the tag for pre-built base
 // images on ghcr.io, so lerd knows exactly which image matches its embedded template.
@@ -526,7 +534,7 @@ func buildFPMImage(version string, force, local bool, customExts []string, extDe
 		if baseRef := tryPullBaseImage(version, w); baseRef != "" {
 			baseDigest, _ = refreshManifestDigestFn(baseRef)
 			containerfile = "FROM " + baseRef + "\n" +
-				"RUN mkdir -p /etc/my.cnf.d && printf '[client]\\nssl=0\\n' > /etc/my.cnf.d/lerd-no-ssl.cnf\n" +
+				mysqlClientCompatBlock +
 				buildCustomExtBlockWithToolchain(customExts, extDeps) +
 				buildCustomPackagesBlock(packages) +
 				mkcertCABlock(tmp)

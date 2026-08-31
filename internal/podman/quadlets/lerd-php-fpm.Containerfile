@@ -150,6 +150,7 @@ RUN apk update && apk add --no-cache \
         git \
         openssh-client \
         mysql-client \
+        mariadb-connector-c \
         nodejs \
         npm \
         libzip \
@@ -191,7 +192,8 @@ COPY --from=builder /usr/local/share/misc/php-spx/ /usr/local/share/misc/php-spx
 
 # MariaDB client (mysql-client) connecting to lerd MySQL uses self-signed
 # certs; disable SSL verification so CLI tools (mysqldump, schema loading)
-# work out of the box.
+# work out of the box. mariadb-connector-c above ships the
+# caching_sha2_password plugin MySQL 8.4+ authenticates root with.
 RUN mkdir -p /etc/my.cnf.d && printf '[client]\nssl=0\n' > /etc/my.cnf.d/lerd-no-ssl.cnf
 
 # Composer from the official image.
