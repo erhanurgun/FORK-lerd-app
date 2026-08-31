@@ -18,6 +18,8 @@ Directories with real TLDs are automatically normalised: dots are replaced with 
 
 For example: `admin.example.com` becomes `admin-example.test`
 
+`lerd domain add` and `lerd domain remove` take the name with or without the TLD, so `shop.acme` and `shop.acme.test` both mean `shop.acme.test`. A trailing TLD used to be appended to rather than recognised, which put an unreachable `shop.acme.test.test` in the site's `.lerd.yaml`.
+
 ---
 
 ## Multiple domains

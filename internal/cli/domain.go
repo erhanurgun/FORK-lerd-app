@@ -53,6 +53,15 @@ func newDomainListCmd() *cobra.Command {
 	}
 }
 
+// qualifyDomain turns the argument into a full domain. The help asks for a name
+// without the TLD, but people type the domain they want to end up with, and
+// appending to that produced shop.acme.test.test. The TUI already trims it, so
+// the CLI trimming too is what makes the two agree.
+func qualifyDomain(arg, tld string) string {
+	name := strings.ToLower(strings.TrimSuffix(strings.ToLower(arg), "."+tld))
+	return name + "." + tld
+}
+
 // resolveSiteForCwd finds the site registered for the current working directory.
 func resolveSiteForCwd() (*config.Site, error) {
 	return ensureSiteForCwd()
@@ -69,8 +78,7 @@ func runDomainAdd(_ *cobra.Command, args []string) error {
 		return err
 	}
 
-	domainName := strings.ToLower(args[0])
-	fullDomain := domainName + "." + cfg.DNS.TLD
+	fullDomain := qualifyDomain(args[0], cfg.DNS.TLD)
 
 	if linker.IsReservedDomain(fullDomain) {
 		return fmt.Errorf("domain %q is reserved for internal Lerd use", fullDomain)
@@ -145,8 +153,7 @@ func runDomainRemove(_ *cobra.Command, args []string) error {
 		return err
 	}
 
-	domainName := strings.ToLower(args[0])
-	fullDomain := domainName + "." + cfg.DNS.TLD
+	fullDomain := qualifyDomain(args[0], cfg.DNS.TLD)
 
 	if !site.HasDomain(fullDomain) {
 		return fmt.Errorf("site %q does not have domain %q", site.Name, fullDomain)
