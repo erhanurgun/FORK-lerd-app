@@ -23,6 +23,29 @@ teardown() {
   rm -rf "$BATS_TMPDIR/home-$$"
 }
 
+# setsid is util-linux and macOS ships no equivalent binary, so the only way to
+# drop the controlling terminal on both is perl's POSIX::setsid, which is in the
+# base install of each.
+run_without_tty() {
+  if command -v setsid >/dev/null 2>&1; then
+    setsid bash -c "$1"
+  else
+    perl -e 'use POSIX; POSIX::setsid(); exec @ARGV' bash -c "$1"
+  fi
+}
+
+# script(1) allocates the pty on both platforms but its calling convention
+# differs: util-linux takes -c CMD ahead of the file, BSD takes the file then the
+# command. The trailing sleep holds stdin open until the pty is up, or BSD reads
+# EOF before the prompt is printed.
+run_with_tty() {
+  if script --version 2>/dev/null | grep -qi util-linux; then
+    ( printf 'y\n'; sleep 1 ) | script -qec "$1" /dev/null
+  else
+    ( printf 'y\n'; sleep 1 ) | script -q /dev/null bash -c "$1"
+  fi
+}
+
 # Pins the isolation the whole file rests on: whatever the environment running
 # the suite looks like, the directories the uninstall removes must sit inside
 # the throwaway HOME and never in the real one.
@@ -762,7 +785,7 @@ _undeletable_dir() {
 }
 
 @test "have_tty is false when the process has no controlling terminal" {
-  run setsid bash -c "source '$INSTALLER'; have_tty && echo yes || echo no"
+  run run_without_tty "source '$INSTALLER'; have_tty && echo yes || echo no"
   [ "$status" -eq 0 ]
   [ "$output" = "no" ]
 }
@@ -770,7 +793,7 @@ _undeletable_dir() {
 # set -u is on, so a read that never ran leaves _ans unset and the script aborts
 # instead of taking the question as declined.
 @test "ask declines cleanly when there is no controlling terminal" {
-  run setsid bash -c "source '$INSTALLER'; ask 'proceed?' && echo GOT_YES || echo GOT_NO"
+  run run_without_tty "source '$INSTALLER'; ask 'proceed?' && echo GOT_YES || echo GOT_NO"
   [ "$status" -eq 0 ]
   [[ "$output" == *"GOT_NO"* ]]
   [[ "$output" != *"unbound variable"* ]]
@@ -778,6 +801,6 @@ _undeletable_dir() {
 
 @test "ask reads the answer from the terminal when one is present" {
   command -v script >/dev/null || skip "needs script(1) to allocate a pty"
-  run bash -c "printf 'y\n' | script -qec \"bash -c 'source $INSTALLER; ask proceed? && echo GOT_YES || echo GOT_NO'\" /dev/null"
+  run run_with_tty "source '$INSTALLER'; ask proceed? && echo GOT_YES || echo GOT_NO"
   [[ "$output" == *"GOT_YES"* ]]
 }
