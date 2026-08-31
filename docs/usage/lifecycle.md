@@ -100,6 +100,16 @@ store there is no download to warn about, so the operation runs straight away
 with no extra click; a repeat PHP rebuild against a base you already pulled is
 the usual case for that.
 
+### From an assistant
+
+The MCP tools that would fetch an image (installing a service preset, updating,
+migrating, rolling back or reinstalling a service, and adding a PHP extension,
+which rebuilds the image) report the image and its size back to the assistant
+and download nothing. It takes a second call carrying `confirm: true` to go
+ahead, so the size reaches the person paying for the connection before the bytes
+move. An image already on the machine is not disclosed and the action runs
+straight away.
+
 ### Offline mode
 
 On a metered or offline connection, `--no-pull` (or `LERD_OFFLINE=1`, which
