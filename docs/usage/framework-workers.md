@@ -138,6 +138,8 @@ A worker gated on a composer package belongs to the package, not to the framewor
 
 ## Project-specific custom workers
 
+The `workers:` list is what `lerd start` brings back, and it follows the worker units lerd has written rather than what happens to be running at the moment you touch another worker. Starting a worker adds it, stopping one by name removes it, and a worker that is merely down, crash-looping or stopped for a rebuild, stays on the list and starts again with the rest.
+
 Add workers to `.lerd.yaml` for project-specific needs that don't belong in the framework definition:
 
 ```yaml

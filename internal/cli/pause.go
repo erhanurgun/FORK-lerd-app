@@ -14,6 +14,7 @@ import (
 	"github.com/geodro/lerd/internal/nginx"
 	phpDet "github.com/geodro/lerd/internal/php"
 	"github.com/geodro/lerd/internal/podman"
+	"github.com/geodro/lerd/internal/services"
 	"github.com/geodro/lerd/internal/siteinfo"
 	lerdSystemd "github.com/geodro/lerd/internal/systemd"
 	"github.com/spf13/cobra"
@@ -385,9 +386,44 @@ func startServicesForSiteNoticed(sitePath, siteName string) {
 }
 
 // CollectRunningWorkerNames returns the names of active workers for the site,
-// including stripe. Used to sync .lerd.yaml.
+// including stripe. Used to snapshot what to bring back after a restart.
 func CollectRunningWorkerNames(site *config.Site) []string {
 	return collectRunningWorkers(site)
+}
+
+// CollectDeclaredWorkerNames returns the workers a site has units installed
+// for. The list in .lerd.yaml is what `lerd start` brings back, so it follows
+// the units on disk rather than what happens to be running: a unit is written
+// when a worker starts and removed when it stops, while a worker that is merely
+// down keeps its own. Snapshotting the running set instead wrote a crash-looping
+// worker out of the file the next time any other worker was touched, and nothing
+// started it again (#1627).
+func CollectDeclaredWorkerNames(site *config.Site) []string {
+	declared := collectRunningWorkers(site)
+	seen := make(map[string]bool, len(declared))
+	for _, w := range declared {
+		seen[w] = true
+	}
+	installed := make(map[string]bool)
+	for _, u := range services.Mgr.ListServiceUnits("lerd-*") {
+		installed[u] = true
+	}
+	for _, u := range services.Mgr.ListTimerUnits("lerd-*") {
+		installed[strings.TrimSuffix(u, ".timer")] = true
+	}
+	if fw, ok := config.GetFrameworkForDir(site.Framework, site.Path); ok && fw.Workers != nil {
+		names := make([]string, 0, len(fw.Workers))
+		for wName := range fw.Workers {
+			names = append(names, wName)
+		}
+		sort.Strings(names)
+		for _, wName := range names {
+			if !seen[wName] && installed["lerd-"+wName+"-"+site.Name] {
+				declared = append(declared, wName)
+			}
+		}
+	}
+	return declared
 }
 
 // collectRunningWorkers returns the names of all active or restarting workers

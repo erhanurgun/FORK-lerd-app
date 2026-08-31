@@ -279,7 +279,7 @@ func runWorkerStart(name string, tuned map[string]string) error {
 		return err
 	}
 	if !site.Paused {
-		_ = config.SetProjectWorkers(site.Path, CollectRunningWorkerNames(site))
+		_ = config.SetProjectWorkers(site.Path, CollectDeclaredWorkerNames(site))
 	}
 	return nil
 }
@@ -305,7 +305,7 @@ func runWorkerStop(name string) error {
 		return err
 	}
 	if !site.Paused {
-		_ = config.SetProjectWorkers(site.Path, CollectRunningWorkerNames(site))
+		_ = config.SetProjectWorkers(site.Path, CollectDeclaredWorkerNames(site))
 	}
 	return nil
 }
