@@ -605,9 +605,11 @@ func TestIsLerdBuiltImage_matchers(t *testing.T) {
 // the location one writes fastcgi_param into the file nginx ignores, then
 // 33450 → 33650 for the worker options an assistant reads off the framework
 // definition, which replace the three queue arguments the tool used to name
-// itself and cover every worker a definition makes tunable.
+// itself and cover every worker a definition makes tunable, then 33650 → 34100
+// for the image download an assistant has to relay and confirm rather than
+// start on someone else's connection.
 func TestLerdReference_underSizeCeiling(t *testing.T) {
-	const ceiling = 33650
+	const ceiling = 34100
 	if got := len(lerdReference); got > ceiling {
 		t.Errorf("lerd-reference.md is %d bytes, ceiling is %d — trim before raising", got, ceiling)
 	}

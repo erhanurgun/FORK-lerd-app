@@ -270,8 +270,11 @@ func TestToolList_underSizeCeiling(t *testing.T) {
 	// remove as a broken service, then 23050 → 23250 for the site `scope`
 	// property: a site now has two nginx override files and the location one is
 	// the only place a fastcgi_param or proxy_set_header override takes effect,
-	// so an assistant without the property writes into the file nginx ignores.
-	const ceiling = 23250
+	// so an assistant without the property writes into the file nginx ignores,
+	// then 23250 → 23550 for the `confirm` an image download is disclosed for, on
+	// the two tools whose actions can pull: without it the assistant cannot
+	// answer the disclosure and the operation it was asked for never runs.
+	const ceiling = 23550
 	got, err := json.Marshal(toolList())
 	if err != nil {
 		t.Fatalf("marshal tool list: %v", err)

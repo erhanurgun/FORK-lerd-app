@@ -196,6 +196,10 @@ A **site group** (the `site` tool's `group_*` actions) nests a real site under a
 
 `service` start/stop/restart use the same `serviceops` path as the CLI, Web UI, and TUI: `depends_on` resolution (including family / `env_role` drop-ins), reverse-dependent start, soft stop cascade, and `discover_family` / pinned-dependency-host consumer regen. Stop failures surface as errors rather than a silent OK. Do not assume MCP is a thinner StartUnit wrapper.
 
+### Downloads are disclosed, not started
+
+An assistant is not the one paying for the bandwidth, so the actions that have to fetch a container image (`service` `preset_install`, `update`, `migrate`, `rollback`, `reinstall`, and `runtime` `ext_add`, which rebuilds a PHP image) answer with what they would download instead of downloading it. The answer names the image and its size, read from the registry manifest without pulling anything, and nothing has been fetched at that point. Repeating the call with `confirm: true` goes ahead. An image already in the local store is never disclosed, so the usual case runs straight through. This is the disclosure half of what `LERD_OFFLINE=1` does for the refusal half; see [Image downloads](../usage/lifecycle.md#image-downloads).
+
 ### Worker tuning comes from the framework definition
 
 `worker` `list` reports each worker's tunable `options`: the placeholders its framework definition declares in `tune_command`, the default the definition runs for each, and whatever the project committed to `.lerd.yaml`. `start` (and `queue_start`) take them back as `options: ["queue=emails", "tries=5"]`. Nothing is named in the tool's own schema, so a store definition that makes another worker tunable reaches an assistant within the day, the same way the CLI grows a flag per placeholder. See [Worker options](../usage/queue-workers.md#worker-options).

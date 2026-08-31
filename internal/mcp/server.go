@@ -1518,6 +1518,10 @@ func execServiceReinstall(args map[string]any) (any, *rpcError) {
 	if name == "" {
 		return toolErr("name is required"), nil
 	}
+	pending, _ := serviceops.ActionDownload(name, "reinstall", "")
+	if gate := downloadGate(args, pending, "Reinstalling "+name); gate != nil {
+		return gate, nil
+	}
 	resetData := boolArg(args, "reset_data")
 	opts := serviceops.ReinstallOptions{ResetData: resetData, SkipSnapshot: boolArg(args, "no_snapshot")}
 	taken := ""
@@ -1804,6 +1808,10 @@ func execServicePresetInstall(args map[string]any) (any, *rpcError) {
 		return toolErr("name is required"), nil
 	}
 	version := strArg(args, "version")
+	pending, _ := serviceops.PresetDownload(name, version)
+	if gate := downloadGate(args, pending, "Installing the "+name+" preset"); gate != nil {
+		return gate, nil
+	}
 	svc, err := serviceops.InstallPresetByName(name, version)
 	if err != nil {
 		return toolErr(err.Error()), nil
@@ -1867,11 +1875,11 @@ func execServiceUpdate(args map[string]any) (any, *rpcError) {
 		if err != nil || avail == nil || avail.CurrentImage == "" {
 			return toolErr("could not resolve current image for " + name), nil
 		}
-		if at := strings.LastIndex(avail.CurrentImage, ":"); at > 0 {
-			targetImage = avail.CurrentImage[:at] + ":" + tag
-		} else {
-			targetImage = avail.CurrentImage + ":" + tag
-		}
+		targetImage = serviceops.RetagImage(avail.CurrentImage, tag)
+	}
+	pending, _ := serviceops.ActionDownload(name, "update", tag)
+	if gate := downloadGate(args, pending, "Updating "+name); gate != nil {
+		return gate, nil
 	}
 	var lastImage string
 	emit := func(ev serviceops.PhaseEvent) {
@@ -1902,6 +1910,9 @@ func execServiceMigrate(args map[string]any) (any, *rpcError) {
 	if err != nil {
 		return toolErr(err.Error()), nil
 	}
+	if gate := downloadGate(args, podman.DescribeDownload(target), "Migrating "+name+" to "+tag); gate != nil {
+		return gate, nil
+	}
 	var lastImage string
 	emit := func(ev serviceops.PhaseEvent) {
 		if ev.Image != "" {
@@ -1918,6 +1929,10 @@ func execServiceRollback(args map[string]any) (any, *rpcError) {
 	name := strArg(args, "name")
 	if name == "" {
 		return toolErr("name is required"), nil
+	}
+	pending, _ := serviceops.ActionDownload(name, "rollback", "")
+	if gate := downloadGate(args, pending, "Rolling "+name+" back"); gate != nil {
+		return gate, nil
 	}
 	var lastImage string
 	emit := func(ev serviceops.PhaseEvent) {
@@ -4467,6 +4482,10 @@ func execPHPExtAdd(args map[string]any) (any, *rpcError) {
 	deps, err := podman.ParseApkDeps(strArg(args, "apk_deps"))
 	if err != nil {
 		return toolErr(err.Error()), nil
+	}
+
+	if gate := downloadGate(args, podman.PHPDownload(version), "Rebuilding the PHP "+version+" image"); gate != nil {
+		return gate, nil
 	}
 
 	// Re-adding an already-declared extension must not let a failed verify

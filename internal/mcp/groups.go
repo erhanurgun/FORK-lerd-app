@@ -338,7 +338,7 @@ func siteTool() mcpTool {
 func serviceTool() mcpTool {
 	return mcpTool{
 		Name:        "service",
-		Description: "Manage services (built-in + custom). action: start, stop, restart, pin, unpin, update, rollback, migrate, remove, reinstall, add, expose, port, env, config_read, config_write, config_restore, config_reset, config_list_backups, preset_list, preset_search, preset_install, check_updates, entities, entity_action. entities lists what a service holds beyond databases (buckets, etc.) with the actions each kind supports; databases have their own tool. preset_search browses the store (name=filter). update=pull; migrate=dump+restore; reinstall reset_data wipes data; remove remove_data renames data aside. Both snapshot the DBs first, restorable with db restore all_databases.",
+		Description: "Manage services (built-in + custom). action: start, stop, restart, pin, unpin, update, rollback, migrate, remove, reinstall, add, expose, port, env, config_read, config_write, config_restore, config_reset, config_list_backups, preset_list, preset_search, preset_install, check_updates, entities, entity_action. entities lists what a service holds beyond databases (buckets, etc.) with the actions each kind supports; databases have their own tool. preset_search browses the store (name=filter). update=pull; migrate=dump+restore; reinstall reset_data wipes data; remove remove_data renames data aside. An action that would pull discloses the image size and fetches nothing until confirm: true. Both snapshot the DBs first, restorable with db restore all_databases.",
 		InputSchema: mcpSchema{
 			Type: "object",
 			Properties: map[string]mcpProp{
@@ -369,6 +369,7 @@ func serviceTool() mcpTool {
 				"kind":           {Type: "string", Description: "entity_action: entity kind, as `entities` reported it (e.g. buckets)."},
 				"entity":         {Type: "string", Description: "entity_action: the entity to act on."},
 				"entity_action":  {Type: "string", Description: "entity_action: which declared action to run; export/import stream a file and stay on the CLI."},
+				"confirm":        {Type: "boolean", Description: "preset_install/update/migrate/rollback/reinstall: proceed with the disclosed download."},
 			},
 			Required: []string{"action"},
 		},
@@ -421,7 +422,7 @@ func envTool() mcpTool {
 func runtimeTool() mcpTool {
 	return mcpTool{
 		Name:        "runtime",
-		Description: "PHP/Node runtimes. action: versions, node_install, node_uninstall, node_manager, php_list, ext_list, ext_add, ext_remove, ports_list, ports_add, ports_remove, ini_read, ini_write, ini_reset. php_list flags base_update when a newer base image is published. ext_add/remove apply to EVERY PHP version and rebuild one version's image now (slow); others rebuild on next use. ports_* publish host ports on a version's shell container; a busy port shifts to the next free one. ini_* edit php.ini: per-version (version=8.4) or shared (shared=true), where a per-version key wins; prefer shared.",
+		Description: "PHP/Node runtimes. action: versions, node_install, node_uninstall, node_manager, php_list, ext_list, ext_add, ext_remove, ports_list, ports_add, ports_remove, ini_read, ini_write, ini_reset. php_list flags base_update when a newer base image is published. ext_add/remove apply to EVERY PHP version and rebuild one version's image now (slow; a missing base image is disclosed for confirm: true); others rebuild on next use. ports_* publish host ports on a version's shell container; a busy port shifts to the next free one. ini_* edit php.ini: per-version (version=8.4) or shared (shared=true), where a per-version key wins; prefer shared.",
 		InputSchema: mcpSchema{
 			Type: "object",
 			Properties: map[string]mcpProp{
@@ -434,6 +435,7 @@ func runtimeTool() mcpTool {
 				"shared":    {Type: "boolean", Description: "ini_*: target the shared file (all versions)."},
 				"manager":   {Type: "string", Enum: []string{"fnm", "nvm"}, Description: "node_manager: switch the version manager; omit to report the current one."},
 				"content":   {Type: "string", Description: "ini_write: full php.ini contents."},
+				"confirm":   {Type: "boolean", Description: "ext_add: proceed with the disclosed base image download."},
 			},
 			Required: []string{"action"},
 		},
