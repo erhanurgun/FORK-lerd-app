@@ -349,7 +349,7 @@ To add an extension that isn't in the bundle:
 lerd php:ext add swoole
 ```
 
-An extension the image already ships is refused, since the bundle is the better build of it. The image compiles those extensions as part of its own configure run, with flags a standalone rebuild on top of the image cannot pass, so redeclaring one would quietly replace it with a lesser build: `ftp` declared this way came back without FTPS support and no `ftp_ssl_connect`. Builds skip any bundled name left over in an existing declared set for the same reason.
+An extension the image already ships is refused, since the bundle is the better build of it. The image compiles those extensions as part of its own configure run, with flags a standalone rebuild on top of the image cannot pass, so redeclaring one would quietly replace it with a lesser build: `ftp` declared this way came back without FTPS support and no `ftp_ssl_connect`. Builds skip any bundled name left over in an existing declared set for the same reason, and an image built while one was still being rebuilt reads as out of date, so the next build puts the image's own version back with nothing to run by hand.
 
 Extensions belong to you, not to a PHP version. One declared set applies to every PHP image lerd builds, so a site that changes version keeps them. The version you are on is rebuilt and verified straight away; other installed versions carry the old set until they are rebuilt, and lerd says which ones those are.
 

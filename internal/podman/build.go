@@ -262,7 +262,7 @@ func FPMImageCurrent(version string) bool {
 		return false
 	}
 	return fpmImageCurrent(FPMImageName(version), hash,
-		customSetHash(cfg.GetExtensions(), cfg.AllExtApkDeps(), cfg.GetPackages()))
+		customSetHash(version, cfg.GetExtensions(), cfg.AllExtApkDeps(), cfg.GetPackages()))
 }
 
 // imageLabel reads a single label from a local image. Returns "" on any
@@ -501,7 +501,7 @@ func buildFPMImage(version string, force, local bool, customExts []string, extDe
 	if hashErr != nil {
 		return false, fmt.Errorf("computing Containerfile hash for label: %w", hashErr)
 	}
-	customHash := customSetHash(customExts, extDeps, packages)
+	customHash := customSetHash(version, customExts, extDeps, packages)
 
 	if !force && fpmImageCurrent(imageName, canonicalHash, customHash) {
 		return false, nil
