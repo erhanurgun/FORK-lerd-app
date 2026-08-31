@@ -97,3 +97,25 @@ func TestBundledExtensionsDropsPECLOnPrerelease(t *testing.T) {
 		t.Error("BundledExtensions(8.5) lost xdebug; the prerelease rule leaked into a released version")
 	}
 }
+
+// A declared extension the image already ships must be dropped: rebuilding it
+// generically on top of the base image loses the configure flags the base build
+// gave it, which is how ftp lost FTPS support again after #1583 (#1576).
+func TestWithoutBundled(t *testing.T) {
+	got := WithoutBundled("8.5", []string{"ftp", "yaml", "Zend-OPcache", "ssh2"})
+	want := []string{"yaml", "ssh2"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("WithoutBundled = %v, want %v", got, want)
+	}
+}
+
+// Version-gated names are not bundled everywhere, so a version whose image
+// cannot build one must still be allowed to install it as a custom extension.
+func TestWithoutBundled_KeepsVersionGatedNames(t *testing.T) {
+	if got := WithoutBundled("8.1", []string{"random"}); len(got) != 1 {
+		t.Errorf("WithoutBundled dropped random on 8.1, where the image does not ship it: %v", got)
+	}
+	if got := WithoutBundled("8.2", []string{"random"}); len(got) != 0 {
+		t.Errorf("WithoutBundled kept random on 8.2, where the image ships it: %v", got)
+	}
+}
