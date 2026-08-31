@@ -272,7 +272,7 @@ export default defineConfig({
           text: 'Configuration',
           items: [
             { text: 'Overview', link: '/configuration' },
-            { text: 'Per-project (.lerd.yaml)', link: '/configuration#per-project-config-lerdyaml' },
+            { text: 'Per-project (.lerd.yaml)', link: '/configuration#per-project-config-lerd-yaml' },
           ],
         },
       ],

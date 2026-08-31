@@ -78,6 +78,16 @@ host_proxy:
                           # "start this command on your host?" confirmation.
                           # Default false so a command from a cloned repo is
                           # never run unconfirmed. See usage/host-proxy.md.
+tray:
+  disabled: false         # optional. Set true (or run lerd tray off) to keep the
+                          # system tray applet out of lerd start and lerd install,
+                          # for a desktop that already shows lerd's state elsewhere
+                          # or has no tray host at all. Turning it off also takes
+                          # lerd-tray.service out of the autostart set. Also
+                          # switchable from the dashboard's System page.
+  high_contrast_icon: false # optional. Swaps the running icon for a single green
+                          # glyph that reads on any panel, for mixed themes like
+                          # KDE Breeze Twilight. Toggled with lerd tray icon.
 auto_cleanup: true      # when true (default), lerd reclaims its own orphaned
                         # podman images on its own: the lerd-watcher runs a safe
                         # daily sweep, and a PHP rebuild or a service update/remove

@@ -98,7 +98,7 @@ Prefer your package manager? Lerd is also available through an [apt PPA, a Fedor
 | `.test` domains | Automatic, through a dnsmasq container | Automatic, through hosts file entries written by the tray app |
 | HTTPS | `lerd secure`, mkcert certificate trusted system-wide | One-click self-signed certificate, trusted after you install it manually |
 | PHP versions | 7.4, 8.0 to 8.5, per project | Multiple versions, downloaded into the Laragon folder |
-| Per-project config | [`.lerd.yaml`](/configuration#per-project-config-lerdyaml) committed to the repo, covering PHP, Node, services and workers | None, configuration lives in the Laragon install |
+| Per-project config | [`.lerd.yaml`](/configuration#per-project-config-lerd-yaml) committed to the repo, covering PHP, Node, services and workers | None, configuration lives in the Laragon install |
 | Queue and scheduler workers | `lerd worker start queue` / `schedule`, as systemd user services | Not built in |
 | Dashboard | Web UI, system tray, terminal dashboard, installable PWA | Native tray application |
 | AI / MCP | Built-in [MCP server](/features/mcp) for Claude Code, Cursor, Junie and Windsurf | Not built in |
@@ -151,7 +151,7 @@ Full detail lives in the [quick start](/getting-started/quick-start) and the [si
 
 Be aware of these before you switch, they are the places where the mental model changes:
 
-- **Containers, not a portable folder.** PHP and the services run in rootless Podman containers, so there is no `C:\laragon` you can copy to another machine. What you commit instead is [`.lerd.yaml`](/configuration#per-project-config-lerdyaml), which rebuilds the same environment anywhere.
+- **Containers, not a portable folder.** PHP and the services run in rootless Podman containers, so there is no `C:\laragon` you can copy to another machine. What you commit instead is [`.lerd.yaml`](/configuration#per-project-config-lerd-yaml), which rebuilds the same environment anywhere.
 - **Services are shared, not per project.** One MySQL, one Redis, one Mailpit across every site, which is why five running projects cost around 200 MB of RAM rather than five full stacks.
 - **Nginx by default.** Lerd serves through Nginx and PHP-FPM. If a project depends on `.htaccess` rules, translate them into an [nginx override](/usage/nginx-overrides).
 - **One `sudo` at install time.** Only to point the system resolver at the `.test` domains. Everything after that runs as your own user.
