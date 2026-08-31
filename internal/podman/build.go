@@ -535,7 +535,7 @@ func buildFPMImage(version string, force, local bool, customExts []string, extDe
 			baseDigest, _ = refreshManifestDigestFn(baseRef)
 			containerfile = "FROM " + baseRef + "\n" +
 				mysqlClientCompatBlock +
-				buildCustomExtBlockWithToolchain(customExts, extDeps) +
+				buildCustomExtBlockWithToolchain(version, customExts, extDeps) +
 				buildCustomPackagesBlock(packages) +
 				mkcertCABlock(tmp)
 			goto build
@@ -558,8 +558,8 @@ func buildFPMImage(version string, force, local bool, customExts []string, extDe
 		// The placeholder carries the upstream php image tag, which is not the
 		// lerd version for a prerelease: 8.6 has no plain -fpm-alpine tag yet.
 		containerfile = strings.ReplaceAll(tmpl, "{{.Version}}", config.UpstreamPHPTag(version))
-		containerfile = strings.ReplaceAll(containerfile, "{{.CustomExtensions}}", buildCustomExtBlock(customExts, extDeps))
-		containerfile = strings.ReplaceAll(containerfile, "{{.CustomExtensionsRuntime}}", buildCustomExtRuntimeDeps(customExts, extDeps))
+		containerfile = strings.ReplaceAll(containerfile, "{{.CustomExtensions}}", buildCustomExtBlock(version, customExts, extDeps))
+		containerfile = strings.ReplaceAll(containerfile, "{{.CustomExtensionsRuntime}}", buildCustomExtRuntimeDeps(version, customExts, extDeps))
 		containerfile = strings.ReplaceAll(containerfile, "{{.CustomPackages}}", buildCustomPackagesBlock(packages))
 		containerfile = strings.ReplaceAll(containerfile, "{{.MkcertCA}}", mkcertCABlock(tmp))
 	}
@@ -652,10 +652,10 @@ func apkDepsForExt(ext string, userDeps map[string][]string) []string {
 // buildCustomExtRuntimeDeps emits an apk RUN line that reinstalls the
 // builder-stage deps in the runtime stage so compiled .so files can
 // dlopen against those system libs. Empty when no custom exts have deps.
-func buildCustomExtRuntimeDeps(exts []string, userDeps map[string][]string) string {
+func buildCustomExtRuntimeDeps(phpVersion string, exts []string, userDeps map[string][]string) string {
 	seen := map[string]bool{}
 	var deps []string
-	for _, ext := range exts {
+	for _, ext := range WithoutBundled(phpVersion, exts) {
 		for _, pkg := range apkDepsForExt(ext, userDeps) {
 			if seen[pkg] {
 				continue
@@ -678,19 +678,20 @@ var phpizeToolchain = []string{"autoconf", "make", "g++", "linux-headers"}
 // buildCustomExtBlock generates Dockerfile RUN blocks for user-configured
 // extensions, apk-adding any extra build deps (built-in map ∪ userDeps) first.
 // This is the builder stage's block, which already has a toolchain to build in.
-func buildCustomExtBlock(exts []string, userDeps map[string][]string) string {
-	return customExtBlock(exts, userDeps, false)
+func buildCustomExtBlock(phpVersion string, exts []string, userDeps map[string][]string) string {
+	return customExtBlock(phpVersion, exts, userDeps, false)
 }
 
 // buildCustomExtBlockWithToolchain is the same block for the fast path, which
 // layers straight onto the pre-built runtime image and so has no toolchain to
 // build against. It installs one virtually and purges it inside the same layer,
 // leaving the runtime image the size it was.
-func buildCustomExtBlockWithToolchain(exts []string, userDeps map[string][]string) string {
-	return customExtBlock(exts, userDeps, true)
+func buildCustomExtBlockWithToolchain(phpVersion string, exts []string, userDeps map[string][]string) string {
+	return customExtBlock(phpVersion, exts, userDeps, true)
 }
 
-func customExtBlock(exts []string, userDeps map[string][]string, withToolchain bool) string {
+func customExtBlock(phpVersion string, exts []string, userDeps map[string][]string, withToolchain bool) string {
+	exts = WithoutBundled(phpVersion, exts)
 	if len(exts) == 0 {
 		return ""
 	}
