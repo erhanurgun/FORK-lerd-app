@@ -133,7 +133,7 @@ func newStripeListenCmd() *cobra.Command {
 				return err
 			}
 			if site, err := config.FindSite(siteName); err == nil && !site.Paused {
-				_ = config.SetProjectWorkers(site.Path, CollectRunningWorkerNames(site))
+				_ = config.SetProjectWorkers(site.Path, CollectDeclaredWorkerNames(site))
 			}
 			return nil
 		},
@@ -162,7 +162,7 @@ func newStripeListenStopCmd() *cobra.Command {
 				return err
 			}
 			if site, err := config.FindSite(siteName); err == nil && !site.Paused {
-				_ = config.SetProjectWorkers(site.Path, CollectRunningWorkerNames(site))
+				_ = config.SetProjectWorkers(site.Path, CollectDeclaredWorkerNames(site))
 			}
 			return nil
 		},

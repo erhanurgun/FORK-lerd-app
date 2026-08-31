@@ -4126,7 +4126,7 @@ func handleSiteAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !site.Paused {
-			_ = config.SetProjectWorkers(site.Path, cli.CollectRunningWorkerNames(site))
+			_ = config.SetProjectWorkers(site.Path, cli.CollectDeclaredWorkerNames(site))
 		}
 		writeJSON(w, SiteActionResponse{OK: true})
 		return
@@ -4183,7 +4183,7 @@ func handleSiteAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !site.Paused {
-			_ = config.SetProjectWorkers(site.Path, cli.CollectRunningWorkerNames(site))
+			_ = config.SetProjectWorkers(site.Path, cli.CollectDeclaredWorkerNames(site))
 		}
 		writeJSON(w, SiteActionResponse{OK: true})
 		return
@@ -4202,7 +4202,7 @@ func handleSiteAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !site.Paused {
-			_ = config.SetProjectWorkers(site.Path, cli.CollectRunningWorkerNames(site))
+			_ = config.SetProjectWorkers(site.Path, cli.CollectDeclaredWorkerNames(site))
 		}
 		writeJSON(w, SiteActionResponse{OK: true})
 		return
@@ -4233,7 +4233,7 @@ func handleSiteAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !site.Paused {
-			_ = config.SetProjectWorkers(site.Path, cli.CollectRunningWorkerNames(site))
+			_ = config.SetProjectWorkers(site.Path, cli.CollectDeclaredWorkerNames(site))
 		}
 		writeJSON(w, SiteActionResponse{OK: true})
 		return
@@ -4252,7 +4252,7 @@ func handleSiteAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !site.Paused {
-			_ = config.SetProjectWorkers(site.Path, cli.CollectRunningWorkerNames(site))
+			_ = config.SetProjectWorkers(site.Path, cli.CollectDeclaredWorkerNames(site))
 		}
 		writeJSON(w, SiteActionResponse{OK: true})
 		return
@@ -4724,7 +4724,7 @@ func handleSiteAction(w http.ResponseWriter, r *http.Request) {
 						return
 					}
 					if branch == "" && !site.Paused {
-						_ = config.SetProjectWorkers(site.Path, cli.CollectRunningWorkerNames(site))
+						_ = config.SetProjectWorkers(site.Path, cli.CollectDeclaredWorkerNames(site))
 					}
 				} else {
 					fwN := site.Framework
@@ -6405,6 +6405,6 @@ func handleSiteWorktreeAdd(w http.ResponseWriter, r *http.Request) {
 func syncLerdYAMLWorkersDelayed(site *config.Site) {
 	time.Sleep(2 * time.Second)
 	if !site.Paused {
-		_ = config.SetProjectWorkers(site.Path, cli.CollectRunningWorkerNames(site))
+		_ = config.SetProjectWorkers(site.Path, cli.CollectDeclaredWorkerNames(site))
 	}
 }
