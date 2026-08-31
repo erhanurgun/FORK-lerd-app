@@ -4479,6 +4479,12 @@ func execPHPExtAdd(args map[string]any) (any, *rpcError) {
 		return toolErr(err.Error()), nil
 	}
 
+	// Declaring a bundled extension makes every build rebuild it on top of the
+	// base image, which loses the configure flags that build gave it (#1576).
+	if len(podman.WithoutBundled(version, []string{ext})) == 0 {
+		return toolErr(fmt.Sprintf("extension %q already ships in the PHP %s image, nothing to add", ext, version)), nil
+	}
+
 	deps, err := podman.ParseApkDeps(strArg(args, "apk_deps"))
 	if err != nil {
 		return toolErr(err.Error()), nil

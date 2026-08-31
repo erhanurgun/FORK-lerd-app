@@ -287,16 +287,31 @@ func RemoveContainer(name string) {
 // canonical source of truth; the plist is the live runtime unit).
 var AfterQuadletWriteFn func(name, content string) error
 
-// UnitLifecycle is the interface for starting, stopping, restarting, and
-// querying service units. Set by the platform service manager on macOS so that
-// StartUnit/StopUnit/RestartUnit/UnitStatus route through launchd instead of
-// systemctl. Nil on Linux (the systemctl fallback is used).
-var UnitLifecycle interface {
+// UnitLifecycleManager starts, stops, restarts and queries service units.
+type UnitLifecycleManager interface {
 	Start(name string) error
 	Stop(name string) error
 	Restart(name string) error
 	UnitStatus(name string) (string, error)
 	AllUnitStates() map[string]string
+}
+
+// UnitLifecycle routes StartUnit/StopUnit/RestartUnit/UnitStatus through the
+// platform's manager, set on macOS so they reach launchd instead of systemctl.
+// Nil on Linux, where the systemctl fallback is used, and assigned directly by
+// tests that install a stub.
+var UnitLifecycle UnitLifecycleManager
+
+// platformUnitLifecycle is the manager a platform init() installs (launchd on
+// macOS). It is the real system rather than a test stub, so the under-test guard
+// below has to tell the two apart: keying only on nil left macOS unguarded.
+var platformUnitLifecycle UnitLifecycleManager
+
+// UsePlatformUnitLifecycle installs the platform's real unit manager. Only a
+// platform init() calls it; a test assigns UnitLifecycle directly, which is what
+// keeps its stub distinguishable from the real launchd.
+func UsePlatformUnitLifecycle(m UnitLifecycleManager) {
+	UnitLifecycle, platformUnitLifecycle = m, m
 }
 
 // DaemonReload runs the equivalent of systemctl --user daemon-reload.
@@ -374,7 +389,12 @@ func unitOpCaller() string {
 var errNoRealSystemd = errors.New("podman: refusing the real systemd from a test; set podman.UnitLifecycle")
 
 // realSystemdBlocked reports whether this call must not reach the real user bus.
-func realSystemdBlocked() bool { return UnitLifecycle == nil && config.UnderTest() }
+func realSystemdBlocked() bool {
+	if !config.UnderTest() {
+		return false
+	}
+	return UnitLifecycle == nil || UnitLifecycle == platformUnitLifecycle
+}
 
 func StartUnit(name string) error {
 	logUnitOp("start", name)

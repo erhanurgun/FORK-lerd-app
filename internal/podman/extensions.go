@@ -60,6 +60,24 @@ func BundledExtensions(phpVersion string) []string {
 	return bundled
 }
 
+// WithoutBundled drops the extensions the image for phpVersion already ships.
+// Rebuilding one as a custom extension layers a bare docker-php-ext-install on
+// top of the base image, which loses the configure flags the base build passed
+// it: that is how ftp lost FTPS support after #1583 (#1576).
+func WithoutBundled(phpVersion string, exts []string) []string {
+	bundled := map[string]bool{}
+	for _, e := range BundledExtensions(phpVersion) {
+		bundled[e] = true
+	}
+	kept := make([]string, 0, len(exts))
+	for _, e := range exts {
+		if !bundled[CanonicalExtension(e)] {
+			kept = append(kept, e)
+		}
+	}
+	return kept
+}
+
 // BundledSince returns the first PHP version that ships ext, for the extensions an
 // older image genuinely cannot build. The second result is false for every other
 // extension, which is the ones php:ext add can install on request.
