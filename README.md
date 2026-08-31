@@ -41,21 +41,21 @@ Lerd is built for PHP developers on Linux who want frictionless local developmen
 
 ### PHP, Node and runtimes
 
-- 🐘 **Per-project PHP version.** 8.1 to 8.5, plus a frozen 7.4 / 8.0 legacy tier for projects on the old stack, switched with one click. Custom extensions and Alpine packages are declared once and applied to every image lerd builds.
+- 🐘 **Per-project PHP version.** 8.1 to 8.5, plus a frozen 7.4 / 8.0 legacy tier for projects on the old stack and 8.6 as a prerelease tier nothing picks for you, switched with one click. Custom extensions and Alpine packages are declared once and applied to every image lerd builds.
 
 - ⚡ **FrankenPHP runtime.** Per site, as an alternative to shared PHP-FPM, with Laravel Octane and Symfony Runtime worker mode.
 
 - 📦 **Node.js isolation.** Node 22 or 24 per project, through the bundled fnm or an nvm you already have, switchable from the dashboard. Or **bun** as the JS runtime on the host and, opt-in, inside the container.
 
-- 🪄 **No per-framework setup.** Workers, env values and the nginx vhost are configured for you when you link a project. "Env" means whatever file your framework actually reads: a `.env`, WordPress's `wp-config.php`, Magento's `env.php` or Drupal's `settings.php`, written in place.
+- 🪄 **No per-framework setup.** Workers, env values and the nginx vhost are configured for you when you link a project. "Env" means whatever file your framework actually reads: a `.env`, WordPress's `wp-config.php`, Magento's `env.php` or Drupal's `settings.php`, written in place. A worker's start command, its flags and their defaults come from the same definition, and the queues and limits you answer with are committed to the project's `.lerd.yaml` instead of being retyped on every start.
 
-- 🧩 **Framework store.** Community definitions for Laravel, Symfony, WordPress, Drupal, Magento, CakePHP, CodeIgniter, Statamic and Tempest, with versioned auto-detection back to the majors still on PHP 7.4. One published tomorrow arrives without a new lerd release.
+- 🧩 **Framework store.** Community definitions for Laravel, Symfony, WordPress, Drupal, Magento, CakePHP, CodeIgniter, Statamic, Tempest and TYPO3, with versioned auto-detection back to the majors still on PHP 7.4. Anything belonging to a composer package rather than to a framework, a queue dashboard's worker, an installer's commands, is declared once for every framework that can require it. One published tomorrow arrives without a new lerd release.
 
 ### Services and databases
 
 - 🗄️ **One-click services.** MySQL, PostgreSQL, Redis, Meilisearch, RustFS, Mailpit, Reverb, OpenSearch and more, the default stack built in and every add-on from a store that updates without a lerd release. Create, drop, snapshot, export and import databases from the service page.
 
-- 🔌 **Host tools that reach the container.** `psql`, `mysql`, `pg_dump` and friends run on your host against lerd's engines with no client installed and no port to remember. Point an IDE's phpstan, php-cs-fixer or phpcs at the same shims and they run in the project's PHP container.
+- 🔌 **Host tools that reach the container.** `psql`, `mysql`, `pg_dump` and friends run on your host against lerd's engines with no client installed and no port to remember. Point an IDE's phpstan, php-cs-fixer or phpcs at the same shims and they run in the project's PHP container, and `lerd cpx` runs a command from any Composer package on the site's own PHP version without adding it to the project.
 
 - 🧷 **IDE database wiring** for JetBrains. A project gets one data source pointed at its own lerd database on the host port it actually answers on, written on link and refreshed as the project's database changes, leaving every data source lerd doesn't own untouched.
 
@@ -71,23 +71,25 @@ Lerd is built for PHP developers on Linux who want frictionless local developmen
 
 ### Interfaces
 
-- 🖥️ **Built-in Web UI.** Sites and services dashboards, live widgets, a global Cmd+K command palette, and install/remove of PHP and Node versions, in fourteen languages. Reachable from another machine behind credentials, with the actions that touch the host staying local until you grant them.
+- 🖥️ **Built-in Web UI.** Sites and services dashboards, live widgets, a global Cmd+K command palette, install/remove of PHP and Node versions with a shell into any version's container, and the framework command you run all day pinned to the site's control row, in fourteen languages. Reachable from another machine behind credentials, with the actions that touch the host staying local until you grant them.
 
 - ✨ **Start a project from the dashboard.** The `+` in Sites scaffolds a project from the framework store or links one you already have, asks what `lerd init` asks, then runs composer and the JS build in the modal. Close the tab mid-install and it picks back up.
 
 - 📚 **The documentation, offline.** Every page ships inside the binary, searchable and rendered in the dashboard, so the one moment you most need the docs, a machine with no internet, is not the moment they stop working. `lerd man` reads the same pages in the terminal.
 
-- 💻 **Terminal dashboard** (`lerd tui`). A btop-style TUI with live status, site detail pane, inline domain and version editing, shell drop-in, log tailing, and filter/sort, the same operations surface as the web UI, for tmux and SSH workflows.
+- 💻 **Terminal dashboard** (`lerd tui`). A btop-style TUI with live status, site detail pane, inline domain and version editing, shell drop-in, log tailing, and filter/sort, plus a databases pane carrying every engine's databases and their snapshots and a service pane carrying its client tools, tuning and entities, the same operations surface as the web UI, for tmux and SSH workflows.
+
+- 🚀 **Start it without a terminal.** The dashboard brings lerd up from its own banner when the environment is stopped, streaming the start back unit by unit. `lerd install` writes a Lerd entry to the macOS Applications folder and to the Linux application list, so a cold start is a click with a progress splash behind it. The system tray is optional, for a desktop that already shows this somewhere else.
 
 - 🪟 **Omarchy bar widget.** [lerd Glance](https://github.com/lerd-env/lerd-omarchy-glance) puts sites, services, workers and container CPU and memory in the Omarchy Quattro bar, quiet until something breaks, so you can see the state of the environment without opening a tab.
 
-- ✏️ **Edit config in the browser.** Per-site and global nginx, `php.ini` with the version's own file and the shared scope side by side, `.env` files, and database/service runtime tuning, each validated (`nginx -t` where it applies), with timestamped backups and one-click restore.
+- ✏️ **Edit config in the browser.** Per-site and global nginx, at server scope and at the location scope that can outrank what the generated vhost sets, `php.ini` with the version's own file and the shared scope side by side, `.env` files, and database/service runtime tuning, each validated (`nginx -t` where it applies), with timestamped backups and one-click restore.
 
 - 📋 **Live logs** for PHP-FPM, Queue, Schedule and Reverb, per site, rendered in the colour the tool actually emits (artisan, composer, vite, pest) and with a button that hands any log to a real terminal so a long tail survives closing the tab.
 
 - 🔔 **Notifications** for the things worth interrupting you, delivered to open dashboards, to subscribed browsers over Web Push, or to your desktop's native notification daemon. Every one also lands in the dashboard's sidebar bell, which keeps the last 50 with an unread count across reloads.
 
-- 🤖 **MCP server.** Let AI assistants (Claude Code, Cursor, JetBrains Junie, Codex CLI, Gemini CLI, GitHub Copilot, Google Antigravity, Windsurf) manage your environment directly.
+- 🤖 **MCP server.** Let AI assistants (Claude Code, Cursor, JetBrains Junie, Codex CLI, Gemini CLI, GitHub Copilot, Google Antigravity, Windsurf, OpenCode) manage your environment directly.
 
 ### Health and upkeep
 
@@ -101,13 +103,15 @@ Lerd is built for PHP developers on Linux who want frictionless local developmen
 
 - 💤 **Idle-suspend.** Activity-driven suspension of a site's workers (queue, schedule, horizon, reverb, stripe, Vite) after a configurable idle timeout, resumed on the next request, CLI command, MCP call or file save, with per-site pinning.
 
+- 📶 **Nothing downloads behind your back.** Every command that can pull or rebuild a container image names it and roughly how big it is before the first byte moves, read from the registry manifest so asking costs nothing. The dashboard turns that into a confirmation, an assistant over MCP has to come back with your answer, and `--no-pull`, `LERD_OFFLINE=1` and `lerd start --dry-run` cover a connection you would rather not spend.
+
 - 📌 **Pinned host tools.** Composer, fnm and mkcert are pinned behind a published manifest rather than whatever `releases/latest` served that day, so an upstream release cannot break a fresh install overnight, and the System page reports each against its pin and applies the update on the card that flagged it.
 
 - 🔒 **Rootless and daemonless.** Podman-native, no Docker required, dual-stack IPv4 + IPv6.
 
 ## AI Integration (MCP)
 
-Lerd ships a built-in [Model Context Protocol](https://modelcontextprotocol.io/) server. Connect it to Claude Code, Cursor, JetBrains Junie, Codex CLI, Gemini CLI, GitHub Copilot, Google Antigravity, Windsurf, or any MCP-compatible AI assistant and manage your dev environment without leaving the chat.
+Lerd ships a built-in [Model Context Protocol](https://modelcontextprotocol.io/) server. Connect it to Claude Code, Cursor, JetBrains Junie, Codex CLI, Gemini CLI, GitHub Copilot, Google Antigravity, Windsurf, OpenCode, or any MCP-compatible AI assistant and manage your dev environment without leaving the chat.
 
 ```bash
 lerd mcp:enable-global   # register once, works in every project
