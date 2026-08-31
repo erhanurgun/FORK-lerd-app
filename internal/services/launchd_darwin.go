@@ -18,10 +18,20 @@ import (
 
 // launchctl runs a launchctl command with a 15-second timeout so a throttled
 // or unresponsive service can never hang lerd indefinitely.
-func launchctl(args ...string) ([]byte, error) {
+var launchctl = func(args ...string) ([]byte, error) {
+	if len(args) > 0 && launchctlMutates[args[0]] {
+		config.GuardRealLaunchd(strings.Join(args, " "))
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	return exec.CommandContext(ctx, "launchctl", args...).CombinedOutput()
+}
+
+// launchctlMutates lists the verbs that change the user's launchd domain. Reads
+// like list and print are harmless, so only these are guarded under test.
+var launchctlMutates = map[string]bool{
+	"bootstrap": true, "bootout": true, "enable": true,
+	"disable": true, "kickstart": true, "load": true, "unload": true,
 }
 
 // bootout removes a job from the launchd domain. Every bootout of the watcher
@@ -735,7 +745,13 @@ func (m *darwinServiceManager) ContainerUnitInstalled(name string) bool {
 	return err == nil
 }
 
+// RemoveContainerUnit takes the job out of the launchd domain before dropping its
+// plist. Removing only the file leaves launchd holding a job whose plist is gone,
+// which is how a removed service went on answering launchctl list forever. It
+// goes through StopUnit rather than booting out here so the stop stays on the one
+// funnel that already refuses to reach a real launchd from a test.
 func (m *darwinServiceManager) RemoveContainerUnit(name string) error {
+	_ = podman.StopUnit(name)
 	return removePlist(name)
 }
 
