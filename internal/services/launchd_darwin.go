@@ -52,7 +52,7 @@ func init() {
 	// Bind the concrete type so UnitLifecycle picks up AllUnitStates, which
 	// isn't part of services.ServiceManager (Linux has no need for it — the
 	// systemctl batched-list path covers Linux callers).
-	podman.UnitLifecycle = mgr
+	podman.UsePlatformUnitLifecycle(mgr)
 	podman.RemoveContainerUnitFn = mgr.RemoveContainerUnit
 	// Keep launchd plists in sync when WriteQuadletDiff updates a .container file.
 	podman.AfterQuadletWriteFn = func(name, content string) error {
