@@ -379,7 +379,7 @@ func LoadProjectConfig(dir string) (*ProjectConfig, error) {
 			projectConfigCacheMu.Unlock()
 			return &ProjectConfig{}, nil
 		}
-		return nil, statErr
+		return &ProjectConfig{}, statErr
 	}
 
 	data, err := os.ReadFile(path)
@@ -387,11 +387,14 @@ func LoadProjectConfig(dir string) (*ProjectConfig, error) {
 		if os.IsNotExist(err) {
 			return &ProjectConfig{}, nil
 		}
-		return nil, err
+		return &ProjectConfig{}, err
 	}
 	var cfg ProjectConfig
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, err
+		// Most callers read this config with the error discarded, so hand them an
+		// empty one rather than a nil they would dereference, and name the file
+		// for the few that do report it.
+		return &ProjectConfig{}, fmt.Errorf("%s: %w", path, err)
 	}
 
 	if err := ValidatePublicDir(cfg.PublicDir); err != nil {
