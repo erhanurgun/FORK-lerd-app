@@ -168,6 +168,22 @@ wget -qO- https://lerd.sh/install.sh | bash -s -- --update
 
 :::
 
+Betas are published as GitHub prereleases, which the plain installer skips, so `--beta` is how you ask for one:
+
+::: code-group
+
+```bash [curl]
+curl -fsSL https://lerd.sh/install.sh | bash -s -- --beta
+```
+
+```bash [wget]
+wget -qO- https://lerd.sh/install.sh | bash -s -- --beta
+```
+
+:::
+
+It works on a first install and alongside `--update`, and it takes the newest release of either kind, so once the stable version overtakes the beta line `--beta` installs the stable one. Running the installer without it on a machine already on a prerelease asks before moving you back to stable, rather than downgrading silently.
+
 ::: warning Running something older than 1.26?
 `lerd update` fails on builds from before the project moved to the lerd-env organisation, with an error about an unexpected release URL. [Updating from a version before 1.26](./updating-from-pre-1.26) gets you across in one step.
 :::
@@ -258,7 +274,7 @@ lerd update
 
 If you installed via Homebrew instead, update with `brew upgrade lerd`. The `lerd install` that finishes an update is applied for you by the first lerd command you run at a terminal afterwards, and running it yourself does no harm.
 
-If you're running a local development build (a `git describe` version like `1.25.0-6-g7d03`), the one-line installer and `--update` detect it and ask before replacing it with a release binary, so an ahead-of-release build isn't overwritten silently. Decline to keep your build, or reinstall one explicitly with `install.sh --local <path>`.
+If you're running a local development build (a `git describe` version like `1.25.0-6-g7d03`), the one-line installer and `--update` detect it and ask before replacing it with a release binary, so an ahead-of-release build isn't overwritten silently. Decline to keep your build, or reinstall one explicitly with `install.sh --local <path>`. A beta is not a development build and is left alone by that check; it has its own prompt, and `--beta` skips it by saying which line you want.
 
 ### Lerd in the app list
 

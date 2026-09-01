@@ -446,6 +446,45 @@ _force_linux_os() {
   [ "$status" -ne 0 ]
 }
 
+@test "version_is_dev is false for a prerelease" {
+  run version_is_dev "1.34.0-beta.3"
+  [ "$status" -ne 0 ]
+}
+
+@test "version_tag strips the git-describe tail from a prerelease" {
+  run version_tag "1.34.0-beta.3-11-g632148be-dirty"
+  [ "$output" = "1.34.0-beta.3" ]
+}
+
+@test "version_tag leaves a clean release alone" {
+  run version_tag "1.33.1"
+  [ "$output" = "1.33.1" ]
+}
+
+@test "installed_version keeps the prerelease suffix" {
+  FAKE_BIN="$BATS_TMPDIR/fake-bin-$$"
+  mkdir -p "$FAKE_BIN"
+  printf '#!/bin/sh\necho "lerd version 1.34.0-beta.3 (commit abc)"\n' > "$FAKE_BIN/lerd"
+  chmod +x "$FAKE_BIN/lerd"
+
+  OLD_PATH="$PATH"
+  export PATH="$FAKE_BIN:$PATH"
+
+  run installed_version
+  [ "$output" = "1.34.0-beta.3" ]
+
+  export PATH="$OLD_PATH"
+}
+
+@test "version_is_prerelease tells a beta apart from a release and a dev build" {
+  run version_is_prerelease "1.34.0-beta.3"
+  [ "$status" -eq 0 ]
+  run version_is_prerelease "1.33.1"
+  [ "$status" -ne 0 ]
+  run version_is_prerelease "1.25.0-6-g7d030096-dirty"
+  [ "$status" -ne 0 ]
+}
+
 # ── latest_version ────────────────────────────────────────────────────────────
 
 @test "latest_version parses version from redirect Location header" {
@@ -483,6 +522,54 @@ _force_linux_os() {
   [ "$output" = "" ]
 }
 
+# -- --beta ------------------------------------------------------------------
+
+@test "latest_prerelease_version takes the newest tag from the releases feed" {
+  function curl() {
+    echo '<entry><link rel="alternate" type="text/html" href="https://github.com/lerd-env/lerd/releases/tag/v1.34.0-beta.3"/></entry>'
+    echo '<entry><link rel="alternate" type="text/html" href="https://github.com/lerd-env/lerd/releases/tag/v1.33.1"/></entry>'
+  }
+  export -f curl
+
+  run latest_prerelease_version
+  [ "$status" -eq 0 ]
+  [ "$output" = "1.34.0-beta.3" ]
+}
+
+@test "latest_prerelease_version returns empty string when the feed carries no release" {
+  function curl() { echo "<feed></feed>"; }
+  export -f curl
+
+  run latest_prerelease_version
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+}
+
+@test "resolve_version reads the feed under --beta and the latest redirect without it" {
+  function curl() {
+    case "$*" in
+      *releases.atom*) echo 'href="https://github.com/lerd-env/lerd/releases/tag/v1.34.0-beta.3"' ;;
+      *) echo "location: https://github.com/lerd-env/lerd/releases/tag/v1.33.1" ;;
+    esac
+  }
+  export -f curl
+
+  BETA=0
+  run resolve_version
+  [ "$output" = "1.33.1" ]
+
+  BETA=1
+  run resolve_version
+  [ "$output" = "1.34.0-beta.3" ]
+}
+
+@test "--beta is accepted alongside another flag" {
+  run bash "$INSTALLER" --beta --help
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"Unknown option"* ]]
+  [[ "$output" == *"Usage:"* ]]
+}
+
 # ── --help flag ───────────────────────────────────────────────────────────────
 
 @test "--help prints usage and exits 0" {
@@ -492,6 +579,7 @@ _force_linux_os() {
   [[ "$output" == *"--update"* ]]
   [[ "$output" == *"--uninstall"* ]]
   [[ "$output" == *"--local"* ]]
+  [[ "$output" == *"--beta"* ]]
 }
 
 # ── --local flag ──────────────────────────────────────────────────────────────
