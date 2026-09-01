@@ -1,4 +1,4 @@
-package cli
+package siteops
 
 import "testing"
 
@@ -15,8 +15,8 @@ func TestQualifyDomain(t *testing.T) {
 		// Only a trailing TLD is the suffix; one in the middle is part of the name.
 		{"test.shop", "test.shop.test"},
 	} {
-		if got := qualifyDomain(tc.arg, "test"); got != tc.want {
-			t.Errorf("qualifyDomain(%q) = %q, want %q", tc.arg, got, tc.want)
+		if got := QualifyDomain(tc.arg, "test"); got != tc.want {
+			t.Errorf("QualifyDomain(%q) = %q, want %q", tc.arg, got, tc.want)
 		}
 	}
 }

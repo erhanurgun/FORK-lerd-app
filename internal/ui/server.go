@@ -4487,9 +4487,9 @@ func handleSiteAction(w http.ResponseWriter, r *http.Request) {
 		// project's .lerd.yaml as a conflict-filtered entry. Remove it from
 		// .lerd.yaml only — no registry, vhost, or cert work needed.
 		if !site.HasDomain(fullDomain) {
-			suffix := "." + cfg.DNS.TLD
-			declared := strings.TrimSuffix(fullDomain, suffix)
-			// Check if domain exists in .lerd.yaml before removing.
+			declared := config.ProjectDomainKey(fullDomain, cfg.DNS.TLD)
+			// Check if domain exists in .lerd.yaml before removing. A project may
+			// have written the entry with the TLD, so both sides are normalised.
 			proj, projErr := config.LoadProjectConfig(site.Path)
 			if projErr != nil || proj == nil {
 				writeJSON(w, SiteActionResponse{Error: "site does not have domain " + fullDomain})
@@ -4497,7 +4497,7 @@ func handleSiteAction(w http.ResponseWriter, r *http.Request) {
 			}
 			found := false
 			for _, d := range proj.Domains {
-				if strings.EqualFold(d, declared) {
+				if config.ProjectDomainKey(d, cfg.DNS.TLD) == declared {
 					found = true
 					break
 				}
@@ -4506,7 +4506,7 @@ func handleSiteAction(w http.ResponseWriter, r *http.Request) {
 				writeJSON(w, SiteActionResponse{Error: "site does not have domain " + fullDomain})
 				return
 			}
-			if err := config.RemoveProjectDomain(site.Path, declared); err != nil {
+			if err := config.RemoveProjectDomain(site.Path, declared, cfg.DNS.TLD); err != nil {
 				writeJSON(w, SiteActionResponse{Error: "updating .lerd.yaml: " + err.Error()})
 				return
 			}
