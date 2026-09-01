@@ -77,6 +77,29 @@ func TestRemove_takesTheEntryAndTheIcon(t *testing.T) {
 	}
 }
 
+// The icon lives in lerd's data directory, so a Remove that reached for the
+// directory rather than the file emptied a site registry, the nginx vhosts and
+// the certificates on an uninstall that had been told to keep them.
+func TestRemove_leavesTheRestOfTheDataDirectory(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", dir)
+	t.Setenv("XDG_DATA_DIRS", t.TempDir())
+	if _, err := Install(); err != nil {
+		t.Fatal(err)
+	}
+	sites := filepath.Join(dir, "lerd", "sites.yaml")
+	if err := os.WriteFile(sites, []byte("sites: []\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Remove(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(sites); err != nil {
+		t.Errorf("removing the launcher took %s with it: %v", sites, err)
+	}
+}
+
 // The desktop app ships an entry called Lerd of its own, so a second one under
 // that name would put two identical icons in the application list. Where it is
 // installed the launcher says what it adds instead.
