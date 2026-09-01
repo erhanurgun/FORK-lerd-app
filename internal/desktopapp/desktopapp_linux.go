@@ -153,6 +153,10 @@ func refreshDesktopDatabase(dir string) {
 }
 
 // Remove deletes the desktop entry and its icon. Missing is success.
+//
+// Only the icon file: it sits directly in lerd's data directory, so removing
+// its parent takes the whole of ~/.local/share/lerd with it, which an uninstall
+// that was told to keep the data has no business doing.
 func Remove() error {
 	entry := Path()
 	if entry == "" {
@@ -161,7 +165,7 @@ func Remove() error {
 	if err := os.Remove(entry); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	_ = os.RemoveAll(filepath.Dir(iconPath()))
+	_ = os.Remove(iconPath())
 	refreshDesktopDatabase(filepath.Dir(entry))
 	return nil
 }
