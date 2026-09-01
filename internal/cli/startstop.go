@@ -534,6 +534,23 @@ func startLerd(emit func(StartEvent), skip []string) error {
 	// missing quadlet, drop an orphan quadlet with no YAML. Data dirs untouched.
 	reconcileCustomServices()
 
+	// Heal quadlets whose IPv6 publish lines the host can no longer bind. A
+	// VPN client that turns IPv6 off host-wide takes ::1 with it, and every
+	// unit still carrying a [::1] line dies with exit 126 (#1634).
+	if healed, err := podman.HealIPv6Binds(); err != nil {
+		fmt.Printf("  WARN: healing IPv6 binds: %v\n", err)
+	} else if len(healed) > 0 {
+		fmt.Printf("  Rewrote %d unit(s) to match the host's IPv6 support\n", len(healed))
+		_ = podman.DaemonReloadFn()
+		for _, name := range healed {
+			if status, _ := services.Mgr.UnitStatus(name); status == "active" || status == "activating" {
+				if err := podman.RestartUnit(name); err != nil {
+					fmt.Printf("  WARN: restarting %s: %v\n", name, err)
+				}
+			}
+		}
+	}
+
 	// If the configured default PHP version has never been installed (no plist /
 	// quadlet / container), install it now so CoreUnits can include it.
 	ensureDefaultPHPInstalled()

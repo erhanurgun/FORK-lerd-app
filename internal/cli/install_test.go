@@ -345,7 +345,7 @@ func TestRefreshUnreferencedCustomQuadlets_globalCustomServiceGetsV6Pair(t *test
 	if want := fmt.Sprintf("PublishPort=127.0.0.1:%d:8081", port); !strings.Contains(got, want) {
 		t.Errorf("v4 bind missing from rewritten quadlet:\n%s", got)
 	}
-	if want := fmt.Sprintf("PublishPort=[::1]:%d:8081", port); !strings.Contains(got, want) {
+	if want := fmt.Sprintf("PublishPort=[::1]:%d:8081", port); podman.HostHasIPv6Loopback() && !strings.Contains(got, want) {
 		t.Errorf("v6 pair missing — PairIPv6Binds did not apply during refresh:\n%s", got)
 	}
 }
