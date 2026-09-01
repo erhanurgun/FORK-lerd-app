@@ -32,6 +32,15 @@ func hasDNSFlag(args []string, server string) bool {
 	return false
 }
 
+func hasHostNetwork(args []string) bool {
+	for i, a := range args {
+		if a == "--network" && i+1 < len(args) && args[i+1] == "host" {
+			return true
+		}
+	}
+	return false
+}
+
 // The plain build is what works on a healthy host, so a passing one must not
 // drag the host's resolvers into the image build.
 func TestBuildDNSMasqImage_NoRetryWhenTheFirstBuildPasses(t *testing.T) {
@@ -75,15 +84,59 @@ func TestBuildDNSMasqImage_RetriesWithTheHostResolvers(t *testing.T) {
 	}
 }
 
-// With nothing to pin, a second identical build would only double the wait
-// before the same failure.
-func TestBuildDNSMasqImage_NoRetryWithoutNameservers(t *testing.T) {
+// With nothing to pin, the pinned retry has no servers to use, so the host
+// network is the only fallback left.
+func TestBuildDNSMasqImage_FallsBackToTheHostNetworkWithoutNameservers(t *testing.T) {
 	prev := execCommand
 	t.Cleanup(func() { execCommand = prev })
 	var calls [][]string
-	execCommand = recordExec(&calls, 1, 1)
+	execCommand = recordExec(&calls, 1, 0)
 
-	err := BuildDNSMasqImage(io.Discard, nil)
+	if err := BuildDNSMasqImage(io.Discard, nil); err != nil {
+		t.Fatalf("BuildDNSMasqImage() = %v, want nil once the host-network build succeeds", err)
+	}
+	if len(calls) != 2 {
+		t.Fatalf("ran %d builds, want 2", len(calls))
+	}
+	if !hasHostNetwork(calls[1]) {
+		t.Errorf("fallback args %v do not build on the host network", calls[1])
+	}
+}
+
+// The reported host resolves nothing from inside the build namespace, pinned
+// servers included, so the host network has to be tried after the pinned retry.
+func TestBuildDNSMasqImage_FallsBackToTheHostNetworkAfterThePinnedRetry(t *testing.T) {
+	prev := execCommand
+	t.Cleanup(func() { execCommand = prev })
+	var calls [][]string
+	execCommand = recordExec(&calls, 1, 1, 0)
+
+	if err := BuildDNSMasqImage(io.Discard, []string{"192.0.2.1"}); err != nil {
+		t.Fatalf("BuildDNSMasqImage() = %v, want nil once the host-network build succeeds", err)
+	}
+	if len(calls) != 3 {
+		t.Fatalf("ran %d builds, want 3", len(calls))
+	}
+	if hasDNSFlag(calls[2], "192.0.2.1") {
+		t.Error("the host-network build must not also pin resolvers the namespace could not reach")
+	}
+	if !hasHostNetwork(calls[2]) {
+		t.Errorf("fallback args %v do not build on the host network", calls[2])
+	}
+	if calls[2][len(calls[2])-1] != "-" {
+		t.Errorf("fallback args %v must still read the Containerfile from stdin", calls[2])
+	}
+}
+
+// When even the host network cannot build, the caller has to see the real
+// failure rather than a wrapped one.
+func TestBuildDNSMasqImage_ReturnsTheLastFailure(t *testing.T) {
+	prev := execCommand
+	t.Cleanup(func() { execCommand = prev })
+	var calls [][]string
+	execCommand = recordExec(&calls, 1, 1, 1)
+
+	err := BuildDNSMasqImage(io.Discard, []string{"192.0.2.1"})
 	if err == nil {
 		t.Fatal("BuildDNSMasqImage() = nil, want the build error")
 	}
@@ -91,8 +144,8 @@ func TestBuildDNSMasqImage_NoRetryWithoutNameservers(t *testing.T) {
 	if !errors.As(err, &exitErr) {
 		t.Errorf("err = %v, want the underlying build failure", err)
 	}
-	if len(calls) != 1 {
-		t.Fatalf("ran %d builds, want 1", len(calls))
+	if len(calls) != 3 {
+		t.Fatalf("ran %d builds, want 3", len(calls))
 	}
 }
 
