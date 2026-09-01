@@ -442,3 +442,73 @@ func PairIPv6Binds(content string) string {
 	}
 	return strings.Join(out, "\n")
 }
+
+// hostIPv6LoopbackFn is swapped in tests to stage a host without ::1.
+var hostIPv6LoopbackFn = HostHasIPv6Loopback
+
+// applyIPv6BindPolicy pairs PublishPort lines across both stacks, or reduces
+// them to IPv4 on a host that has no ::1 (VPN clients and ipv6.disable=1 both
+// take it away). rootlessport treats a failed v6 bind as fatal, so a stale
+// [::1] line stops the unit from starting at all instead of degrading.
+func applyIPv6BindPolicy(content string) string {
+	if hostIPv6LoopbackFn() {
+		return PairIPv6Binds(content)
+	}
+	return StripIPv6Binds(content)
+}
+
+// StripIPv6Binds is the inverse of PairIPv6Binds: every IPv6 PublishPort line
+// is dropped when its IPv4 twin is already there, and rewritten to that twin
+// when it is not, so the unit keeps serving on IPv4 alone. Operator-set
+// addresses are left verbatim. Idempotent.
+func StripIPv6Binds(content string) string {
+	lines := strings.Split(content, "\n")
+
+	v4Loopback := map[string]bool{}
+	v4Any := map[string]bool{}
+	for _, line := range lines {
+		value, ok := publishPortValue(line)
+		if !ok || strings.HasPrefix(value, "[") {
+			continue
+		}
+		if rest, isLoopback := strings.CutPrefix(value, "127.0.0.1:"); isLoopback {
+			v4Loopback[rest] = true
+			continue
+		}
+		v4Any[strings.TrimPrefix(value, "0.0.0.0:")] = true
+	}
+
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		value, ok := publishPortValue(line)
+		if !ok {
+			out = append(out, line)
+			continue
+		}
+		if rest, isV6Loopback := strings.CutPrefix(value, "[::1]:"); isV6Loopback {
+			if !v4Loopback[rest] {
+				v4Loopback[rest] = true
+				out = append(out, "PublishPort=127.0.0.1:"+rest)
+			}
+			continue
+		}
+		if rest, isV6Any := strings.CutPrefix(value, "[::]:"); isV6Any {
+			if !v4Any[rest] {
+				v4Any[rest] = true
+				out = append(out, "PublishPort="+rest)
+			}
+			continue
+		}
+		out = append(out, line)
+	}
+	return strings.Join(out, "\n")
+}
+
+// publishPortValue returns the address:port body of a PublishPort= line.
+func publishPortValue(line string) (string, bool) {
+	trimmed := strings.TrimSpace(line)
+	if !strings.HasPrefix(trimmed, "PublishPort=") {
+		return "", false
+	}
+	return strings.TrimPrefix(trimmed, "PublishPort="), true
+}

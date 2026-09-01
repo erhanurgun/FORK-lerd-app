@@ -69,7 +69,7 @@ func WriteQuadletDiff(name, content string) (changed bool, err error) {
 		autostartDisabled = cfg.Autostart.Disabled
 	}
 	content = BindQuadletForLAN(name, content, lanExposed, servicesExposed)
-	content = PairIPv6Binds(content)
+	content = applyIPv6BindPolicy(content)
 	content = StripInstallSection(content, autostartDisabled)
 	// Centralised platform image rewrite + podman-run flags so every quadlet
 	// writer emits identical units. On Apple Silicon PlatformImage swaps
@@ -191,7 +191,7 @@ func RebindInstalledQuadletsForLAN() ([]string, error) {
 			return nil, fmt.Errorf("reading %s: %w", filepath.Base(path), err)
 		}
 		name := strings.TrimSuffix(filepath.Base(path), ".container")
-		updated := PairIPv6Binds(BindQuadletForLAN(name, string(content), lanExposed, servicesExposed))
+		updated := applyIPv6BindPolicy(BindQuadletForLAN(name, string(content), lanExposed, servicesExposed))
 		if string(content) != updated {
 			config.GuardRealWrite(path)
 			if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
@@ -210,6 +210,41 @@ func RebindInstalledQuadletsForLAN() ([]string, error) {
 		}
 	}
 	return restart, nil
+}
+
+// HealIPv6Binds reapplies the IPv6 bind policy to every installed quadlet and
+// returns the units it rewrote. A host that loses ::1 after install (a VPN
+// client disabling IPv6, a reboot with ipv6.disable=1) leaves stale [::1]
+// publish lines behind, and rootlessport treats a bind it cannot satisfy as
+// fatal, so those units never start again until the file is fixed (#1634).
+func HealIPv6Binds() ([]string, error) {
+	paths, err := filepath.Glob(filepath.Join(config.QuadletDir(), "lerd-*.container"))
+	if err != nil {
+		return nil, err
+	}
+	healed := make([]string, 0, len(paths))
+	for _, path := range paths {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("reading %s: %w", filepath.Base(path), err)
+		}
+		updated := applyIPv6BindPolicy(string(content))
+		if updated == string(content) {
+			continue
+		}
+		name := strings.TrimSuffix(filepath.Base(path), ".container")
+		config.GuardRealWrite(path)
+		if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
+			return nil, fmt.Errorf("rewriting %s: %w", filepath.Base(path), err)
+		}
+		if AfterQuadletWriteFn != nil {
+			if err := AfterQuadletWriteFn(name, updated); err != nil {
+				return nil, fmt.Errorf("syncing %s: %w", name, err)
+			}
+		}
+		healed = append(healed, name)
+	}
+	return healed, nil
 }
 
 // quadletWantsLAN reports whether the given quadlet content publishes beyond

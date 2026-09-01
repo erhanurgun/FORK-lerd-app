@@ -514,6 +514,22 @@ export LERD_DISABLE_IPV6=1
 Either path writes `~/.local/share/lerd/ipv6-probe-failed-lerd`, which `EnsureNetwork` honors on every code path (initial create, migration, recreate). To re-enable dual-stack, delete that marker file and re-run `lerd install`.
 :::
 
+::: details Every service fails with "rootlessport listen tcp [::1]:80: bind: cannot assign requested address"
+
+Symptom: nothing starts. nginx, mysql, redis, mailpit and every other service exit with status 126, and the journal shows a bind failure on an IPv6 loopback address:
+
+```
+Error: rootlessport listen tcp [::1]:3306: bind: cannot assign requested address
+lerd-mysql.service: Main process exited, code=exited, status=126/n/a
+```
+
+Cause: the host no longer has `::1`. IPv6 was turned off kernel-wide, either at boot with `ipv6.disable=1` or at runtime by a VPN client doing leak prevention (the NordVPN Linux client sets `net.ipv6.conf.{all,default,lo}.disable_ipv6=1` while connected). Lerd published each service on both `127.0.0.1` and `[::1]`, and podman treats a publish it cannot bind as fatal rather than falling back to the address that would have worked.
+
+Lerd now checks for `::1` before writing a unit and publishes on IPv4 alone when it is gone, so a host in this state comes up normally. Existing units written by an older build are repaired on the next `lerd start`, which rewrites them and restarts whatever was already running. If IPv6 comes back later, the following start restores the dual-stack publish.
+
+Note that this is a different check from the one the network schema uses. That one wants a routable address; the publish only needs loopback, so a VM with just `::1` and `fe80::` still gets its `[::1]` binds while the network stays v4-only.
+:::
+
 ::: details Every DNS lookup inside a lerd container stalls ~5 seconds
 Symptom: pages that hit the database or any container-to-container hostname feel slow, and `time dig <anything> @<container>` takes roughly five seconds before returning an answer. The network looks fine in `podman network inspect lerd` (both IPv4 and IPv6 subnets present), but aardvark-dns's on-disk config has the v6 gateway absent from its listen-ips line.
 
